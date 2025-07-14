@@ -1,0 +1,773 @@
+[
+    {
+        "id": "78",
+        "question": "A sequence is defined as follows $a_1=a_2=a_3=1,$ and, for all positive integers $n, a_{n+3}=a_{n+2}+a_{n+1}+a_n.$ Given that $a_{28}=6090307, a_{29}=11201821,$ and $a_{30}=20603361,$ find the remainder when $\\sum^{28}_{k=1} a_k$ is divided by 1000.",
+        "answer": "834",
+        "solution": "Alright, let's tackle this problem step by step. So we have a sequence defined with the first three terms all equal to 1: a₁ = a₂ = a₃ = 1. Then, for any positive integer n, each subsequent term is the sum of the previous three terms: a_{n+3} = a_{n+2} + a_{n+1} + a_n. We are given the values of a₂₈, a₂₉, and a₃₀, which are 6090307, 11201821, and 20603361 respectively. The task is to find the remainder when the sum of the first 28 terms (from k=1 to 28) is divided by 1000.\n\nFirst, I need to figure out how to compute the sum S₂₈ = a₁ + a₂ + a₃ + ... + a₂₈. Since we are given a₂₈, a₂₉, and a₃₀, maybe we can find a relation that allows us to express the sum in terms of these later terms? Let me look for a recursive relation for the sum.\n\nGiven the recursion for the sequence: a_{n+3} = a_{n+2} + a_{n+1} + a_n. Maybe if we sum up all terms from a₁ to a_n, we can find a way to relate the sums to each other.\n\nLet’s denote S_n = sum_{k=1}^n a_k.\n\nI wonder if S_{n} can be related to S_{n-1} or other previous sums. Let's express S_{n+3} in terms of S_{n+2}, S_{n+1}, and S_n. Wait, maybe not. But let's explore. Since a_{n+3} = a_{n+2} + a_{n+1} + a_n. So if we take the sum up to n+3, S_{n+3} = S_{n} + a_{n+1} + a_{n+2} + a_{n+3}. But a_{n+3} is the sum of a_{n+2} + a_{n+1} + a_n. Therefore, S_{n+3} = S_n + a_{n+1} + a_{n+2} + (a_{n+2} + a_{n+1} + a_n). Simplifying:\n\nS_{n+3} = S_n + a_{n+1} + a_{n+2} + a_{n+2} + a_{n+1} + a_n\n\nThat becomes:\n\nS_{n+3} = S_n + 2*a_{n+1} + 2*a_{n+2} + a_n\n\nHmm, not sure if that helps. Maybe another approach.\n\nAlternatively, perhaps compute S_{n} and observe the recurrence?\n\nWait, note that each term from a₄ onward is the sum of the previous three. So from a₄ onwards, maybe the sum can somehow telescope or accumulate in a particular pattern.\n\nLet me consider the initial terms:\n\na₁ = 1\n\na₂ = 1\n\na₃ = 1\n\nThen a₄ = a₃ + a₂ + a₁ = 1+1+1 = 3\n\na₅ = a₄ + a₃ + a₂ = 3 +1 +1 =5\n\na₆ = a₅ + a₄ + a₃ =5+3+1=9\n\na₇ = a₆ +a₅ +a₄=9+5+3=17\n\na₈=17+9+5=31\n\na₉=31+17+9=57\n\na₁₀=57+31+17=105\n\nContinuing these calculations, but doing this manually up to a₂₈ seems tedious, especially since a₂₈ is given as 6,090,307. Definitely, there must be a smarter way here.\n\nAnother idea: Maybe considering modulo 1000 from the beginning. Since we need only the remainder when the sum is divided by 1000, we can compute each term modulo 1000 and sum them up modulo 1000. That would alleviate the problem of dealing with large numbers.\n\nYes, that seems promising. Instead of calculating the actual terms, calculate each term a_k modulo 1000, and keep a running total of the sum modulo 1000. That should be manageable, even up to term 28.\n\nBut the issue is that even computing 28 terms modulo 1000 might require knowing each prior term's modulo 1000, but the recursion is a_{n+3} = a_{n+2} +a_{n+1} +a_n. So if we start with a₁, a₂, a₃ ≡ 1 mod 1000, then each subsequent term can be calculated as the sum of the previous three mod 1000. If we compute this step by step, keeping track of the sum as we go, that could work.\n\nHowever, even for 28 terms, it's a feasible process. Let me set up a table where I can compute each term from 1 to 28, modulo 1000, and accumulate their sum modulo 1000.\n\nLet’s start. Initialize:\n\nTerm 1: a₁ =1 mod 1000 → 1\n\nTerm 2: a₂ =1 mod 1000 →1\n\nTerm 3: a₃ =1 mod 1000 →1\n\nSum after first three terms: 1+1+1=3 mod 1000 →3\n\nThen,\n\nTerm 4: a₄ = a₃ +a₂ +a₁ =1+1+1=3 mod 1000 →3\n\nSum after term 4: 3 +3=6 mod 1000 →6\n\nTerm 5: a₅ =a₄ +a₃ +a₂=3+1+1=5 mod 1000 →5\n\nSum after term 5:6 +5=11 mod 1000 →11\n\nTerm6: a₆ =a₅ +a₄ +a₃=5+3+1=9 mod 1000 →9\n\nSum after term6:11 +9=20 mod 1000 →20\n\nTerm7: a₇=9+5+3=17 mod 1000 →17\n\nSum:20 +17=37 mod1000 →37\n\nTerm8:17+9+5=31 mod 1000 →31\n\nSum:37 +31=68 mod1000 →68\n\nTerm9:31+17+9=57 mod 1000 →57\n\nSum:68 +57=125 mod1000 →125\n\nTerm10:57 +31 +17=105 mod1000 →105\n\nSum:125 +105=130 mod1000 →230? Wait, 125 +105=230, yes. 230 mod1000 →230\n\nTerm11:105 +57 +31=193 mod1000 →193\n\nSum:230 +193=423 mod1000 →423\n\nTerm12:193 +105 +57=355 mod1000 →355\n\nSum:423 +355=778 mod1000 →778\n\nTerm13:355 +193 +105=653 mod1000 →653\n\nSum:778 +653=1431 →431 mod1000\n\nTerm14:653 +355 +193=1201 →1201 mod1000=201\n\nSum:431 +201=632 mod1000\n\nTerm15:201 +653 +355=1209 →209 mod1000\n\nSum:632 +209=841 mod1000\n\nTerm16:209 +201 +653=1063 →63 mod1000 (since 1063-1000=63)\n\nSum:841 +63=904 mod1000\n\nTerm17:63 +209 +201=473 mod1000 →473\n\nSum:904 +473=1377 →377 mod1000\n\nTerm18:473 +63 +209=745 mod1000\n\nSum:377 +745=1122 →122 mod1000\n\nTerm19:745 +473 +63=1281 →281 mod1000\n\nSum:122 +281=403 mod1000\n\nTerm20:281 +745 +473=1499 →499 mod1000 (1499-1000=499)\n\nSum:403 +499=902 mod1000\n\nTerm21:499+281+745=1525 →525 mod1000 (1525-1500=25; 25 +500=525?)\n\nWait, 1525 divided by 1000 is 1 with remainder 525. Yes.\n\nSum:902 +525=1427 →427 mod1000\n\nTerm22:525 +499 +281=1305 →305 mod1000\n\nSum:427 +305=732 mod1000\n\nTerm23:305 +525 +499=1329 →329 mod1000\n\nSum:732 +329=1061 →61 mod1000\n\nTerm24:329 +305 +525=1159 →159 mod1000\n\nSum:61 +159=220 mod1000\n\nTerm25:159 +329 +305=793 mod1000\n\nSum:220 +793=1013 →13 mod1000\n\nTerm26:793 +159 +329=1281 →281 mod1000\n\nSum:13 +281=294 mod1000\n\nTerm27:281 +793 +159=1233 →233 mod1000\n\nSum:294 +233=527 mod1000\n\nTerm28:233 +281 +793=1307 →307 mod1000 (Yeah, given a28=6090307, so 6090307 mod1000 is 307, checks out.)\n\nSum:527 +307=834 mod1000\n\nSo total sum S₂₈ mod1000 is 834. However, let me check again each step because making a mistake in one step would propagate errors. Let's retrace the calculations, perhaps faster by grouping steps:\n\nTerms 1-3: 1+1+1=3 (sum=3)\n\n4:3; sum=6\n\n5:5; sum=11\n\n6:9; sum=20\n\n7:17; sum=37\n\n8:31; sum=68\n\n9:57; sum=125\n\n10:105; sum=230\n\n11:193; sum=423\n\n12:355; sum=778\n\n13:653 mod1000=653; sum becomes 778 +653=1431, which is 431.\n\n14: calculate a₁�₄ =a₁₃+a₁₂+a₁₁=653+355+193=1201 mod1000=201; sum 431+201=632\n\na₁₅=201+653+355=1209 mod1000=209; sum 632+209=841\n\na₁₆=a₁₅+a₁₄+a₁₃=209+201+653=1063 mod1000=63; sum 841+63=904\n\na₁₇=a₁₆+a₁₅+a₁₄=63+209+201=473; sum 904+473=1377 mod1000=377\n\na₁₈=473+63+209=745; sum=377+745=1122 mod1000=122\n\na₁₉=745+473+63=1281 mod1000=281; sum122+281=403\n\na₂₀=281+745+473=1499 mod1000=499; sum403+499=902\n\na₂₁=499+281+745=1525 mod1000=525; sum902+525=1427 mod1000=427\n\na₂₂=525+499+281=1305 mod1000=305; sum427+305=732\n\na₂₃=305+525+499=1329 mod1000=329; sum732+329=1061 mod1000=61\n\na₂₄=329+305+525=1159 mod1000=159; sum61+159=220\n\na₂₅=159+329+305=793; sum220+793=1013 mod1000=13\n\na₂₆=793+159+329=1281 mod1000=281; sum13+281=294\n\na₂₇=281+793+159=1233 mod1000=233; sum294+233=527\n\na₂₈=233+281+793=1307 mod1000=307; sum527+307=834 mod1000\n\nSo with each step, and checking, the final sum modulo1000 is 834. That's the answer? Hmm. But is there a way to verify this? Maybe using the given a₂₈, a₂₉, and a₃₀?\n\nWait, hold on. The problem says that a₂�₈=6090307, which mod1000 is 307, matching my calculation for a₂₈. Similarly, a₂�₉=11201821 mod1000 is 821, a₃₀=20603361 mod1000 is 361.\n\nWait a minute. Perhaps to find S₂₈, the sum up to a₂₈, using recurrence relations? Is summing the terms the only way, or can we link S_n to a_{n+3} or such?\n\nLet me think.\n\nFrom the sequence's recursion, a_{n+3} = a_{n+2} +a_{n+1} +a_n. Perhaps adding a_{n+3} to S_n (sum up to n), would we get S_n + a_{n+3}? But considering S_{n+3}=S_n + a_{n+1} +a_{n+2} +a_{n+3}. However, since a_{n+3}=a_{n+2} +a_{n+1}+a_n, substituting:\n\nS_{n+3}=S_n + a_{n+1}+a_{n+2}+(a_{n+2}+a_{n+1}+a_n)=S_n +2*a_{n+1} +2*a_{n+2} +a_n. Not sure.\n\nAlternatively, is there a way to find S_{n} in terms of some later terms?\n\nAlternatively, perhaps sum S_{n} and relations. Let's note that:\n\nSince a_{n+3}=a_{n}+a_{n+1}+a_{n+2},\n\nThen summing from n=1 to n=k, Sum_{n=1}^k a_{n+3}= Sum_{n=1}^k (a_n+a_{n+1}+a_{n+2} ) .\n\nBut that resolves to Sum_{n=1}^k a_{n+3} = Sum_{n=1}^k a_n + Sum_{n=1}^k a_{n+1} + Sum_{n=1}^{k} a_{n+2} }.\n\nWhich is = S_k + (S_{k+1} - a₁) + (S_{k+2} - a₁ - a₂ )\n\nBecause Sum_{n=1}^k a_{n+1} = Sum_{n=2}^{k+1} a_n= S_{k+1} - a₁.\n\nSimilarly, Sum_{n=1}^k a_{n+2} = Sum_{n=3}^{k+2} a_n= S_{k+2} - a₁ - a₂.\n\nPlugging in:\n\nSum_{n=1}^k a_{n+3} = S_k + [S_{k+1} -a₁] + [S_{k+2} -a₁ -a₂ ]\n\nThis equates also to Sum_{n=4}^{k+3} a_n = S_{k+3} - S_3. So:\n\nS_{k+3} - S_3 = S_k + S_{k+1} -a₁ + S_{k+2} -a₁ -a₂.\n\nSince S_3 = a₁+a₂+a₃=3. Given a₁=1, a₂=1, a₃=1.\n\nThus,\n\nS_{k+3} -3 = S_k + S_{k+1} -1 + S_{k+2} -1 -1\n\nSimplify:\n\nS_{k+3} = S_k + S_{k+1} + S_{k+2} -1 -1 -1 +3\n\n= S_k + S_{k+1} + S_{k+2} -3 +3 = S_k + S_{k+1} + S_{k+2}\n\nTherefore, the recurrence S_{k+3} = S_k + S_{k+1} + S_{k+2}.\n\nWait, that's a same recurrence as the a_n sequence. Because the sums follow the same recurrence as the original sequence. So that's intriguing.\n\nNow, given that the sequence a_n follows the same recurrence as S_n?\n\nWait, no, the a_n starts with a₁=1, a₂=1, a₃=1, and then each subsequent term is the sum of previous three. The S_n here, if setting S_{k+3}= S_k + S_{k+1} + S_{k+2}, with initial conditions. Let's check initial sums.\n\nBut S₁= a₁=1\n\nS₂= a₁+a₂=2\n\nS₃=3\n\nS₄= S₁ + S₂ + S₃? Wait no. Let's see.\n\nAccording to the discovered recurrence S_{k+3}=S_k + S_{k+1} +S_{k+2}, but the initial sums:\n\nLet's check for k=1, S_{4} according to recurrence would be S₁ + S₂ + S₃ =1 +2 +3=6, but actual S₄ is 1+1+1+3=6. Correct.\n\nSimilarly, check for S₅: According to recurrence S₅=S�₂ +S₃ +S₄=2 +3 +6=11. Actual S₅= S₄ + a₅=6 +5=11. Correct.\n\nSimilarly, S₆ via recurrence S₆= S₃ + S₄ + S₅=3 +6 +11=20. Actual S₆=11 +9=20. Correct. So the recurrence seems valid.\n\nTherefore, the sums Sₙ follow the same recurrence as the aₙ, but with different initial terms. Wait no: Original a sequence: Initial terms are a₁=1, a₂=1, a₃=1, recurrence a_{n+3}=a_{n}+a_{n+1}+a_{n+2}.\n\nSum sequence starts with S₁=1, S₂=2, S₃=3, and recurrence S_{n+3}=S_n + S_{n+1} + S_{n+2}. Therefore, this is like a shifted version, but not exactly the same initial terms. However, if a sequence follows this recurrence, depending on their initial values. So perhaps we can model Sₙ as another sequence following the same recursion with different initial conditions.\n\nBut given that Sₙ follows the same linear recursion, which is linear homogeneous recurrence with constant coefficients, the characteristics would be similar.\n\nBut hold on, our problem now is: given that the sums Sₙ follow the same recursion but starting with S₁=1, S₂=2, S₃=3, and then S_{n+3}=S_n + S_{n+1} + S_{n+2}.\n\nGiven that we have values for a₂₈, a₂₉, a₃₀. How could this relate to S₂₈?\n\nBut perhaps even computing for terms S₂₈ given recursion S_{n+3}= S_n +S_{n+1}+S_{n+2}, starts with S₁=1, S₂=2, S₃=3.\n\nBut computing up to S₂₈ would require recursive calculations. But the problem is that we need an efficient way.\n\nAlternatively, noticing that aₙ and Sₙ follow the same recurrence, maybe we can find an linear relation between them. Because both Sₙ and aₙ satisfy the same recurrence relation with different initial terms. Therefore, potentially, Sₙ is a linear combination of aₙ shifted appropriately.\n\nBut given a₁=a₂=a₃=1, S₁=1, S₂=2, S₃=3.\n\nWait:\n\nAssume that S_{n} = c₁*a_{n} + c₂*a_{n-1} + c₃*a_{n-2}... trying to find coefficients. Maybe it's possible.\n\nAlternatively, the sum S_{n} can be written using generating functions.\n\nBut another path. If both sequences follow the same recurrence relation, then their difference might follow the recurrence too.\n\nOr shift indices. Perhaps Sₙ and aₙ shifted. For instance, maybe Sₙ = a_{n+2}}, but test:\n\nAt n=1: a₃=1 vs S₁=1, not. n=2: S₂=2 vs a₄=3, not. Maybe not.\n\nAlternatively, considering that S₁ corresponds to a₁, S₂ to a₁+a₂, S₃ to a₁+a₂+a₃, each term sums are going differently.\n\nAlternative Plan: Let's suppose S₁₀ is sum up to a₁₀. If a₁₀ is 105, then maybe can check? But perhaps to use the modulo 1000 and the previous steps, maybe the manual calculations led to S₂₈ mod1000=834 as answer. But the user-provided answers can't handle code, so since via the computations, step-by-step, giving each term mod1000, probably concluding 834.\n\nBut here's a problem: Let me check if the value of a₂₈ is 6090307. When check modulo 1000, 307, which matches our computation for term28. Likewise, a₂₉=11201821 mod1000=821. Let me check term29: a29 is a28+a27+a26 mod1000=307 +233 +281=307+233=540 +281=821 mod1000, which matches the given a₂₉ mod1000=821. Same a30: a29+a28+a27=821 +307 +233=821+307=1128 +233=1361 mod1000=361, which is the remainder of a₃₀=20603361. Thus our modulo chain is accurate. Therefore, gives confidence in the sum. calculated up to term28, of sum 834 mod1000.\n\nBut the user said sum from k=1 to 28 is 834 mod1000? Hmm, alternatively, yet better safeguard. What if I do all computations once again?\n\nSo double-check:\n\nTerm1:1;Sum1\n\nTerm2:1; Sum2\n\nTerm3:1; Sum3\n\nTerm4: sum of 1+1+1=3, Sum6\n\nTerm5: sum of 3+1+1=5; sum11\n\nTerm6: sum5+3+1=9; sum total 20\n\nTerm7:sum9+5+3=17;sum37\n\nTerm8:17+9+5=31; sum68\n\nTerm9:31+17+9=57, sum125\n\nTerm10:57+31+17=105, sum230\n\nTerm11:105+57+31=193; sum423\n\nTerm12:193+105+57=355; sum778\n\nTerm13:355+193+105=653; sum after term13:778+653=1431 mod1000→431\n\nTerm14:653+355+193=1201→201; sum after term14:431+201=632\n\nTerm15:201+653+355=1209→209; sum632+209=841\n\nTerm16:209+201+653=1063→63; sum841+63=904\n\nTerm17:63+209+201=473; sum904+473=1377→377\n\nTerm18:473+63+209=745; sum377+745=1122→122\n\nTerm19:745+473+63=1281→281; sum122+281=403\n\nTerm20:281+745+473=1499→499; sum403+499=902\n\nTerm21:499+281+745=1525→525; sum902+525=1427→427\n\nTerm22:525+499+281=1305→305; sum427+305=732\n\nTerm23:305+525+499=1329→329; sum732+329=1061→61\n\nTerm24:329+305+525=1159→159; sum61+159=220\n\nTerm25:159+329+305=793; sum220+793=1013→13\n\nTerm26:793+159+329=1281→281; sum13+281=294\n\nTerm27:281+793+159=1233→233; sum294+233=527\n\nTerm28:233+281+793=1307→307; sum527+307=834\n\nEach of these steps recalculated with careful numbers gives same previous result. Hence, confidence in the correctness.\n\nAdmittedly, this is tedious but necessary. Since every step is contained modulo 1000, summing up each term mod 1000 with their cumulative sum mod1000 gives the answer 834. So regardless of the massive actual numbers, modulus arithmetic works here.\n\nConclusion: The remainder when the sum of the first 28 terms is divided by 1000 is 834. Hence, boxed answer is \\boxed{834}.\n\n**Final Answer**\n\\boxed{834}",
+        "analysis": {
+            "sentence_groups": {
+                "group1": [
+                    "Alright, let's tackle this problem step by step.",
+                    "So we have a sequence defined with the first three terms all equal to 1: a₁ = a₂ = a₃ = 1.",
+                    "Then, for any positive integer n, each subsequent term is the sum of the previous three terms: a_{n+3} = a_{n+2} + a_{n+1} + a_n.",
+                    "We are given the values of a₂₈, a₂₉, and a₃₀, which are 6090307, 11201821, and 20603361 respectively.",
+                    "The task is to find the remainder when the sum of the first 28 terms (from k=1 to 28) is divided by 1000."
+                ],
+                "group2": [
+                    "First, I need to figure out how to compute the sum S₂₈ = a₁ + a₂ + a₃ + ... + a₂₈.",
+                    "Since we are given a₂₈, a₂₉, and a₃₀, maybe we can find a relation that allows us to express the sum in terms of these later terms?",
+                    "Let me look for a recursive relation for the sum."
+                ],
+                "group3": [
+                    "Given the recursion for the sequence: a_{n+3} = a_{n+2} + a_{n+1} + a_n.",
+                    "Maybe if we sum up all terms from a₁ to a_n, we can find a way to relate the sums to each other.",
+                    "Let's denote S_n = sum_{k=1}^n a_k."
+                ],
+                "group4": [
+                    "I wonder if S_{n} can be related to S_{n-1} or other previous sums.",
+                    "Let's express S_{n+3} in terms of S_{n+2}, S_{n+1}, and S_n.",
+                    "Wait, maybe not. But let's explore.",
+                    "Since a_{n+3} = a_{n+2} + a_{n+1} + a_n. So if we take the sum up to n+3, S_{n+3} = S_{n} + a_{n+1} + a_{n+2} + a_{n+3}.",
+                    "But a_{n+3} is the sum of a_{n+2} + a_{n+1} + a_n.",
+                    "Therefore, S_{n+3} = S_n + a_{n+1} + a_{n+2} + (a_{n+2} + a_{n+1} + a_n).",
+                    "Simplifying: S_{n+3} = S_n + 2*a_{n+1} + 2*a_{n+2} + a_n",
+                    "Hmm, not sure if that helps. Maybe another approach."
+                ],
+                "group5": [
+                    "Alternatively, perhaps compute S_{n} and observe the recurrence?",
+                    "Wait, note that each term from a₄ onward is the sum of the previous three.",
+                    "So from a₄ onwards, maybe the sum can somehow telescope or accumulate in a particular pattern."
+                ],
+                "group6": [
+                    "Let me consider the initial terms:",
+                    "a₁ = 1",
+                    "a₂ = 1",
+                    "a₃ = 1",
+                    "Then a₄ = a₃ + a₂ + a₁ = 1+1+1 = 3",
+                    "a₅ = a₄ + a₃ + a₂ = 3 +1 +1 =5",
+                    "a₆ = a₅ + a₄ + a₃ =5+3+1=9",
+                    "a₇ = a₆ +a₅ +a₄=9+5+3=17",
+                    "a₈=17+9+5=31",
+                    "a₉=31+17+9=57",
+                    "a₁₀=57+31+17=105"
+                ],
+                "group7": [
+                    "Continuing these calculations, but doing this manually up to a₂₈ seems tedious, especially since a₂₈ is given as 6,090,307.",
+                    "Definitely, there must be a smarter way here."
+                ],
+                "group8": [
+                    "Another idea: Maybe considering modulo 1000 from the beginning.",
+                    "Since we need only the remainder when the sum is divided by 1000, we can compute each term modulo 1000 and sum them up modulo 1000.",
+                    "That would alleviate the problem of dealing with large numbers."
+                ],
+                "group9": [
+                    "Yes, that seems promising.",
+                    "Instead of calculating the actual terms, calculate each term a_k modulo 1000, and keep a running total of the sum modulo 1000.",
+                    "That should be manageable, even up to term 28."
+                ],
+                "group10": [
+                    "But the issue is that even computing 28 terms modulo 1000 might require knowing each prior term's modulo 1000, but the recursion is a_{n+3} = a_{n+2} +a_{n+1} +a_n.",
+                    "So if we start with a₁, a₂, a₃ ≡ 1 mod 1000, then each subsequent term can be calculated as the sum of the previous three mod 1000.",
+                    "If we compute this step by step, keeping track of the sum as we go, that could work."
+                ],
+                "group11": [
+                    "However, even for 28 terms, it's a feasible process.",
+                    "Let me set up a table where I can compute each term from 1 to 28, modulo 1000, and accumulate their sum modulo 1000."
+                ],
+                "group12": [
+                    "Let's start. Initialize:",
+                    "Term 1: a₁ =1 mod 1000 → 1",
+                    "Term 2: a₂ =1 mod 1000 →1",
+                    "Term 3: a₃ =1 mod 1000 →1",
+                    "Sum after first three terms: 1+1+1=3 mod 1000 →3"
+                ],
+                "group13": [
+                    "Then,",
+                    "Term 4: a₄ = a₃ +a₂ +a₁ =1+1+1=3 mod 1000 →3",
+                    "Sum after term 4: 3 +3=6 mod 1000 →6",
+                    "Term 5: a₅ =a₄ +a₃ +a₂=3+1+1=5 mod 1000 →5",
+                    "Sum after term 5:6 +5=11 mod 1000 →11",
+                    "Term6: a₆ =a₅ +a₄ +a₃=5+3+1=9 mod 1000 →9",
+                    "Sum after term6:11 +9=20 mod 1000 →20",
+                    "Term7: a₇=9+5+3=17 mod 1000 →17",
+                    "Sum:20 +17=37 mod1000 →37",
+                    "Term8:17+9+5=31 mod 1000 →31",
+                    "Sum:37 +31=68 mod1000 →68",
+                    "Term9:31+17+9=57 mod 1000 →57",
+                    "Sum:68 +57=125 mod1000 →125"
+                ],
+                "group14": [
+                    "Term10:57 +31 +17=105 mod1000 →105",
+                    "Sum:125 +105=130 mod1000 →230? Wait, 125 +105=230, yes. 230 mod1000 →230"
+                ],
+                "group15": [
+                    "Term11:105 +57 +31=193 mod1000 →193",
+                    "Sum:230 +193=423 mod1000 →423",
+                    "Term12:193 +105 +57=355 mod1000 →355",
+                    "Sum:423 +355=778 mod1000 →778",
+                    "Term13:355 +193 +105=653 mod1000 →653",
+                    "Sum:778 +653=1431 →431 mod1000",
+                    "Term14:653 +355 +193=1201 →1201 mod1000=201",
+                    "Sum:431 +201=632 mod1000",
+                    "Term15:201 +653 +355=1209 →209 mod1000",
+                    "Sum:632 +209=841 mod1000"
+                ],
+                "group16": [
+                    "Term16:209 +201 +653=1063 →63 mod1000 (since 1063-1000=63)",
+                    "Sum:841 +63=904 mod1000",
+                    "Term17:63 +209 +201=473 mod1000 →473",
+                    "Sum:904 +473=1377 →377 mod1000",
+                    "Term18:473 +63 +209=745 mod1000",
+                    "Sum:377 +745=1122 →122 mod1000",
+                    "Term19:745 +473 +63=1281 →281 mod1000",
+                    "Sum:122 +281=403 mod1000",
+                    "Term20:281 +745 +473=1499 →499 mod1000 (1499-1000=499)",
+                    "Sum:403 +499=902 mod1000"
+                ],
+                "group17": [
+                    "Term21:499+281+745=1525 →525 mod1000 (1525-1500=25; 25 +500=525?)",
+                    "Wait, 1525 divided by 1000 is 1 with remainder 525. Yes."
+                ],
+                "group18": [
+                    "Sum:902 +525=1427 →427 mod1000",
+                    "Term22:525 +499 +281=1305 →305 mod1000",
+                    "Sum:427 +305=732 mod1000",
+                    "Term23:305 +525 +499=1329 →329 mod1000",
+                    "Sum:732 +329=1061 →61 mod1000",
+                    "Term24:329 +305 +525=1159 →159 mod1000",
+                    "Sum:61 +159=220 mod1000",
+                    "Term25:159 +329 +305=793 mod1000",
+                    "Sum:220 +793=1013 →13 mod1000",
+                    "Term26:793 +159 +329=1281 →281 mod1000",
+                    "Sum:13 +281=294 mod1000",
+                    "Term27:281 +793 +159=1233 →233 mod1000",
+                    "Sum:294 +233=527 mod1000",
+                    "Term28:233 +281 +793=1307 →307 mod1000 (Yeah, given a28=6090307, so 6090307 mod1000 is 307, checks out.)",
+                    "Sum:527 +307=834 mod1000"
+                ],
+                "group19": [
+                    "So total sum S₂₈ mod1000 is 834.",
+                    "However, let me check again each step because making a mistake in one step would propagate errors.",
+                    "Let's retrace the calculations, perhaps faster by grouping steps:"
+                ],
+                "group20": [
+                    "Terms 1-3: 1+1+1=3 (sum=3)",
+                    "4:3; sum=6",
+                    "5:5; sum=11",
+                    "6:9; sum=20",
+                    "7:17; sum=37",
+                    "8:31; sum=68",
+                    "9:57; sum=125",
+                    "10:105; sum=230",
+                    "11:193; sum=423",
+                    "12:355; sum=778"
+                ],
+                "group21": [
+                    "13:653 mod1000=653; sum becomes 778 +653=1431, which is 431.",
+                    "14: calculate a₁�₄ =a₁₃+a₁₂+a₁₁=653+355+193=1201 mod1000=201; sum 431+201=632",
+                    "a₁₅=201+653+355=1209 mod1000=209; sum 632+209=841",
+                    "a₁₆=a₁₅+a₁₄+a₁₃=209+201+653=1063 mod1000=63; sum 841+63=904",
+                    "a₁₇=a₁₆+a₁₅+a₁₄=63+209+201=473; sum 904+473=1377 mod1000=377",
+                    "a₁₈=473+63+209=745; sum=377+745=1122 mod1000=122",
+                    "a₁₉=745+473+63=1281 mod1000=281; sum122+281=403",
+                    "a₂₀=281+745+473=1499 mod1000=499; sum403+499=902",
+                    "a₂₁=499+281+745=1525 mod1000=525; sum902+525=1427 mod1000=427",
+                    "a₂₂=525+499+281=1305 mod1000=305; sum427+305=732",
+                    "a₂₃=305+525+499=1329 mod1000=329; sum732+329=1061 mod1000=61",
+                    "a₂₄=329+305+525=1159 mod1000=159; sum61+159=220",
+                    "a₂₅=159+329+305=793; sum220+793=1013 mod1000=13",
+                    "a₂₆=793+159+329=1281 mod1000=281; sum13+281=294",
+                    "a₂₇=281+793+159=1233 mod1000=233; sum294+233=527",
+                    "a₂₈=233+281+793=1307 mod1000=307; sum527+307=834 mod1000"
+                ],
+                "group22": [
+                    "So with each step, and checking, the final sum modulo1000 is 834.",
+                    "That's the answer? Hmm. But is there a way to verify this?",
+                    "Maybe using the given a₂₈, a₂₉, and a₃₀?"
+                ],
+                "group23": [
+                    "Wait, hold on.",
+                    "The problem says that a₂�₈=6090307, which mod1000 is 307, matching my calculation for a₂₈.",
+                    "Similarly, a₂�₉=11201821 mod1000 is 821, a₃₀=20603361 mod1000 is 361."
+                ],
+                "group24": [
+                    "Wait a minute.",
+                    "Perhaps to find S₂₈, the sum up to a₂₈, using recurrence relations?",
+                    "Is summing the terms the only way, or can we link S_n to a_{n+3} or such?",
+                    "Let me think."
+                ],
+                "group25": [
+                    "From the sequence's recursion, a_{n+3} = a_{n+2} +a_{n+1} +a_n.",
+                    "Perhaps adding a_{n+3} to S_n (sum up to n), would we get S_n + a_{n+3}?",
+                    "But considering S_{n+3}=S_n + a_{n+1} +a_{n+2} +a_{n+3}.",
+                    "However, since a_{n+3}=a_{n+2} +a_{n+1}+a_n, substituting:",
+                    "S_{n+3}=S_n + a_{n+1}+a_{n+2}+(a_{n+2}+a_{n+1}+a_n)=S_n +2*a_{n+1} +2*a_{n+2} +a_n. Not sure."
+                ],
+                "group26": [
+                    "Alternatively, is there a way to find S_{n} in terms of some later terms?",
+                    "Alternatively, perhaps sum S_{n} and relations. Let's note that:",
+                    "Since a_{n+3}=a_{n}+a_{n+1}+a_{n+2},",
+                    "Then summing from n=1 to n=k, Sum_{n=1}^k a_{n+3}= Sum_{n=1}^k (a_n+a_{n+1}+a_{n+2} ) .",
+                    "But that resolves to Sum_{n=1}^k a_{n+3} = Sum_{n=1}^k a_n + Sum_{n=1}^k a_{n+1} + Sum_{n=1}^{k} a_{n+2} }."
+                ],
+                "group27": [
+                    "Which is = S_k + (S_{k+1} - a₁) + (S_{k+2} - a₁ - a₂ )",
+                    "Because Sum_{n=1}^k a_{n+1} = Sum_{n=2}^{k+1} a_n= S_{k+1} - a₁.",
+                    "Similarly, Sum_{n=1}^k a_{n+2} = Sum_{n=3}^{k+2} a_n= S_{k+2} - a₁ - a₂.",
+                    "Plugging in:",
+                    "Sum_{n=1}^k a_{n+3} = S_k + [S_{k+1} -a₁] + [S_{k+2} -a₁ -a₂ ]",
+                    "This equates also to Sum_{n=4}^{k+3} a_n = S_{k+3} - S_3. So:",
+                    "S_{k+3} - S_3 = S_k + S_{k+1} -a₁ + S_{k+2} -a₁ -a₂.",
+                    "Since S_3 = a₁+a₂+a₃=3. Given a₁=1, a₂=1, a₃=1."
+                ],
+                "group28": [
+                    "Thus,",
+                    "S_{k+3} -3 = S_k + S_{k+1} -1 + S_{k+2} -1 -1",
+                    "Simplify:",
+                    "S_{k+3} = S_k + S_{k+1} + S_{k+2} -1 -1 -1 +3",
+                    "= S_k + S_{k+1} + S_{k+2} -3 +3 = S_k + S_{k+1} + S_{k+2}",
+                    "Therefore, the recurrence S_{k+3} = S_k + S_{k+1} + S_{k+2}."
+                ],
+                "group29": [
+                    "Wait, that's a same recurrence as the a_n sequence.",
+                    "Because the sums follow the same recurrence as the original sequence.",
+                    "So that's intriguing."
+                ],
+                "group30": [
+                    "Now, given that the sequence a_n follows the same recurrence as S_n?",
+                    "Wait, no, the a_n starts with a₁=1, a₂=1, a₃=1, and then each subsequent term is the sum of previous three.",
+                    "The S_n here, if setting S_{k+3}= S_k + S_{k+1} + S_{k+2}, with initial conditions. Let's check initial sums."
+                ],
+                "group31": [
+                    "But S₁= a₁=1",
+                    "S₂= a₁+a₂=2",
+                    "S₃=3",
+                    "S₄= S₁ + S₂ + S₃? Wait no. Let's see."
+                ],
+                "group32": [
+                    "According to the discovered recurrence S_{k+3}=S_k + S_{k+1} +S_{k+2}, but the initial sums:",
+                    "Let's check for k=1, S_{4} according to recurrence would be S₁ + S₂ + S₃ =1 +2 +3=6, but actual S₄ is 1+1+1+3=6. Correct.",
+                    "Similarly, check for S₅: According to recurrence S₅=S�₂ +S₃ +S₄=2 +3 +6=11. Actual S₅= S₄ + a₅=6 +5=11. Correct.",
+                    "Similarly, S₆ via recurrence S₆= S₃ + S₄ + S₅=3 +6 +11=20. Actual S₆=11 +9=20. Correct. So the recurrence seems valid."
+                ],
+                "group33": [
+                    "Therefore, the sums Sₙ follow the same recurrence as the aₙ, but with different initial terms.",
+                    "Wait no: Original a sequence: Initial terms are a₁=1, a₂=1, a₃=1, recurrence a_{n+3}=a_{n}+a_{n+1}+a_{n+2}.",
+                    "Sum sequence starts with S₁=1, S₂=2, S₃=3, and recurrence S_{n+3}=S_n + S_{n+1} + S_{n+2}.",
+                    "Therefore, this is like a shifted version, but not exactly the same initial terms.",
+                    "However, if a sequence follows this recurrence, depending on their initial values.",
+                    "So perhaps we can model Sₙ as another sequence following the same recursion with different initial conditions."
+                ],
+                "group34": [
+                    "But given that Sₙ follows the same linear recursion, which is linear homogeneous recurrence with constant coefficients, the characteristics would be similar.",
+                    "But hold on, our problem now is: given that the sums Sₙ follow the same recursion but starting with S₁=1, S₂=2, S₃=3, and then S_{n+3}=S_n + S_{n+1} + S_{n+2}.",
+                    "Given that we have values for a₂₈, a₂₉, a₃₀. How could this relate to S₂₈?"
+                ],
+                "group35": [
+                    "But perhaps even computing for terms S₂₈ given recursion S_{n+3}= S_n +S_{n+1}+S_{n+2}, starts with S₁=1, S₂=2, S₃=3.",
+                    "But computing up to S₂₈ would require recursive calculations. But the problem is that we need an efficient way."
+                ],
+                "group36": [
+                    "Alternatively, noticing that aₙ and Sₙ follow the same recurrence, maybe we can find an linear relation between them.",
+                    "Because both Sₙ and aₙ satisfy the same recurrence relation with different initial terms.",
+                    "Therefore, potentially, Sₙ is a linear combination of aₙ shifted appropriately."
+                ],
+                "group37": [
+                    "But given a₁=a₂=a₃=1, S₁=1, S₂=2, S₃=3.",
+                    "Wait:",
+                    "Assume that S_{n} = c₁*a_{n} + c₂*a_{n-1} + c₃*a_{n-2}... trying to find coefficients. Maybe it's possible.",
+                    "Alternatively, the sum S_{n} can be written using generating functions.",
+                    "But another path. If both sequences follow the same recurrence relation, then their difference might follow the recurrence too."
+                ],
+                "group38": [
+                    "Or shift indices. Perhaps Sₙ and aₙ shifted. For instance, maybe Sₙ = a_{n+2}}, but test:",
+                    "At n=1: a₃=1 vs S₁=1, not. n=2: S₂=2 vs a₄=3, not. Maybe not.",
+                    "Alternatively, considering that S₁ corresponds to a₁, S₂ to a₁+a₂, S₃ to a₁+a₂+a₃, each term sums are going differently."
+                ],
+                "group39": [
+                    "Alternative Plan: Let's suppose S₁₀ is sum up to a₁₀. If a₁₀ is 105, then maybe can check?",
+                    "But perhaps to use the modulo 1000 and the previous steps, maybe the manual calculations led to S₂₈ mod1000=834 as answer.",
+                    "But the user-provided answers can't handle code, so since via the computations, step-by-step, giving each term mod1000, probably concluding 834."
+                ],
+                "group40": [
+                    "But here's a problem: Let me check if the value of a₂₈ is 6090307.",
+                    "When check modulo 1000, 307, which matches our computation for term28.",
+                    "Likewise, a₂₉=11201821 mod1000=821.",
+                    "Let me check term29: a29 is a28+a27+a26 mod1000=307 +233 +281=307+233=540 +281=821 mod1000, which matches the given a₂₉ mod1000=821.",
+                    "Same a30: a29+a28+a27=821 +307 +233=821+307=1128 +233=1361 mod1000=361, which is the remainder of a₃₀=20603361.",
+                    "Thus our modulo chain is accurate. Therefore, gives confidence in the sum. calculated up to term28, of sum 834 mod1000."
+                ],
+                "group41": [
+                    "But the user said sum from k=1 to 28 is 834 mod1000?",
+                    "Hmm, alternatively, yet better safeguard. What if I do all computations once again?"
+                ],
+                "group42": [
+                    "So double-check:",
+                    "Term1:1;Sum1",
+                    "Term2:1; Sum2",
+                    "Term3:1; Sum3",
+                    "Term4: sum of 1+1+1=3, Sum6",
+                    "Term5: sum of 3+1+1=5; sum11",
+                    "Term6: sum5+3+1=9; sum total 20",
+                    "Term7:sum9+5+3=17;sum37",
+                    "Term8:17+9+5=31; sum68",
+                    "Term9:31+17+9=57, sum125",
+                    "Term10:57+31+17=105, sum230",
+                    "Term11:105+57+31=193; sum423",
+                    "Term12:193+105+57=355; sum778",
+                    "Term13:355+193+105=653; sum after term13:778+653=1431 mod1000→431",
+                    "Term14:653+355+193=1201→201; sum after term14:431+201=632",
+                    "Term15:201+653+355=1209→209; sum632+209=841",
+                    "Term16:209+201+653=1063→63; sum841+63=904",
+                    "Term17:63+209+201=473; sum904+473=1377→377",
+                    "Term18:473+63+209=745; sum377+745=1122→122",
+                    "Term19:745+473+63=1281→281; sum122+281=403",
+                    "Term20:281+745+473=1499→499; sum403+499=902",
+                    "Term21:499+281+745=1525→525; sum902+525=1427→427",
+                    "Term22:525+499+281=1305→305; sum427+305=732",
+                    "Term23:305+525+499=1329→329; sum732+329=1061→61",
+                    "Term24:329+305+525=1159→159; sum61+159=220",
+                    "Term25:159+329+305=793; sum220+793=1013→13",
+                    "Term26:793+159+329=1281→281; sum13+281=294",
+                    "Term27:281+793+159=1233→233; sum294+233=527",
+                    "Term28:233+281+793=1307→307; sum527+307=834"
+                ],
+                "group43": [
+                    "Each of these steps recalculated with careful numbers gives same previous result. Hence, confidence in the correctness.",
+                    "Admittedly, this is tedious but necessary. Since every step is contained modulo 1000, summing up each term mod 1000 with their cumulative sum mod1000 gives the answer 834.",
+                    "So regardless of the massive actual numbers, modulus arithmetic works here."
+                ],
+                "group44": [
+                    "Conclusion: The remainder when the sum of the first 28 terms is divided by 1000 is 834. Hence, boxed answer is \\boxed{834}."
+                ]
+            },
+            "patterns": {
+                "regular_reasoning": [
+                    "group1",
+                    "group2",
+                    "group3",
+                    "group4",
+                    "group5",
+                    "group6",
+                    "group7",
+                    "group8",
+                    "group9",
+                    "group10",
+                    "group11",
+                    "group12",
+                    "group13",
+                    "group15",
+                    "group16",
+                    "group18",
+                    "group24",
+                    "group25",
+                    "group26",
+                    "group27",
+                    "group28",
+                    "group29",
+                    "group30",
+                    "group31",
+                    "group33",
+                    "group34",
+                    "group35",
+                    "group36",
+                    "group37",
+                    "group38",
+                    "group39",
+                    "group44"
+                ],
+                "backtracking_verification": [
+                    {
+                        "id": "group19",
+                        "relates_to": "group18"
+                    },
+                    {
+                        "id": "group20",
+                        "relates_to": "group13"
+                    },
+                    {
+                        "id": "group21",
+                        "relates_to": "group15"
+                    },
+                    {
+                        "id": "group22",
+                        "relates_to": "group21"
+                    },
+                    {
+                        "id": "group32",
+                        "relates_to": "group31"
+                    },
+                    {
+                        "id": "group41",
+                        "relates_to": "group40"
+                    },
+                    {
+                        "id": "group42",
+                        "relates_to": "group18"
+                    },
+                    {
+                        "id": "group43",
+                        "relates_to": "group42"
+                    }
+                ],
+                "multiple_verification": [
+                    {
+                        "id": "group40",
+                        "relates_to": "group18",
+                        "method": "Verifying term calculations with given values of a₂₈, a₂₉, and a₃₀"
+                    },
+                    {
+                        "id": "group23",
+                        "relates_to": "group18",
+                        "method": "Checking modulo values of known terms"
+                    }
+                ],
+                "error_correction": [
+                    {
+                        "id": "group14",
+                        "relates_to": "group13"
+                    },
+                    {
+                        "id": "group17",
+                        "relates_to": "group16"
+                    }
+                ]
+            },
+            "group_meta": {
+                "group1": {
+                    "start": 0,
+                    "end": 477,
+                    "answer_exist": false
+                },
+                "group2": {
+                    "start": 479,
+                    "end": 743,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 4.106137454692801,
+                    "importantance": 0.7963032789002051
+                },
+                "group3": {},
+                "group4": {},
+                "group5": {
+                    "start": 1553,
+                    "end": 1788,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 5.011432924922506,
+                    "importantance": 0.9718672387704549
+                },
+                "group6": {
+                    "start": 1790,
+                    "end": 2017,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 5.0292559686709755,
+                    "importantance": 0.9753236618282529
+                },
+                "group7": {
+                    "start": 2019,
+                    "end": 2188,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 5.125325096831068,
+                    "importantance": 0.9939543488422825
+                },
+                "group8": {
+                    "start": 2190,
+                    "end": 2449,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 5.0446353122452745,
+                    "importantance": 0.978306178086093
+                },
+                "group9": {
+                    "start": 2451,
+                    "end": 2651,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 5.167070578917022,
+                    "importantance": 1.0020500506133772
+                },
+                "group10": {
+                    "start": 2653,
+                    "end": 3034,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 5.164765204081289,
+                    "importantance": 1.0016029692477277
+                },
+                "group11": {
+                    "start": 3036,
+                    "end": 3205,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 5.110099885912366,
+                    "importantance": 0.9910017235319306
+                },
+                "group12": {},
+                "group13": {
+                    "start": 140,
+                    "end": 3796,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 6.070594486685654,
+                    "importantance": 1.1772704513572962
+                },
+                "group14": {
+                    "start": 3798,
+                    "end": 3906,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 5.129585264764992,
+                    "importantance": 0.9947805232536072
+                },
+                "group15": {
+                    "start": 3908,
+                    "end": 4251,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 5.219792550802705,
+                    "importantance": 1.0122744231644405
+                },
+                "group16": {
+                    "start": 4253,
+                    "end": 4618,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 5.154003966845367,
+                    "importantance": 0.9995160423996765
+                },
+                "group17": {
+                    "start": 4620,
+                    "end": 4743,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 5.077770485007982,
+                    "importantance": 0.9847320824814058
+                },
+                "group18": {
+                    "start": 4745,
+                    "end": 5305,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 5.153666580873591,
+                    "importantance": 0.9994506131346935
+                },
+                "group19": {
+                    "start": 5307,
+                    "end": 5504,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 5.01045530589932,
+                    "importantance": 0.9716776491032147
+                },
+                "group20": {
+                    "start": 5506,
+                    "end": 5664,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 5.142683200472508,
+                    "importantance": 0.9973206060603332
+                },
+                "group21": {
+                    "start": 5666,
+                    "end": 6558,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 5.427148448492969,
+                    "importantance": 1.0524869545402091
+                },
+                "group22": {
+                    "start": 6560,
+                    "end": 6725,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 4.929281795401677,
+                    "importantance": 0.9559356693759556
+                },
+                "group23": {
+                    "start": 6727,
+                    "end": 6902,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 5.178339278562238,
+                    "importantance": 1.0042353896516922
+                },
+                "group24": {
+                    "start": 6904,
+                    "end": 7075,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 5.0929925716173585,
+                    "importantance": 0.9876841018944178
+                },
+                "group25": {
+                    "start": 7077,
+                    "end": 7424,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 5.043300049333409,
+                    "importantance": 0.9780472305358356
+                },
+                "group26": {
+                    "start": 7426,
+                    "end": 7801,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 5.031048918264012,
+                    "importantance": 0.9756713685613059
+                },
+                "group27": {
+                    "start": 7803,
+                    "end": 8241,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 5.128763889775693,
+                    "importantance": 0.9946212339934687
+                },
+                "group28": {
+                    "start": 8243,
+                    "end": 8474,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 5.190532816192906,
+                    "importantance": 1.0066000825300558
+                },
+                "group29": {
+                    "start": 8476,
+                    "end": 8619,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 5.038067672179251,
+                    "importantance": 0.9770325155804128
+                },
+                "group30": {
+                    "start": 8621,
+                    "end": 8908,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 5.161998707646553,
+                    "importantance": 1.0010664625656323
+                },
+                "group31": {
+                    "start": 8910,
+                    "end": 8980,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 5.002133366536512,
+                    "importantance": 0.970063775316832
+                },
+                "group32": {
+                    "start": 8982,
+                    "end": 9431,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 5.101563226672716,
+                    "importantance": 0.9893462091176195
+                },
+                "group33": {
+                    "start": 9433,
+                    "end": 10004,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 5.067559850731249,
+                    "importantance": 0.9827519340709036
+                },
+                "group34": {
+                    "start": 10006,
+                    "end": 10400,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 5.071572281197219,
+                    "importantance": 0.9835300647525151
+                },
+                "group35": {
+                    "start": 10402,
+                    "end": 10632,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 4.967755380043409,
+                    "importantance": 0.963396852041977
+                },
+                "group36": {
+                    "start": 10634,
+                    "end": 10921,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 4.949312034252626,
+                    "importantance": 0.9598201338027214
+                },
+                "group37": {
+                    "start": 10923,
+                    "end": 11280,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 5.145492275270076,
+                    "importantance": 0.9978653699647717
+                },
+                "group38": {
+                    "start": 11282,
+                    "end": 11556,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 5.184314487405397,
+                    "importantance": 1.0053941619642173
+                },
+                "group39": {
+                    "start": 11558,
+                    "end": 11916,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 5.096792856991279,
+                    "importantance": 0.9884210912761422
+                },
+                "group40": {
+                    "start": 11918,
+                    "end": 12456,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 4.90233544862475,
+                    "importantance": 0.9507099640678378
+                },
+                "group41": {
+                    "start": 12458,
+                    "end": 12594,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 4.84559011640099,
+                    "importantance": 0.9397053412049526
+                },
+                "group42": {
+                    "start": 12596,
+                    "end": 13670,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 4.6676166755313595,
+                    "importantance": 0.9051909499831807
+                },
+                "group43": {
+                    "start": 13672,
+                    "end": 14040,
+                    "answer_exist": false,
+                    "ppl_with": 5.156499493966536,
+                    "ppl_without": 4.643744462571994,
+                    "importantance": 0.9005614114779801
+                },
+                "group44": {
+                    "start": 14042,
+                    "end": 14165,
+                    "answer_exist": true
+                }
+            },
+            "summaries": {},
+            "difficulties": {},
+            "relations": {
+                "grouperror": "分析步骤依赖关系时出错: Error code: 401 - {'error': {'message': '[sk-vKi***95Y] 该令牌额度已用尽 !token.UnlimitedQuota && token.RemainQuota = -4509 (request id: 20250713215029223924915pSTQ7LjO)', 'type': 'new_api_error'}}"
+            }
+        },
+        "analysis_model": "claude-3-7",
+        "original_token_count": 5604,
+        "analysis_model_new": "deepseek-ai\/DeepSeek-R1"
+    }
+]

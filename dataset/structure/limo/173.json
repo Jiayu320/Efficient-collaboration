@@ -1,0 +1,721 @@
+[
+    {
+        "id": "173",
+        "question": "Let $N$ be the number of positive integers that are less than or equal to 2003 and whose base-2 representation has more 1's than 0's. Find the remainder when $N$ is divided by 1000.",
+        "answer": "155",
+        "solution": "Okay, so I need to find the number of positive integers ≤2003 whose base-2 (binary) representations have more 1's than 0's. Then, I have to find the remainder when that number is divided by 1000. Hmm, let me start by understanding the problem step by step.\n\nFirst, let's recall that every positive integer can be expressed in binary form, which consists of 0's and 1's. For example, the number 5 in binary is 101, which has two 1's and one 0. The problem is asking for numbers where the count of 1's exceeds the count of 0's in their binary representations. \n\nSince the upper limit is 2003, I need to consider all numbers from 1 to 2003 inclusive. To approach this, I think the key steps are:\n\n1. Determine the binary representation of 2003 to know the maximum number of bits we need to consider.\n2. For numbers with a certain number of bits (say, m bits), calculate how many such numbers have more 1's than 0's in their binary form.\n3. Sum these counts for all relevant bit lengths, making sure not to exceed 2003 when considering the highest bit length.\n4. Finally, take the total count modulo 1000.\n\nLet me start with step 1: finding the binary representation of 2003.\n\n2003 divided by 2 is 1001 with a remainder of 1.\n1001 divided by 2 is 500 with a remainder of 1.\n500 divided by 2 is 250 with a remainder of 0.\n250 divided by 2 is 125 with a remainder of 0.\n125 divided by 2 is 62 with a remainder of 1.\n62 divided by 2 is 31 with a remainder of 0.\n31 divided by 2 is 15 with a remainder of 1.\n15 divided by 2 is 7 with a remainder of 1.\n7 divided by 2 is 3 with a remainder of 1.\n3 divided by 2 is 1 with a remainder of 1.\n1 divided by 2 is 0 with a remainder of 1.\n\nReading the remainders from bottom to top, the binary representation of 2003 is 11111010011.\n\nLet me verify that:\n\nStarting from the right, the bits correspond to powers of 2:\n\n1*(2^10) + 1*(2^9) + 1*(2^8) + 1*(2^7) + 1*(2^6) + 0*(2^5) + 1*(2^4) + 0*(2^3) + 0*(2^2) + 1*(2^1) + 1*(2^0)\n\nCalculating:\n\n1024 + 512 + 256 + 128 + 64 + 0 + 16 + 0 + 0 + 2 + 1 = 1024+512=1536; 1536+256=1792; 1792+128=1920; 1920+64=1984; 1984+16=2000; 2000+2=2002; 2002+1=2003. Perfect, that's correct.\n\nSo, 2003 in binary is 11111010011, which is 11 bits long. Therefore, numbers from 1 to 2003 can have binary representations ranging from 1 bit (just 1) up to 11 bits. However, numbers with 11 bits must be less than or equal to 2003, so we need to be careful with the 11-bit numbers.\n\nNow, the next step is to figure out, for each bit length from 1 to 11, how many numbers with that many bits have more 1's than 0's. Then, for the 11-bit numbers, we need to adjust the count to ensure we don't exceed 2003.\n\nFirst, let's handle the numbers with bit lengths from 1 to 10. For these, all numbers with that bit length are allowed since the maximum number with, say, 10 bits is 1023, which is less than 2003. But for 11-bit numbers, the maximum is 2047, but we can only go up to 2003, so we need to be careful there.\n\nLet me recall that for a number with m bits, the number of 1's must be more than the number of 0's. Since the number has m bits, the number of 0's is m - number_of_1's. So, the condition is:\n\nnumber_of_1's > (m - number_of_1's)\n\nWhich simplifies to:\n\n2 * number_of_1's > m\n\nOr:\n\nnumber_of_1's > m \/ 2\n\nSince number_of_1's must be an integer, this means number_of_1's ≥ floor(m\/2) + 1.\n\nTherefore, for each m (bit length), the numbers we are interested in are those with k 1's, where k ranges from ceil(m\/2 + 1) to m. Wait, let me check:\n\nIf m is even, say m=2n, then number_of_1's > n, so k ≥ n+1.\n\nIf m is odd, say m=2n+1, then number_of_1's > n + 0.5, so k ≥ n+1.\n\nSo regardless of whether m is even or odd, the required number of 1's is floor(m\/2) + 1. For example, m=11 (which is odd), floor(11\/2)=5, so k needs to be at least 6. For m=10, floor(10\/2)=5, so k needs to be at least 6. Wait, but 10 bits: total bits 10. If k=6, then number of 1's is 6, number of 0's is 4, so 6 >4, which satisfies the condition.\n\nTherefore, for each bit length m, the count is the sum from k=ceil(m\/2 + 1) to m of C(m-1, k-1). Wait, why m-1 choose k-1?\n\nWait, because for an m-bit number, the first bit is always 1 (since we're considering numbers in their standard binary form without leading zeros). Therefore, the remaining m-1 bits can be either 0 or 1. So, if we fix the first bit as 1, then the number of 1's in the entire number is 1 + (number of 1's in the remaining m-1 bits). Therefore, the total number of 1's is k = 1 + s, where s is the number of 1's in the remaining m-1 bits.\n\nBut we need the total number of 1's to be greater than m\/2. So, k > m\/2. Since k = 1 + s, this translates to s > m\/2 - 1. Therefore, s ≥ floor(m\/2 -1) + 1. Wait, maybe this is complicating it. Alternatively, perhaps it's better to consider that the total number of 1's must be greater than the number of 0's, which is m - k.\n\nWait, original condition: k > (m - k) => 2k > m => k > m\/2. So k needs to be at least floor(m\/2) +1. For example, m=11: floor(11\/2)=5, so k ≥6. m=10: floor(10\/2)=5, so k ≥6.\n\nBut since the first bit is 1, the remaining m-1 bits can vary. So total number of 1's is 1 + s, where s is the number of 1's in the remaining m-1 bits. Therefore, the total k = 1 + s. So the condition is 1 + s > (m - (1 + s)) => 1 + s > m -1 - s => 2s + 2 > m => 2s > m - 2 => s > (m - 2)\/2. Therefore, s ≥ floor((m - 2)\/2) + 1.\n\nHmm, this seems different. Let me check with an example. Let's take m=11 bits. Then, s > (11 - 2)\/2 = 9\/2 = 4.5. Therefore, s ≥5. So the total k = 1 + s ≥6. Which matches our previous result.\n\nSimilarly, for m=10, s > (10 -2)\/2 = 4, so s ≥5, so total k=1 +5=6. Correct.\n\nTherefore, for each m-bit number, the number of 1's required is k ≥ floor(m\/2) +1. However, since the first bit is 1, the remaining m-1 bits need to have s ≥ floor((m - 2)\/2) +1. Let's verify:\n\nIf m is odd: m=11. Then floor((11 -2)\/2)= floor(9\/2)=4. So s ≥5. Wait, 4.5, so floor(4.5) =4, but since s must be integer, s>4.5 implies s≥5. So yes, s≥5. Then, k=1+5=6.\n\nSimilarly, for m=10 (even), floor((10-2)\/2)=floor(8\/2)=4. So s>4. So s≥5. Therefore, k=1+5=6. Correct.\n\nSo in general, for an m-bit number, the number of such numbers is the sum over s from s_min to m-1 of C(m-1, s), where s_min = floor((m - 2)\/2) +1. Wait, let's rephrase:\n\ns must be ≥ ceil((m -1)\/2). Wait, perhaps there's a better way. Since 2s > m - 2 => s > (m -2)\/2. Since s must be integer, s ≥ floor((m -2)\/2) +1.\n\nBut floor((m -2)\/2) +1 = floor((m)\/2 -1) +1 = floor(m\/2). Hmm, maybe not. Let's compute for m=11:\n\nfloor((11 -2)\/2) +1 = floor(9\/2) +1 =4 +1=5. Correct.\n\nFor m=10:\n\nfloor((10 -2)\/2) +1= floor(8\/2) +1=4 +1=5. Correct.\n\nTherefore, s_min = floor((m -2)\/2) +1 = floor(m\/2 -1) +1 = floor(m\/2). Wait:\n\nWait, floor((m -2)\/2) +1 = floor(m\/2 -1) +1. If m is even:\n\nm=10: floor(10\/2 -1) +1 =floor(5 -1)+1=4 +1=5. Correct.\n\nIf m=11: floor(11\/2 -1) +1= floor(5.5 -1)+1=floor(4.5)+1=4 +1=5. Correct.\n\nSo yes, s_min = floor(m\/2). Therefore, the number of m-bit numbers with more 1's than 0's is sum_{s=floor(m\/2)}^{m-1} C(m-1, s). Because s can range from floor(m\/2) to m-1 (since the remaining m-1 bits can have up to m-1 1's). Therefore, the total count for each m is the sum of combinations from s= floor(m\/2) to m-1 of C(m-1, s).\n\nAlternatively, since the first bit is 1, the total number of 1's is 1 + s, where s is the number of 1's in the remaining m-1 bits. Therefore, total 1's k =1 +s. The condition k > m\/2 translates to 1 +s > m\/2. Therefore, s > m\/2 -1. Since s must be an integer, s ≥ floor(m\/2 -1) +1 = floor(m\/2). Therefore, s needs to be at least floor(m\/2). Wait, but earlier we had s_min= floor(m\/2). Wait, but when m is even:\n\nm=10, s needs to be ≥5, which is m\/2. Wait, but m=10, floor(m\/2 -1) +1= floor(5 -1)+1=4+1=5. So yes, s_min=5. But floor(m\/2) when m=10 is 5. So s_min= floor(m\/2). Similarly for m=11, floor(m\/2)=5, which matches s_min=5. Therefore, regardless of m being even or odd, s_min= floor(m\/2). Therefore, the number of such numbers is sum_{s=floor(m\/2)}^{m-1} C(m-1, s).\n\nAlternatively, this sum is equal to sum_{k= floor(m\/2) +1}^{m} C(m-1, k -1), but since s = k -1, perhaps not. Wait, maybe it's better to write in terms of k.\n\nWait, total 1's in the number is k =1 + s. So since we need k > m\/2, then s = k -1 > m\/2 -1 => k > m\/2. So k ≥ floor(m\/2) +1. Therefore, the number of numbers is sum_{k= floor(m\/2) +1}^{m} C(m-1, k -1). Which is the same as sum_{s= floor(m\/2)}^{m -1} C(m-1, s). Because substituting s = k -1.\n\nSo regardless, for each bit length m, the number of numbers with more 1's than 0's is the sum from s= floor(m\/2) to m-1 of C(m-1, s). This sum can be calculated for each m from 1 to 11, except that for m=1, since it's a special case.\n\nWait, let's check m=1. An m=1 bit number is just '1'. The number of 1's is 1, number of 0's is 0. So 1 >0, which satisfies the condition. So for m=1, the count is 1. Let's see if our formula works:\n\nFor m=1: s_min = floor(1\/2)=0. So sum from s=0 to 0 (since m-1=0) of C(0,0)=1. So the count is 1. Correct.\n\nSimilarly, for m=2: numbers are '10' and '11'. For m=2, the first bit is 1, and the remaining 1 bit can be 0 or 1. The total number of 1's must be >1 (since m=2, need more than 1 one). So k>1, but k can be at most 2. So numbers with 2 ones: '11'. So count=1. According to the formula: s_min= floor(2\/2)=1. So sum from s=1 to 1 of C(1,1)=1. Correct.\n\nAnother test: m=3. Numbers are 100 to 111. The first bit is 1, the remaining 2 bits. Total 1's must be >1.5, so at least 2. Therefore, the remaining two bits must have at least 1 one. So total k=1 + s, where s ≥1. So s can be 1 or 2. The number of such numbers is C(2,1) + C(2,2) =2 +1=3. Let's verify with the formula: s_min= floor(3\/2)=1. Sum from s=1 to 2 of C(2,1) + C(2,2)=2 +1=3. Correct.\n\nSo the formula seems to work.\n\nTherefore, for each m from 1 to 11, except for m=11 where we have to be careful not to exceed 2003, the number of numbers is sum_{s= floor(m\/2)}^{m-1} C(m-1, s). Then, for m=11, we need to adjust the count because not all 11-bit numbers up to 2047 are allowed; we can only go up to 2003.\n\nSo my plan is:\n\n1. For m=1 to 10, calculate the count using the formula sum_{s= floor(m\/2)}^{m-1} C(m-1, s). Sum all these counts.\n\n2. For m=11, calculate the number of 11-bit numbers ≤2003 that have more 1's than 0's. Add this to the previous sum.\n\n3. Total N is the sum from steps 1 and 2. Then compute N mod 1000.\n\nSo let's start with m=1 to 10.\n\nFirst, let's compute for each m from 1 to 10:\n\nm | s_min = floor(m\/2) | sum_{s=s_min}^{m-1} C(m-1, s)\n---|---------------------|--------------------------------\n1 | 0                   | C(0,0)=1\n2 | 1                   | C(1,1)=1\n3 | 1                   | C(2,1)+C(2,2)=2+1=3\n4 | 2                   | C(3,2)+C(3,3)=3+1=4\n5 | 2                   | C(4,2)+C(4,3)+C(4,4)=6+4+1=11\n6 | 3                   | C(5,3)+C(5,4)+C(5,5)=10+5+1=16\n7 | 3                   | C(6,3)+C(6,4)+C(6,5)+C(6,6)=20+15+6+1=42\n8 | 4                   | C(7,4)+C(7,5)+C(7,6)+C(7,7)=35+21+7+1=64\n9 | 4                   | C(8,4)+C(8,5)+C(8,6)+C(8,7)+C(8,8)=70+56+28+8+1=163\n10 |5                   | C(9,5)+C(9,6)+C(9,7)+C(9,8)+C(9,9)=126+84+36+9+1=256\n\nWait, let me verify each of these calculations step by step to avoid mistakes.\n\nFor m=1: floor(1\/2)=0. Sum from s=0 to 0: C(0,0)=1. Correct.\n\nm=2: floor(2\/2)=1. Sum from s=1 to 1: C(1,1)=1. Correct.\n\nm=3: floor(3\/2)=1. Sum from s=1 to 2: C(2,1)=2, C(2,2)=1. Total=3. Correct.\n\nm=4: floor(4\/2)=2. Sum from s=2 to 3: C(3,2)=3, C(3,3)=1. Total=4. Correct.\n\nm=5: floor(5\/2)=2. Sum from s=2 to 4: C(4,2)=6, C(4,3)=4, C(4,4)=1. Total=6+4+1=11. Correct.\n\nm=6: floor(6\/2)=3. Sum from s=3 to 5: C(5,3)=10, C(5,4)=5, C(5,5)=1. Total=10+5+1=16. Correct.\n\nm=7: floor(7\/2)=3. Sum from s=3 to 6: C(6,3)=20, C(6,4)=15, C(6,5)=6, C(6,6)=1. Total=20+15+6+1=42. Correct.\n\nm=8: floor(8\/2)=4. Sum from s=4 to 7: C(7,4)=35, C(7,5)=21, C(7,6)=7, C(7,7)=1. Total=35+21+7+1=64. Correct.\n\nm=9: floor(9\/2)=4. Sum from s=4 to 8: C(8,4)=70, C(8,5)=56, C(8,6)=28, C(8,7)=8, C(8,8)=1. Total=70+56=126, 126+28=154, 154+8=162, 162+1=163. Correct.\n\nm=10: floor(10\/2)=5. Sum from s=5 to 9: C(9,5)=126, C(9,6)=84, C(9,7)=36, C(9,8)=9, C(9,9)=1. Total=126+84=210, 210+36=246, 246+9=255, 255+1=256. Correct.\n\nTherefore, summing up the counts from m=1 to m=10:\n\n1 (m=1) +1 (m=2) +3 (m=3) +4 (m=4) +11 (m=5) +16 (m=6) +42 (m=7) +64 (m=8) +163 (m=9) +256 (m=10).\n\nLet's compute that:\n\nStart adding sequentially:\n\n1 +1=2\n\n2 +3=5\n\n5 +4=9\n\n9 +11=20\n\n20 +16=36\n\n36 +42=78\n\n78 +64=142\n\n142 +163=305\n\n305 +256=561\n\nSo the total count from m=1 to m=10 is 561.\n\nNow, we need to compute the count for m=11, i.e., 11-bit numbers from 10000000000 (which is 1024) to 11111010011 (which is 2003). We need to count how many numbers in this range have more 1's than 0's in their binary representation.\n\nAn 11-bit number has m=11 bits. The condition is that the number of 1's is greater than the number of 0's. Since m=11, number of 1's must be ≥6 (since 11\/2=5.5, so more than 5.5 is 6). So we need numbers with 6 or more 1's in their 11-bit representation, but only up to 2003.\n\nThe total number of 11-bit numbers with 6 or more 1's is sum_{k=6}^{11} C(11, k). However, this counts all numbers from 1024 to 2047. But we need only up to 2003, so we have to subtract the numbers from 2004 to 2047 that have 6 or more 1's.\n\nAlternatively, it might be more straightforward to calculate directly using the binary representation of 2003 and count the numbers ≤2003 with ≥6 1's by traversing the binary digits and using combinatorial counting with constraints.\n\nLet me recall that 2003 in binary is 11111010011. Let's write this out with positions labeled from left (MSB) to right (LSB):\n\nPosition: 10 9 8 7 6 5 4 3 2 1 0\n\nBits:        1  1  1  1  1  0  1  0  0  1  1\n\nWait, note that in standard binary notation, the rightmost bit is position 0. So let me adjust:\n\nPosition (from left, starting at 0): 0 1 2 3 4 5 6 7 8 9 10\n\nBits:                               1 1 1 1 1 0 1 0 0 1 1\n\nWait, perhaps confusing. Let's clarify:\n\nThe binary number is 11111010011.\n\nStarting from the left (most significant bit), the first bit is 1 (2^10), then 1 (2^9), 1 (2^8), 1 (2^7), 1 (2^6), 0 (2^5), 1 (2^4), 0 (2^3), 0 (2^2), 1 (2^1), 1 (2^0). So positions are 10 to 0.\n\nTo handle numbers up to 2003, which is 11111010011, we can use a digit-by-digit approach, considering each bit from the most significant to the least, keeping track of the number of 1's and 0's so far, and whether the number being formed is still less than or equal to 2003.\n\nThis method is similar to combinatorial counting with a upper bound, often handled with recursion and dynamic programming, considering constraints bit by bit.\n\nAlternatively, since directly calculating this might be complex, maybe we can compute the total number of 11-bit numbers with ≥6 1's and subtract those that are greater than 2003 but still have ≥6 1's.\n\nBut first, let's compute the total number of 11-bit numbers with ≥6 1's. The total is sum_{k=6}^{11} C(11, k). Let's compute this:\n\nC(11,6) = 462\n\nC(11,7) = 330\n\nC(11,8) = 165\n\nC(11,9) = 55\n\nC(11,10) = 11\n\nC(11,11) =1\n\nAdding them up:\n\n462 +330=792\n\n792 +165=957\n\n957 +55=1012\n\n1012 +11=1023\n\n1023 +1=1024\n\nWait, that's interesting. The sum from k=0 to 11 of C(11,k)=2048, so sum from k=6 to 11 is half of that, which is 1024. But 2048\/2=1024. So yes, since the binomial coefficients are symmetric, sum_{k=6}^{11} C(11,k)= sum_{k=0}^{5} C(11,k}=1024. Wait, actually, for odd n=11, the sum from k=0 to 5 is equal to sum from k=6 to 11. So total 1024 numbers with ≥6 1's. But numbers from 1024 to 2047 inclusive are 1024 numbers (since 2047-1024+1=1024). So actually, all 11-bit numbers from 1024 to 2047 have exactly 11 bits, and exactly half of them have ≥6 1's. That's an interesting observation.\n\nBut wait, 2047 is 11111111111, which has 11 1's. The numbers from 1024 to 2047 correspond to all 11-bit numbers. So the number of 11-bit numbers with ≥6 1's is 1024. But wait, sum_{k=6}^{11} C(11,k}=1024. But 2^11=2048, so half of that is 1024. Hence, yes.\n\nBut our upper limit is 2003, which is less than 2047. Therefore, the total number of 11-bit numbers from 1024 to 2003 inclusive is 2003 -1024 +1=980 numbers. But we need to find how many of these 980 numbers have ≥6 1's.\n\nAlternatively, total 11-bit numbers with ≥6 1's is 1024, but we need to subtract the numbers from 2004 to 2047 that have ≥6 1's. Let's compute how many numbers are there from 2004 to 2047: 2047 -2004 +1=44 numbers. So if we can compute how many of these 44 numbers have ≥6 1's, then subtract that from 1024 to get the count up to 2003.\n\nBut perhaps this approach is not straightforward because computing how many numbers in 2004-2047 have ≥6 1's might be as hard as computing the original problem. Alternatively, maybe it's better to perform a digit DP (dynamic programming) approach on the binary representation of 2003 to count numbers ≤2003 with exactly 11 bits and ≥6 1's.\n\nLet me try that.\n\nFirst, let's write the binary representation of 2003: 11111010011.\n\nWe need to count numbers from 1024 (10000000000) to 2003 (11111010011) inclusive, with exactly 11 bits, and with ≥6 1's.\n\nTo do this, we can model the binary digits from the most significant bit (position 10) to the least (position 0), keeping track of:\n\n- The number of 1's so far.\n\n- Whether the number being constructed is already less than the upper bound (2003) or still equal.\n\nThis is a standard approach in combinatorics for counting numbers with certain digit constraints.\n\nLet me outline the steps:\n\n1. Convert 2003 to its binary representation: 11111010011.\n\n2. Initialize a recursive function or a DP table that tracks:\n\n   a. The current bit position.\n\n   b. The number of 1's accumulated so far.\n\n   c. A flag indicating whether the number being built is already less than the upper bound (is_less), which allows for any digits in the remaining positions, or still equal (is_equal), which restricts the next digits to be ≤ the corresponding bit in the upper bound.\n\n3. At each bit position, if is_less is true, we can choose either 0 or 1 for the current bit, and accumulate the count accordingly. If is_equal is true, we can only choose a bit ≤ the corresponding bit in the upper bound. If we choose a bit less than the upper bound's bit, then subsequent bits can be anything (is_less becomes true).\n\n4. When we reach the end of the bit positions (position 0), we check if the total number of 1's is ≥6. If yes, add to the count.\n\nSince implementing this as a recursive function with memoization might be complex, but given that the number of bits is small (11), perhaps we can compute it manually or with a systematic approach.\n\nAlternatively, let me consider the binary digits of 2003:\n\nPositions (from left, position 10 to 0):\n\n1 (pos10), 1 (pos9), 1 (pos8), 1 (pos7), 1 (pos6), 0 (pos5), 1 (pos4), 0 (pos3), 0 (pos2), 1 (pos1), 1 (pos0).\n\nWe need to construct numbers bit by bit from position 10 to 0, keeping track of the number of 1's and whether we've already placed a bit lower than the corresponding bit in 2003.\n\nLet me attempt to model this with a table.\n\nWe can define a DP table with states (position, num_ones, is_less). The initial state is (position=10, num_ones=0, is_less=False). The goal is to compute the number of valid numbers at position=-1 (all bits processed) with num_ones ≥6.\n\nAt each position, if is_less is True, we can put either 0 or 1, and accumulate the count. If is_less is False, we can put a bit up to the corresponding bit in 2003. If we put a bit less than the upper bound's bit, then is_less becomes True for the next positions.\n\nAdditionally, we need to track the number of 1's so far. So the state is (pos, num_ones, is_less), and we need to memoize the number of ways to reach the end from this state.\n\nHowever, since this is time-consuming, maybe we can approach this step by step.\n\nAlternatively, we can use generating functions or inclusion-exclusion. But since time is limited, perhaps the digit DP approach is the way to go.\n\nAlternatively, let me consider that 2003 is 11111010011. Let's think of constructing numbers less than or equal to this, with exactly 11 bits, and count those with ≥6 ones.\n\nTo do this, we can traverse each bit from the first to the last, considering the constraints.\n\nLet me outline the process:\n\nStart with the first bit (position 10). It must be 1 (since we're considering 11-bit numbers). So num_ones =1, and we are still equal to the upper bound so far (since the first bit of 2003 is 1).\n\nNext, position 9: upper bound bit is 1. We can choose 0 or 1.\n\nIf we choose 1: num_ones becomes 2, and we stay equal.\n\nIf we choose 0: num_ones remains 1, and we set is_less=True.\n\nBut wait, in position 9, the upper bound is 1. So if we choose 0, all subsequent bits can be arbitrary (since we've already made the number smaller). If we choose 1, we stay equal.\n\nSimilarly, proceed to position 8.\n\nThis recursive structure is complex, but perhaps manageable.\n\nAlternatively, here's a step-by-step breakdown:\n\nInitialize:\n\n- Position: 10 (MSB)\n\n- Current 1's count: 1\n\n- Tight constraint: Yes (i.e., following the upper bound bits so far)\n\nProceed to position 9:\n\nUpper bound bit is 1.\n\nIf we set bit 9 to 1:\n\n- 1's count becomes 2.\n\n- Still tight.\n\nIf we set bit 9 to 0:\n\n- 1's count remains 1.\n\n- Loose: all subsequent bits can be set freely.\n\nFrom the loose state, the remaining bits can be anything, so we can compute how many ways there are to get the required number of 1's.\n\nSo for each decision point (where we can choose to set a bit lower than the upper bound, thus going loose), we can calculate the number of valid numbers by combinatorics.\n\nLet me attempt to compute this.\n\nLet me define the positions as 10 down to 0.\n\nStart at position 10:\n\n- Bit set to 1 (fixed, since we are considering 11-bit numbers), count=1, tight=True.\n\nMove to position 9 (bit 9):\n\nUpper bound bit is 1.\n\nOption 1: Set bit 9 to 1.\n\n- count=2, tight=True.\n\nOption 2: Set bit 9 to 0.\n\n- count=1, tight=False.\n\nFor the tight=False case, we have 9 remaining bits (positions 8 to 0), and need total 1's ≥(6 - current count)=6 -1=5. So need at least 5 more 1's in the remaining 9 bits. The number of such numbers is sum_{k=5}^9 C(9,k). Let's compute this:\n\nC(9,5)=126; C(9,6)=84; C(9,7)=36; C(9,8)=9; C(9,9)=1. Sum=126+84=210, 210+36=246, 246+9=255, 255+1=256. So 256 numbers.\n\nSo if we choose bit 9=0, we get 256 numbers with ≥5 1's in the remaining 9 bits, totaling 1+5=6 ones.\n\nTherefore, from choosing bit9=0, we get 256 numbers.\n\nNow, proceed with the tight path where bit9=1 (count=2, tight=True).\n\nPosition 8:\n\nUpper bound bit is 1.\n\nOption 1: Set bit8=1. count=3, tight=True.\n\nOption 2: Set bit8=0. count=2, tight=False.\n\nFor tight=False, remaining bits:8 bits (pos7 to 0). Need total 1's ≥6 -2=4.\n\nNumber of ways: sum_{k=4}^8 C(8,k).\n\nCompute:\n\nC(8,4)=70; C(8,5)=56; C(8,6)=28; C(8,7)=8; C(8,8)=1. Sum=70+56=126, 126+28=154, 154+8=162, 162+1=163. So 163 numbers.\n\nThus, choosing bit8=0 gives 163 numbers.\n\nAdd this to the total.\n\nProceeding with tight path where bit8=1 (count=3, tight=True).\n\nPosition7:\n\nUpper bound bit is 1.\n\nOption1: bit7=1. count=4, tight=True.\n\nOption2: bit7=0. count=3, tight=False.\n\nFor tight=False, remaining bits:7 bits. Need 6-3=3 more 1's.\n\nNumber of ways: sum_{k=3}^7 C(7,k).\n\nC(7,3)=35; C(7,4)=35; C(7,5)=21; C(7,6)=7; C(7,7)=1. Sum=35+35=70, 70+21=91, 91+7=98, 98+1=99. So 99 numbers.\n\nThus, choosing bit7=0 gives 99 numbers.\n\nProceeding with tight path where bit7=1 (count=4, tight=True).\n\nPosition6:\n\nUpper bound bit is1.\n\nOption1: bit6=1. count=5, tight=True.\n\nOption2: bit6=0. count=4, tight=False.\n\nFor tight=False, remaining bits:6 bits. Need ≥6 -4=2 more 1's.\n\nNumber of ways: sum_{k=2}^6 C(6,k).\n\nC(6,2)=15; C(6,3)=20; C(6,4)=15; C(6,5)=6; C(6,6)=1. Sum=15+20=35, 35+15=50, 50+6=56, 56+1=57. So 57 numbers.\n\nChoosing bit6=0 gives 57 numbers.\n\nProceeding with tight path where bit6=1 (count=5, tight=True).\n\nPosition5:\n\nUpper bound bit is0.\n\nSince we are tight, we can only set bit5 to 0 (since upper bound bit is0). Therefore, bit5=0. count remains 5. tight remains True.\n\nWait, but hold on: in the tight path, when the upper bound bit is 0, we cannot set bit5 to 1, because that would make the number exceed the upper bound. Therefore, we have to set bit5=0. However, this might affect the count of 1's. So after setting bit5=0, the count remains 5, and tight remains True.\n\nProceeding to position4:\n\nUpper bound bit is1.\n\nOption1: Set bit4=1. count=6, tight=True.\n\nOption2: Set bit4=0. count=5, tight=False.\n\nFor tight=False, remaining bits:4 bits (pos3 to 0). Need ≥6 -5=1 more 1's.\n\nNumber of ways: sum_{k=1}^4 C(4,k)= C(4,1)+C(4,2)+C(4,3)+C(4,4)=4+6+4+1=15.\n\nSo choosing bit4=0 gives 15 numbers.\n\nProceeding with tight path where bit4=1 (count=6, tight=True).\n\nPosition3:\n\nUpper bound bit is0.\n\nAgain, tight constraint: must set bit3=0. count remains 6. tight remains True.\n\nPosition2:\n\nUpper bound bit is0.\n\nMust set bit2=0. count remains 6. tight remains True.\n\nPosition1:\n\nUpper bound bit is1.\n\nOption1: Set bit1=1. count=7, tight=True.\n\nOption2: Set bit1=0. count=6, tight=False.\n\nFor tight=False, remaining bits:1 bit (pos0). Need ≥6 -6=0 more 1's. So any bit is allowed. Number of ways: 2 (0 or 1). But since we have only 1 bit left, it's 2^1=2.\n\nBut wait, remaining bits: after pos1, only pos0 remains. So if we set bit1=0, then pos0 can be 0 or1. So 2 possibilities. However, we need to check whether these numbers are still ≤2003.\n\nWait, but once we set bit1=0, we have to consider the remaining bit (pos0). However, the upper bound at pos0 is1. So even if we set bit1=0, since we are tight, setting pos0 can be up to1. So actually, in tight=False, we can set pos0 freely. Wait, no. If we set bit1=0 when tight=True, then the rest must follow the upper bound. Wait, this is confusing.\n\nWait, let's backtrack. At position1, we are still tight. The upper bound bit is1. If we set bit1=1, we stay tight. If we set bit1=0, then we become loose (is_less=True), allowing pos0 to be anything.\n\nBut in the tight path, after setting bit1=0, we are loose for the remaining bit (pos0). So pos0 can be 0 or1. Therefore, there are 2 possibilities. However, the count of 1's would be 6 (from previous) plus whatever pos0 is. But since we need total ≥6, even if pos0 is 0, total is 6, which is acceptable. Therefore, all 2 possibilities are valid. Hence, number of ways=2.\n\nTherefore, choosing bit1=0 gives 2 numbers.\n\nProceeding with tight path where bit1=1 (count=7, tight=True).\n\nPosition0:\n\nUpper bound bit is1.\n\nWe can set bit0=1 or 0. But since we are tight, we need to set bit0 ≤1. However, setting bit0=1 keeps us tight, but since it's the last bit, after setting it, we check if the number is ≤2003. However, since we've followed the upper bound exactly, it will be equal to 2003 if we set all remaining bits to the upper bound's bits.\n\nBut let's see:\n\nCurrent bits set so far (positions10 to1): 1111101001.\n\nPosition0 is the last bit. The upper bound bit is1. So we can set it to0 or1. If we set it to1, the number becomes 11111010011, which is exactly 2003. If we set it to0, the number becomes 11111010010, which is 2002, which is less than 2003. So both are allowed.\n\nTherefore, setting bit0=1: count=8, tight=True. The number is 2003.\n\nSetting bit0=0: count=7, tight=False. The number is 2002.\n\nBut since we need to count numbers ≤2003, both are valid.\n\nHowever, we need to check if they meet the 1's count ≥6.\n\nFor setting bit0=1: total 1's=8 ≥6: valid.\n\nFor setting bit0=0: total 1's=7 ≥6: valid.\n\nTherefore, both possibilities are valid. Hence, number of ways=2.\n\nTherefore, from the tight path at position1, we get 2 numbers.\n\nTherefore, backtracking:\n\nAt position1 (with count=6, tight=True):\n\n- Choosing bit1=1 leads to 2 numbers (count=7 and 8).\n\n- Choosing bit1=0 leads to 2 numbers (count=6 and 6 + pos0's 1).\n\nWait, actually, when we set bit1=0 and become loose, pos0 can be 0 or1. So total 1's would be 6 (current) + bit0. So if bit0=0, total=6; if bit0=1, total=7. Since we need ≥6, both are acceptable. So both possibilities count. Hence, 2 numbers.\n\nTherefore, total at position1: 2 (from tight) +15 (earlier loose) ?\n\nWait, no. Wait, earlier when we were at position4, after setting bit4=0, we had remaining bits pos3 to0. But need to clarify the flow.\n\nWait, this is getting quite tangled. Let me try to tabulate the total counts at each position:\n\nStarting from position10:\n\n- Position10: must set 1. Count=1. Tight=True.\n\nPosition9:\n\n- Option1: set1. Count=2. Tight=True.\n\n- Option2: set0. Count=1. Tight=False. Adds 256.\n\nPosition9's tight path continues.\n\nPosition8:\n\n- Option1: set1. Count=3. Tight=True.\n\n- Option2: set0. Count=2. Tight=False. Adds 163.\n\nPosition8's tight path continues.\n\nPosition7:\n\n- Option1: set1. Count=4. Tight=True.\n\n- Option2: set0. Count=3. Tight=False. Adds99.\n\nPosition7's tight path continues.\n\nPosition6:\n\n- Option1: set1. Count=5. Tight=True.\n\n- Option2: set0. Count=4. Tight=False. Adds57.\n\nPosition6's tight path continues.\n\nPosition5:\n\n- Upper bound bit0. Must set0. Count=5. Tight=True.\n\nPosition4:\n\n- Option1: set1. Count=6. Tight=True.\n\n- Option2: set0. Count=5. Tight=False. Adds15.\n\nPosition4's tight path continues.\n\nPosition3:\n\n- Upper bound bit0. Must set0. Count=6. Tight=True.\n\nPosition2:\n\n- Upper bound bit0. Must set0. Count=6. Tight=True.\n\nPosition1:\n\n- Option1: set1. Count=7. Tight=True.\n\n- Option2: set0. Count=6. Tight=False. Adds2.\n\nPosition1's tight path continues.\n\nPosition0:\n\n- Upper bound bit1. Can set0 or1.\n\n   - Set1: Count=8. Valid.\n\n   - Set0: Count=7. Valid.\n\nSo total from tight path at position0:2.\n\nAdding all the loose contributions:\n\n256 (from position9) +163 (pos8) +99 (pos7) +57 (pos6) +15 (pos4) +2 (pos1) +2 (pos0) = ?\n\nCompute:\n\n256 +163=419\n\n419 +99=518\n\n518 +57=575\n\n575 +15=590\n\n590 +2=592\n\n592 +2=594.\n\nWait, but the tight path at position0 gives 2 numbers. Are those included in the above sum?\n\nWait, no. The 2 from position0 are from the tight path, which hasn't been added yet. The previous sum (594) includes:\n\n256 (pos9) +\n\n163 (pos8) +\n\n99 (pos7) +\n\n57 (pos6) +\n\n15 (pos4) +\n\n2 (pos1).\n\nThen, from the tight path at position0, we get 2 more.\n\nTherefore, total count for m=11 is 594 +2=596.\n\nWait, but let me check again:\n\nStarting from position10, every time we take the tight path, we proceed deeper, and whenever we take the loose path, we add the precomputed combinations. So the total is the sum of all loose contributions plus the contributions from the tight path at the end.\n\nIn this case, the tight path at the end (position0) gives 2 numbers (2003 and 2002), both with ≥6 1's.\n\nTherefore, total count=594 (from loose) +2 (from tight)=596.\n\nBut let me verify the arithmetic:\n\n256 (pos9) +163=419\n\n419 +99=518\n\n518 +57=575\n\n575 +15=590\n\n590 +2=592\n\n592 +2=594.\n\nWait, but the 2 from pos1 and the 2 from pos0? Wait, the 2 from pos1 is already included in the 594. Wait, no. Let me re-express:\n\n- At position9, choosing 0: 256\n\n- At position8, choosing0:163\n\n- At position7, choosing0:99\n\n- At position6, choosing0:57\n\n- At position4, choosing0:15\n\n- At position1, choosing0:2\n\n- At position0, tight path:2\n\nSo the total is 256+163+99+57+15+2+2= let's compute:\n\n256 +163=419\n\n419 +99=518\n\n518 +57=575\n\n575 +15=590\n\n590 +2=592\n\n592 +2=594.\n\nWait, but the problem is, when we choose to go loose at position1, we computed 2 numbers. But these 2 numbers (from pos1 onwards) are counted as 2, but actually, in reality, when we set bit1=0 and then have pos0 free, there are 2 numbers (bit0=0 or1). Both have counts 6 or7, which are valid. So that's correct.\n\nSimilarly, the tight path at position0 gives 2 numbers (bit0=0 or1), both valid.\n\nTherefore, total count=594.\n\nBut wait, let me check with an alternative approach. The total number of 11-bit numbers ≤2003 with ≥6 ones is equal to the total number of 11-bit numbers with ≥6 ones (1024) minus the number of 11-bit numbers >2003 (i.e., 2004-2047) with ≥6 ones. Let's compute the latter.\n\nNumbers from 2004 to2047 inclusive:44 numbers.\n\nHow many of these 44 numbers have ≥6 ones?\n\nFirst, note that 2004 is 11111010100.\n\nWait, 2003 is 11111010011. Adding 1 gives 11111010100.\n\nSo binary representations from 2004 to2047 are from 11111010100 to11111111111.\n\nLet me find how many of these 44 numbers have ≥6 ones.\n\nNote that all numbers from 2004 to2047 have the first 6 bits as 111110 (since 2003 is 11111010011, adding 1 gives 11111010100). Wait, let's check the binary:\n\n2003:11111010011\n\n2004:11111010100\n\n2005:11111010101\n\n...\n\n2047:11111111111\n\nSo numbers from 2004 to2047 have the prefix 1111101 (positions10 to4: 1111101) and vary in the last 4 bits (positions3 to0). Wait, actually, positions vary depending on the number.\n\nWait, let's clarify. 2004 is 11111010100, which is 11 bits. Let's list the bits:\n\n11111010100 (2004)\n\n11111010101 (2005)\n\n...\n\n11111011111 (2015)\n\n11111100000 (2016)\n\n...\n\nUp to 11111111111 (2047).\n\nSo numbers from 2004 to2047 can be divided into two parts:\n\n1. Numbers from 2004 to2015: these have the prefix 1111101 followed by 4 bits (positions3 to0). The prefix 1111101 has six 1's.\n\n2. Numbers from2016 to2047: these have the prefix 111111 followed by5 bits. The prefix 111111 has six 1's.\n\nTherefore, for numbers from2004 to2015 (12 numbers), the prefix already has six 1's. Therefore, regardless of the suffix (4 bits), the total number of 1's is ≥6. Because even if the suffix has 0 ones, total is 6. If the suffix has some ones, total is more. Therefore, all 12 numbers from2004 to2015 have ≥6 ones.\n\nFor numbers from2016 to2047 (32 numbers), the prefix is111111 (6 ones), and the suffix is5 bits. The total number of 1's is6 + number of 1's in the suffix. Since the suffix can be from00000 to11111. The minimum total 1's is6, maximum is11. Therefore, all 32 numbers have ≥6 ones.\n\nTherefore, the total numbers from2004 to2047 with ≥6 ones is12 +32=44. But wait, there are44 numbers from2004 to2047, and all of them have ≥6 ones. Therefore, the count of 11-bit numbers ≤2003 with ≥6 ones is1024 (total 11-bit numbers with ≥6 ones) -44=980.\n\nBut wait, 1024 -44=980. But earlier, our digit DP approach gave 594. Clearly, there's a discrepancy here. Which is correct?\n\nWait, if all numbers from2004 to2047 have ≥6 ones, then numbers ≤2003 with ≥6 ones would be1024 -44=980. But earlier, the digit DP gave594. This suggests that there's a mistake in one of the approaches.\n\nWait, but let's check the assumption that all numbers from2004 to2047 have ≥6 ones.\n\nLooking at the prefix:\n\nFor numbers2004-2015: prefix1111101 (positions10-4). Let's count the number of1's:\n\nPositions10-4:1111101. That's1,1,1,1,1,0,1: six1's. So the prefix has six1's. The suffix (positions3-0) can be anything. So total1's is6 + suffix1's. So even if suffix has0, total is6. Therefore, all12 numbers have ≥6.\n\nFor numbers2016-2047: prefix111111 (positions10-5). That's six1's. The suffix (positions4-0) is5 bits. Total1's is6 + suffix1's. Minimum suffix is0, so total6. Therefore, all32 numbers have ≥6.\n\nThus, total44 numbers from2004-2047 have ≥6. Therefore, the count up to2003 is1024 -44=980.\n\nBut according to the digit DP approach, it's594. So there's a contradiction. Therefore, one of the methods is wrong.\n\nWait, but 980 seems too high. Because numbers from1024 to2003 are980 numbers, and if all of them had ≥6 ones, then the count would be980. But clearly, not all of them have ≥6 ones. For example, the number1024 is10000000000, which has only1 one. Therefore, the count should be less than980. So the digit DP result of594 seems more plausible, but the other method suggests980.\n\nWait, this indicates a fundamental error in my second approach. Wait, no. Wait, the total number of 11-bit numbers with ≥6 ones is1024. The numbers from1024 to2047 are all 11-bit numbers. Therefore, the count of numbers ≤2003 with ≥6 ones is equal to1024 - numbers from2004-2047 with ≥6 ones. But since all numbers from2004-2047 have ≥6 ones, then the count would be1024 -44=980. But this can't be right because numbers like1024 (1 one) are included in1024-2003 and would not have ≥6 ones. Therefore, my second approach is flawed.\n\nWait, no. Wait, the total number of 11-bit numbers with ≥6 ones is1024, but these 1024 numbers are distributed from1024 to2047. However, numbers from1024 to2047 include both numbers with ≥6 ones and <6 ones. Wait, no. Wait, in the entire range1024-2047 (all 11-bit numbers), exactly half have ≥6 ones, which is1024. So in that range, exactly1024 numbers have ≥6 ones. Therefore, if we take a subset of this range (from1024-2003), the number of numbers with ≥6 ones would be1024 minus the numbers with ≥6 ones in2004-2047. But since2004-2047 has44 numbers, all of which have ≥6 ones, the count would be1024 -44=980. However, this is not correct because numbers from1024-2003 include some numbers with <6 ones.\n\nWait, this suggests that the total numbers with ≥6 ones in 1024-2047 is1024, and numbers with ≥6 ones in1024-2003 would be1024 - numbers with ≥6 ones in2004-2047=1024 -44=980. But this is only correct if all numbers in2004-2047 with ≥6 ones are exactly44. But actually, all numbers in2004-2047 have ≥6 ones, so there are44 numbers with ≥6 ones in2004-2047, so subtracting them from the total1024 gives980. But this assumes that all numbers in1024-2047 with ≥6 ones are exactly the numbers in1024-2047 except those44. But that's not true. Because the total numbers in1024-2047 is1024, and exactly half of them (1024) have ≥6 ones. Therefore, the entire range1024-2047 has1024 numbers, all of which have ≥6 ones. Which is impossible because numbers like1024 have only1 one.\n\nWait, this is contradictory. There must be a misunderstanding.\n\nWait, earlier I thought that the number of 11-bit numbers with ≥6 ones is1024, which is half of2048. But in reality, the sum_{k=6}^{11} C(11,k)}=1024, which is correct. However, this counts all 11-bit numbers (from0 to2047) with ≥6 ones. But in our problem, we are considering numbers from1 to2003. However, when converting to 11-bit numbers, we are considering numbers from1024 to2003, but the count of numbers with ≥6 ones in the entire 11-bit range (0-2047) is1024. But numbers from0-1023 are not 11-bit numbers. Therefore, the count of numbers from1024 to2047 with ≥6 ones is1024 (since all 11-bit numbers with ≥6 ones are in this range). Therefore, numbers from1024 to2047 with ≥6 ones is1024. Therefore, numbers from1024 to2003 with ≥6 ones is1024 - numbers from2004 to2047 with ≥6 ones. But numbers from2004 to2047 are44 numbers, all of which have ≥6 ones. Therefore, numbers from1024 to2003 with ≥6 ones is1024 -44=980. But this must be incorrect because, for example, the number1024 (10000000000) has only1 one, which is way less than6. Therefore, there's a mistake in the reasoning.\n\nAh! The error is in assuming that all 11-bit numbers (from1024 to2047) with ≥6 ones are1024. But in reality, numbers from1024 to2047 are all 11-bit numbers, and exactly half of them have ≥6 ones. However, the count of numbers with ≥6 ones in the entire 11-bit space (0-2047) is1024, but numbers from0-1023 are not 11-bit numbers. Therefore, the count from1024 to2047 is1024, which is all 11-bit numbers, and half of them (512) have ≥6 ones. Wait, no. Wait, the binomial distribution for n=11 is symmetric around 5.5. So sum_{k=6}^{11} C(11,k}=1024, which is exactly half of2048. Therefore, in the entire range0-2047, there are1024 numbers with ≥6 ones. But numbers from0-1023 are not 11-bit numbers (they are 10-bit or less). Therefore, all 1024 numbers with ≥6 ones are in the range1024-2047. Therefore, the number of 11-bit numbers with ≥6 ones is1024. Hence, numbers from1024-2047 inclusive (which are all 11-bit numbers) contain exactly1024 numbers with ≥6 ones. But this can't be true because numbers like1024 (1 one) are in this range but don't have ≥6 ones. Therefore, this is impossible. Therefore, my previous assumption is incorrect.\n\nThis indicates a fundamental misunderstanding. Let me re-examine.\n\nThe total number of 11-bit numbers (numbers from1024 to2047) is1024 numbers. Each of these numbers has exactly11 bits. The number of these numbers with exactly k ones is C(11,k). Therefore, the number with ≥6 ones is sum_{k=6}^{11} C(11,k)}=1024. Therefore, every 11-bit number has ≥6 ones. But that can't be true, because for example, the number1024 is10000000000, which has1 one. This suggests that my earlier calculation is wrong.\n\nWait, no. Wait, hold on. C(11, k) counts the number of numbers with k ones in their 11-bit representation. However, the numbers from0 to2047 include all possible 11-bit numbers, but numbers from0 to1023 have leading zeros when written as 11-bit numbers. However, when we talk about the numbers from1024 to2047, these are precisely the numbers that have their 11th bit (position10) set to1, followed by 10 bits. Therefore, when we count the number of 1's in these numbers, we have to include the leading 1. Therefore, the count of 1's in numbers from1024 to2047 is1 (for the leading bit) plus the number of 1's in the remaining10 bits.\n\nTherefore, the total number of 1's in a number from1024 to2047 is1 + s, where s is the number of1's in the remaining10 bits. Therefore, the number of numbers with ≥6 ones is the number of numbers where1 + s ≥6 => s ≥5. The number of such numbers is the number of numbers with s ≥5 in the last10 bits. The number of ways is sum_{s=5}^{10} C(10, s}=C(10,5)+C(10,6)+...+C(10,10). Let's compute this:\n\nC(10,5)=252\n\nC(10,6)=210\n\nC(10,7)=120\n\nC(10,8)=45\n\nC(10,9)=10\n\nC(10,10)=1\n\nSum=252+210=462, 462+120=582, 582+45=627, 627+10=637, 637+1=638.\n\nTherefore, the number of 11-bit numbers (from1024 to2047) with ≥6 ones is638.\n\nBut previously, I thought it was1024, which was a mistake. The correct number is638.\n\nTherefore, the total number of 11-bit numbers with ≥6 ones is638. Hence, the number of such numbers from1024 to2003 is638 - numbers from2004 to2047 with ≥6 ones.\n\nNow, we need to compute how many numbers from2004 to2047 have ≥6 ones.\n\nNumbers from2004 to2047 are44 numbers. As established earlier, numbers from2004 to2015 (12 numbers) have prefix1111101 followed by4 bits, and numbers from2016 to2047 (32 numbers) have prefix111111 followed by5 bits.\n\nFor numbers from2004 to2015:\n\nPrefix1111101 (7 bits). Number of1's in prefix:6. The last4 bits can be anything. Therefore, total1's=6 + s, where s is the number of1's in the last4 bits. To have total ≥6, even if s=0, total is6, which is acceptable. Therefore, all12 numbers have ≥6 ones.\n\nFor numbers from2016 to2047:\n\nPrefix111111 (6 bits). Number of1's in prefix:6. The last5 bits can be anything. Therefore, total1's=6 + s. Similarly, all these numbers have ≥6 ones.\n\nTherefore, all44 numbers from2004 to2047 have ≥6 ones. Therefore, the number of numbers from1024 to2003 with ≥6 ones is638 -44=594.\n\nAh, this matches the digit DP result. Therefore, the correct count for m=11 is594.\n\nTherefore, total N=561 (from m=1 to10) +594 (from m=11)=561+594=1155.\n\nThen, 1155 mod1000=155.\n\nWait, but let me verify:\n\n561 +594=1155. 1155 divided by1000 is1 remainder155. So the remainder is155.\n\nBut before finalizing, let me check the calculation for the number of 11-bit numbers with ≥6 ones:\n\nSum_{s=5}^{10} C(10, s}=638. Therefore, 638 numbers from1024 to2047 have ≥6 ones. Then subtract44 numbers from2004 to2047, which all have ≥6 ones. So 638 -44=594. Correct.\n\nThen, total count from m=1 to10:561. 561+594=1155. 1155 mod1000=155.\n\nTherefore, the remainder is155.\n\nBut wait, let me verify once again with another approach.\n\nAn alternative way to compute the number of 11-bit numbers ≤2003 with ≥6 ones is to use the digit DP result of594, which we obtained earlier. Adding that to561 gives1155. Then mod1000=155.\n\nAlternatively, perhaps there was a miscalculation in the earlier step-by-step digit DP.\n\nWait, in the digit DP, we obtained594 by summing the loose contributions and the tight path. Let me verify the loose contributions:\n\nFrom position9:256\n\nFrom position8:163\n\nFrom position7:99\n\nFrom position6:57\n\nFrom position4:15\n\nFrom position1:2\n\nFrom position0:2\n\nTotal:256+163=419, 419+99=518, 518+57=575, 575+15=590, 590+2=592, 592+2=594. Yes.\n\nTherefore,594 is correct.\n\nAdding to m=1 to10's561 gives1155. 1155 mod1000 is155.\n\nTherefore, the answer should be155.\n\nBut wait, let me check with a small example to ensure that the logic is sound.\n\nFor example, let's take a smaller number, say N=7 (111 in binary). Compute the number of numbers ≤7 with more 1's than 0's.\n\nNumbers from1 to7:\n\n1:1 -> 1 one, 0 zeros. 1>0: yes.\n\n2:10 -> 1 one,1 zero. Not more.\n\n3:11 ->2 ones,0 zeros. Yes.\n\n4:100 ->1 one,2 zeros. No.\n\n5:101 ->2 ones,1 zero. Yes.\n\n6:110 ->2 ones,1 zero. Yes.\n\n7:111 ->3 ones,0 zeros. Yes.\n\nTotal:1,3,5,6,7. So 5 numbers.\n\nCompute using the method above:\n\nFirst, binary of7 is111 (3 bits).\n\nFor m=1 to3.\n\nFor m=1: count=1.\n\nFor m=2: numbers are10,11. More 1's than 0's:11. Count=1.\n\nFor m=3: numbers from4 to7. Need ≥2 ones (since m=3, need>1.5). Let's compute:\n\nNumbers with 2 ones:5 (101),6(110). Numbers with3 ones:7(111). Total=3.\n\nTotal count=1+1+3=5, which matches.\n\nIf we compute using the same method as in the problem:\n\nFor m=3: numbers from4-7. Total numbers=4. How many have ≥2 ones?\n\n5,6,7. So3. Hence, correct.\n\nTherefore, the method works.\n\nThus, applying the same method to the original problem, the result should be correct.\n\nTherefore, the final answer is155.\n\n**Final Answer**\n\\boxed{155}",
+        "analysis": {
+            "sentence_groups": {
+                "group1": [
+                    "Okay, so I need to find the number of positive integers ≤2003 whose base-2 (binary) representations have more 1's than 0's. Then, I have to find the remainder when that number is divided by 1000.",
+                    "Hmm, let me start by understanding the problem step by step.",
+                    "First, let's recall that every positive integer can be expressed in binary form, which consists of 0's and 1's. For example, the number 5 in binary is 101, which has two 1's and one 0. The problem is asking for numbers where the count of 1's exceeds the count of 0's in their binary representations.",
+                    "Since the upper limit is 2003, I need to consider all numbers from 1 to 2003 inclusive. To approach this, I think the key steps are:",
+                    "1. Determine the binary representation of 2003 to know the maximum number of bits we need to consider.",
+                    "2. For numbers with a certain number of bits (say, m bits), calculate how many such numbers have more 1's than 0's in their binary form.",
+                    "3. Sum these counts for all relevant bit lengths, making sure not to exceed 2003 when considering the highest bit length.",
+                    "4. Finally, take the total count modulo 1000."
+                ],
+                "group2": [
+                    "Let me start with step 1: finding the binary representation of 2003.",
+                    "2003 divided by 2 is 1001 with a remainder of 1.",
+                    "1001 divided by 2 is 500 with a remainder of 1.",
+                    "500 divided by 2 is 250 with a remainder of 0.",
+                    "250 divided by 2 is 125 with a remainder of 0.",
+                    "125 divided by 2 is 62 with a remainder of 1.",
+                    "62 divided by 2 is 31 with a remainder of 0.",
+                    "31 divided by 2 is 15 with a remainder of 1.",
+                    "15 divided by 2 is 7 with a remainder of 1.",
+                    "7 divided by 2 is 3 with a remainder of 1.",
+                    "3 divided by 2 is 1 with a remainder of 1.",
+                    "1 divided by 2 is 0 with a remainder of 1.",
+                    "Reading the remainders from bottom to top, the binary representation of 2003 is 11111010011."
+                ],
+                "group3": [
+                    "Let me verify that:",
+                    "Starting from the right, the bits correspond to powers of 2:",
+                    "1*(2^10) + 1*(2^9) + 1*(2^8) + 1*(2^7) + 1*(2^6) + 0*(2^5) + 1*(2^4) + 0*(2^3) + 0*(2^2) + 1*(2^1) + 1*(2^0)",
+                    "Calculating:",
+                    "1024 + 512 + 256 + 128 + 64 + 0 + 16 + 0 + 0 + 2 + 1 = 1024+512=1536; 1536+256=1792; 1792+128=1920; 1920+64=1984; 1984+16=2000; 2000+2=2002; 2002+1=2003. Perfect, that's correct."
+                ],
+                "group4": [
+                    "So, 2003 in binary is 11111010011, which is 11 bits long. Therefore, numbers from 1 to 2003 can have binary representations ranging from 1 bit (just 1) up to 11 bits. However, numbers with 11 bits must be less than or equal to 2003, so we need to be careful with the 11-bit numbers.",
+                    "Now, the next step is to figure out, for each bit length from 1 to 11, how many numbers with that many bits have more 1's than 0's. Then, for the 11-bit numbers, we need to adjust the count to ensure we don't exceed 2003.",
+                    "First, let's handle the numbers with bit lengths from 1 to 10. For these, all numbers with that bit length are allowed since the maximum number with, say, 10 bits is 1023, which is less than 2003. But for 11-bit numbers, the maximum is 2047, but we can only go up to 2003, so we need to be careful there."
+                ],
+                "group5": [
+                    "Let me recall that for a number with m bits, the number of 1's must be more than the number of 0's. Since the number has m bits, the number of 0's is m - number_of_1's. So, the condition is:",
+                    "number_of_1's > (m - number_of_1's)",
+                    "Which simplifies to:",
+                    "2 * number_of_1's > m",
+                    "Or:",
+                    "number_of_1's > m \/ 2",
+                    "Since number_of_1's must be an integer, this means number_of_1's ≥ floor(m\/2) + 1."
+                ],
+                "group6": [
+                    "Wait, let me check:",
+                    "If m is even, say m=2n, then number_of_1's > n, so k ≥ n+1.",
+                    "If m is odd, say m=2n+1, then number_of_1's > n + 0.5, so k ≥ n+1.",
+                    "So regardless of whether m is even or odd, the required number of 1's is floor(m\/2) + 1. For example, m=11 (which is odd), floor(11\/2)=5, so k needs to be at least 6. For m=10, floor(10\/2)=5, so k needs to be at least 6. Wait, but 10 bits: total bits 10. If k=6, then number of 1's is 6, number of 0's is 4, so 6 >4, which satisfies the condition."
+                ],
+                "group7": [
+                    "However, since the first bit is 1 (since we're considering numbers in their standard binary form without leading zeros), the remaining m-1 bits can vary. So total number of 1's is 1 + s, where s is the number of 1's in the remaining m-1 bits.",
+                    "Therefore, for each bit length m, the number of numbers is sum_{s= floor(m\/2)}^{m-1} C(m-1, s). This sum can be calculated for each m from 1 to 11, except that for m=1, since it's a special case."
+                ],
+                "group8": [
+                    "Wait, let's check m=1. An m=1 bit number is just '1'. The number of 1's is 1, number of 0's is 0. So 1 >0, which satisfies the condition. So for m=1, the count is 1. Let's see if our formula works:",
+                    "For m=1: s_min = floor(1\/2)=0. So sum from s=0 to 0 (since m-1=0) of C(0,0)=1. So the count is 1. Correct."
+                ],
+                "group9": [
+                    "Similarly, for m=2: numbers are '10' and '11'. For m=2, the first bit is 1, and the remaining 1 bit can be 0 or 1. The total number of 1's must be >1 (since m=2, need more than 1 one). So k>1, but k can be at most 2. So numbers with 2 ones: '11'. So count=1. According to the formula: s_min= floor(2\/2)=1. So sum from s=1 to 1 of C(1,1)=1. Correct."
+                ],
+                "group10": [
+                    "Another test: m=3. Numbers are 100 to 111. The first bit is 1, the remaining 2 bits. Total 1's must be >1.5, so at least 2. Therefore, the remaining two bits must have at least 1 one. So total k=1 + s, where s ≥1. So s can be 1 or 2. The number of such numbers is C(2,1) + C(2,2) =2 +1=3. Let's verify with the formula: s_min= floor(3\/2)=1. Sum from s=1 to 2 of C(2,1) + C(2,2)=2 +1=3. Correct."
+                ],
+                "group11": [
+                    "So the formula seems to work.",
+                    "Therefore, for each m from 1 to 11, except for m=11 where we have to be careful not to exceed 2003, the number of numbers is sum_{s= floor(m\/2)}^{m-1} C(m-1, s). Then, for m=11, we need to adjust the count because not all 11-bit numbers up to 2047 are allowed; we can only go up to 2003."
+                ],
+                "group12": [
+                    "So my plan is:",
+                    "1. For m=1 to 10, calculate the count using the formula sum_{s= floor(m\/2)}^{m-1} C(m-1, s). Sum all these counts.",
+                    "2. For m=11, calculate the number of 11-bit numbers ≤2003 that have more 1's than 0's. Add this to the previous sum.",
+                    "3. Total N is the sum from steps 1 and 2. Then compute N mod 1000.",
+                    "So let's start with m=1 to 10."
+                ],
+                "group13": [
+                    "First, let's compute for each m from 1 to 10:",
+                    "m | s_min = floor(m\/2) | sum_{s=s_min}^{m-1} C(m-1, s)",
+                    "---|---------------------|--------------------------------",
+                    "1 | 0                   | C(0,0)=1",
+                    "2 | 1                   | C(1,1)=1",
+                    "3 | 1                   | C(2,1)+C(2,2)=2+1=3",
+                    "4 | 2                   | C(3,2)+C(3,3)=3+1=4",
+                    "5 | 2                   | C(4,2)+C(4,3)+C(4,4)=6+4+1=11",
+                    "6 | 3                   | C(5,3)+C(5,4)+C(5,5)=10+5+1=16",
+                    "7 | 3                   | C(6,3)+C(6,4)+C(6,5)+C(6,6)=20+15+6+1=42",
+                    "8 | 4                   | C(7,4)+C(7,5)+C(7,6)+C(7,7)=35+21+7+1=64",
+                    "9 | 4                   | C(8,4)+C(8,5)+C(8,6)+C(8,7)+C(8,8)=70+56+28+8+1=163",
+                    "10 |5                   | C(9,5)+C(9,6)+C(9,7)+C(9,8)+C(9,9)=126+84+36+9+1=256"
+                ],
+                "group14": [
+                    "Wait, let me verify each of these calculations step by step to avoid mistakes.",
+                    "For m=1: floor(1\/2)=0. Sum from s=0 to 0: C(0,0)=1. Correct.",
+                    "m=2: floor(2\/2)=1. Sum from s=1 to 1: C(1,1)=1. Correct.",
+                    "m=3: floor(3\/2)=1. Sum from s=1 to 2: C(2,1)=2, C(2,2)=1. Total=3. Correct.",
+                    "m=4: floor(4\/2)=2. Sum from s=2 to 3: C(3,2)=3, C(3,3)=1. Total=4. Correct.",
+                    "m=5: floor(5\/2)=2. Sum from s=2 to 4: C(4,2)=6, C(4,3)=4, C(4,4)=1. Total=6+4+1=11. Correct.",
+                    "m=6: floor(6\/2)=3. Sum from s=3 to 5: C(5,3)=10, C(5,4)=5, C(5,5)=1. Total=10+5+1=16. Correct.",
+                    "m=7: floor(7\/2)=3. Sum from s=3 to 6: C(6,3)=20, C(6,4)=15, C(6,5)=6, C(6,6)=1. Total=20+15+6+1=42. Correct.",
+                    "m=8: floor(8\/2)=4. Sum from s=4 to 7: C(7,4)=35, C(7,5)=21, C(7,6)=7, C(7,7)=1. Total=35+21+7+1=64. Correct.",
+                    "m=9: floor(9\/2)=4. Sum from s=4 to 8: C(8,4)=70, C(8,5)=56, C(8,6)=28, C(8,7)=8, C(8,8)=1. Total=70+56=126, 126+28=154, 154+8=162, 162+1=163. Correct.",
+                    "m=10: floor(10\/2)=5. Sum from s=5 to 9: C(9,5)=126, C(9,6)=84, C(9,7)=36, C(9,8)=9, C(9,9)=1. Total=126+84=210, 210+36=246, 246+9=255, 255+1=256. Correct."
+                ],
+                "group15": [
+                    "Therefore, summing up the counts from m=1 to m=10:",
+                    "1 (m=1) +1 (m=2) +3 (m=3) +4 (m=4) +11 (m=5) +16 (m=6) +42 (m=7) +64 (m=8) +163 (m=9) +256 (m=10).",
+                    "Let's compute that:",
+                    "Start adding sequentially:",
+                    "1 +1=2",
+                    "2 +3=5",
+                    "5 +4=9",
+                    "9 +11=20",
+                    "20 +16=36",
+                    "36 +42=78",
+                    "78 +64=142",
+                    "142 +163=305",
+                    "305 +256=561",
+                    "So the total count from m=1 to m=10 is 561."
+                ],
+                "group16": [
+                    "Now, we need to compute the count for m=11, i.e., 11-bit numbers from 10000000000 (which is 1024) to 11111010011 (which is 2003). We need to count how many numbers in this range have more 1's than 0's in their binary representation.",
+                    "An 11-bit number has m=11 bits. The condition is that the number of 1's is greater than the number of 0's. Since m=11, number of 1's must be ≥6 (since 11\/2=5.5, so more than 5.5 is 6). So we need numbers with 6 or more 1's in their 11-bit representation, but only up to 2003."
+                ],
+                "group17": [
+                    "Alternatively, total 11-bit numbers with ≥6 1's is 1024, but we need to subtract the numbers from 2004 to 2047 that have ≥6 1's. Let's compute how many numbers are there from 2004 to 2047: 2047 -2004 +1=44 numbers. So if we can compute how many of these 44 numbers have ≥6 1's, then subtract that from 1024 to get the count up to 2003.",
+                    "Wait, actually, positions vary depending on the number.",
+                    "Wait, let's clarify. 2004 is 11111010100, which is 11 bits. Let's list the bits:",
+                    "11111010100 (2004)",
+                    "11111010101 (2005)",
+                    "...",
+                    "11111011111 (2015)",
+                    "11111100000 (2016)",
+                    "...",
+                    "Up to 11111111111 (2047).",
+                    "So numbers from 2004 to2047 can be divided into two parts:",
+                    "1. Numbers from 2004 to2015: these have the prefix 1111101 followed by 4 bits (positions3 to0). The prefix 1111101 has six 1's.",
+                    "2. Numbers from2016 to2047: these have the prefix 111111 followed by5 bits. The prefix 111111 has six 1's."
+                ],
+                "group18": [
+                    "Starting from position10:",
+                    "- Position10: must set 1. Count=1. Tight=True.",
+                    "Position9:",
+                    "- Option1: set1. Count=2. Tight=True.",
+                    "- Option2: set0. Count=1. Tight=False. Adds 256.",
+                    "Position9's tight path continues.",
+                    "Position8:",
+                    "- Option1: set1. Count=3. Tight=True.",
+                    "- Option2: set0. Count=2. Tight=False. Adds 163.",
+                    "Position8's tight path continues.",
+                    "Position7:",
+                    "- Option1: set1. Count=4. Tight=True.",
+                    "- Option2: set0. Count=3. Tight=False. Adds99.",
+                    "Position7's tight path continues.",
+                    "Position6:",
+                    "- Option1: set1. Count=5. Tight=True.",
+                    "- Option2: set0. Count=4. Tight=False. Adds57.",
+                    "Position6's tight path continues.",
+                    "Position5:",
+                    "- Upper bound bit0. Must set0. Count=5. Tight=True.",
+                    "Position4:",
+                    "- Option1: set1. Count=6. Tight=True.",
+                    "- Option2: set0. Count=5. Tight=False. Adds15.",
+                    "Position4's tight path continues.",
+                    "Position3:",
+                    "- Upper bound bit0. Must set0. Count=6. Tight=True.",
+                    "Position2:",
+                    "- Upper bound bit0. Must set0. Count=6. Tight=True.",
+                    "Position1:",
+                    "- Option1: set1. Count=7. Tight=True.",
+                    "- Option2: set0. Count=6. Tight=False. Adds2.",
+                    "Position1's tight path continues.",
+                    "Position0:",
+                    "- Upper bound bit1. Can set0 or1.",
+                    "   - Set1: Count=8. Valid.",
+                    "   - Set0: Count=7. Valid.",
+                    "So total from tight path at position0:2."
+                ],
+                "group19": [
+                    "Adding all the loose contributions:",
+                    "256 (from position9) +163 (pos8) +99 (pos7) +57 (pos6) +15 (pos4) +2 (pos1) +2 (pos0) = ?",
+                    "Compute:",
+                    "256 +163=419",
+                    "419 +99=518",
+                    "518 +57=575",
+                    "575 +15=590",
+                    "590 +2=592",
+                    "592 +2=594."
+                ],
+                "group20": [
+                    "Wait, but let me verify the arithmetic:",
+                    "256 (pos9) +163=419",
+                    "419 +99=518",
+                    "518 +57=575",
+                    "575 +15=590",
+                    "590 +2=592",
+                    "592 +2=594.",
+                    "Wait, but the 2 from pos1 and the 2 from pos0? Wait, the 2 from pos1 is already included in the 594. Wait, no. Let me re-express:",
+                    "- At position9, choosing 0: 256",
+                    "- At position8, choosing0:163",
+                    "- At position7, choosing0:99",
+                    "- At position6, choosing0:57",
+                    "- At position4, choosing0:15",
+                    "- At position1, choosing0:2",
+                    "- At position0, tight path:2",
+                    "So the total is 256+163+99+57+15+2+2= let's compute:",
+                    "256 +163=419",
+                    "419 +99=518",
+                    "518 +57=575",
+                    "575 +15=590",
+                    "590 +2=592",
+                    "592 +2=594."
+                ],
+                "group21": [
+                    "Ah! The error is in assuming that all 11-bit numbers (from1024 to2047) with ≥6 ones are1024. But in reality, numbers from1024 to2047 are all 11-bit numbers, and exactly half of them have ≥6 ones. However, the count of numbers with ≥6 ones in the entire 11-bit space (0-2047) is1024, but numbers from0-1023 are not 11-bit numbers. Therefore, the count from1024 to2047 is1024, which is all 11-bit numbers, and half of them (512) have ≥6 ones. Wait, no.",
+                    "This indicates a fundamental misunderstanding. Let me re-examine.",
+                    "The total number of 11-bit numbers (numbers from1024 to2047) is1024 numbers. Each of these numbers has exactly11 bits. The number of these numbers with exactly k ones is C(11,k). Therefore, the number with ≥6 ones is sum_{k=6}^{11} C(11,k)}=1024. Therefore, every 11-bit number has ≥6 ones. But that can't be true, because for example, the number1024 is10000000000, which has1 one. This suggests that my earlier calculation is wrong.",
+                    "Wait, no. Wait, hold on. C(11, k) counts the number of numbers with k ones in their 11-bit representation. However, the numbers from0 to2047 include all possible 11-bit numbers, but numbers from0 to1023 have leading zeros when written as 11-bit numbers. However, when we talk about the numbers from1024 to2047, these are precisely the numbers that have their 11th bit (position10) set to1, followed by 10 bits. Therefore, when we count the number of 1's in these numbers, we have to include the leading 1. Therefore, the count of 1's in numbers from1024 to2047 is1 (for the leading bit) plus the number of 1's in the remaining10 bits."
+                ],
+                "group22": [
+                    "Therefore, the total number of 1's in a number from1024 to2047 is1 + s, where s is the number of1's in the remaining10 bits. Therefore, the number of numbers with ≥6 ones is the number of numbers where1 + s ≥6 => s ≥5. The number of such numbers is the number of numbers with s ≥5 in the last10 bits. The number of ways is sum_{s=5}^{10} C(10, s}=C(10,5)+C(10,6)+...+C(10,10). Let's compute this:",
+                    "C(10,5)=252",
+                    "C(10,6)=210",
+                    "C(10,7)=120",
+                    "C(10,8)=45",
+                    "C(10,9)=10",
+                    "C(10,10)=1",
+                    "Sum=252+210=462, 462+120=582, 582+45=627, 627+10=637, 637+1=638."
+                ],
+                "group23": [
+                    "Therefore, the total number of 11-bit numbers with ≥6 ones is638. Hence, the number of such numbers from1024 to2003 is638 - numbers from2004 to2047 with ≥6 ones.",
+                    "Now, we need to compute how many numbers from2004 to2047 have ≥6 ones.",
+                    "Numbers from2004 to2047 are44 numbers. As established earlier, numbers from2004 to2015 (12 numbers) have prefix1111101 followed by4 bits, and numbers from2016 to2047 (32 numbers) have prefix111111 followed by5 bits.",
+                    "For numbers from2004 to2015:",
+                    "Prefix1111101 (7 bits). Number of1's in prefix:6. The last4 bits can be anything. Therefore, total1's=6 + s, where s is the number of1's in the last4 bits. To have total ≥6, even if s=0, total is6, which is acceptable. Therefore, all12 numbers have ≥6 ones.",
+                    "For numbers from2016 to2047:",
+                    "Prefix111111 (6 bits). Number of1's in prefix:6. The last5 bits can be anything. Therefore, total1's=6 + s. Similarly, all these numbers have ≥6 ones.",
+                    "Therefore, all44 numbers from2004 to2047 have ≥6 ones. Therefore, the number of numbers from1024 to2003 with ≥6 ones is638 -44=594."
+                ],
+                "group24": [
+                    "Ah, this matches the digit DP result. Therefore, the correct count for m=11 is594.",
+                    "Therefore, total N=561 (from m=1 to10) +594 (from m=11)=561+594=1155.",
+                    "Then, 1155 mod1000=155.",
+                    "Wait, but let me verify:",
+                    "561 +594=1155. 1155 divided by1000 is1 remainder155. So the remainder is155."
+                ],
+                "group25": [
+                    "But before finalizing, let me check the calculation for the number of 11-bit numbers with ≥6 ones:",
+                    "Sum_{s=5}^{10} C(10, s}=638. Therefore, 638 numbers from1024 to2047 have ≥6 ones. Then subtract44 numbers from2004 to2047, which all have ≥6 ones. So 638 -44=594. Correct.",
+                    "Then, total count from m=1 to10:561. 561+594=1155. 1155 mod1000=155.",
+                    "Therefore, the remainder is155."
+                ],
+                "group26": [
+                    "But wait, let me check with a small example to ensure that the logic is sound.",
+                    "For example, let's take a smaller number, say N=7 (111 in binary). Compute the number of numbers ≤7 with more 1's than 0's.",
+                    "Numbers from1 to7:",
+                    "1:1 -> 1 one, 0 zeros. 1>0: yes.",
+                    "2:10 -> 1 one,1 zero. Not more.",
+                    "3:11 ->2 ones,0 zeros. Yes.",
+                    "4:100 ->1 one,2 zeros. No.",
+                    "5:101 ->2 ones,1 zero. Yes.",
+                    "6:110 ->2 ones,1 zero. Yes.",
+                    "7:111 ->3 ones,0 zeros. Yes.",
+                    "Total:1,3,5,6,7. So 5 numbers.",
+                    "Compute using the method above:",
+                    "First, binary of7 is111 (3 bits).",
+                    "For m=1 to3.",
+                    "For m=1: count=1.",
+                    "For m=2: numbers are10,11. More 1's than 0's:11. Count=1.",
+                    "For m=3: numbers from4 to7. Need ≥2 ones (since m=3, need>1.5). Let's compute:",
+                    "Numbers with 2 ones:5 (101),6(110). Numbers with3 ones:7(111). Total=3.",
+                    "Total count=1+1+3=5, which matches.",
+                    "If we compute using the same method as in the problem:",
+                    "For m=3: numbers from4-7. Total numbers=4. How many have ≥2 ones?",
+                    "5,6,7. So3. Hence, correct.",
+                    "Therefore, the method works.",
+                    "Thus, applying the same method to the original problem, the result should be correct.",
+                    "Therefore, the final answer is155."
+                ],
+                "group27": [
+                    "Therefore, the final answer is155.",
+                    "**Final Answer**",
+                    "\\boxed{155}"
+                ]
+            },
+            "patterns": {
+                "regular_reasoning": [
+                    "group1",
+                    "group2",
+                    "group4",
+                    "group5",
+                    "group7",
+                    "group11",
+                    "group12",
+                    "group13",
+                    "group15",
+                    "group16",
+                    "group18",
+                    "group19",
+                    "group23",
+                    "group24",
+                    "group27"
+                ],
+                "backtracking_verification": [
+                    {
+                        "id": "group3",
+                        "relates_to": "group2"
+                    },
+                    {
+                        "id": "group6",
+                        "relates_to": "group5"
+                    },
+                    {
+                        "id": "group8",
+                        "relates_to": "group7"
+                    },
+                    {
+                        "id": "group9",
+                        "relates_to": "group7"
+                    },
+                    {
+                        "id": "group10",
+                        "relates_to": "group7"
+                    },
+                    {
+                        "id": "group14",
+                        "relates_to": "group13"
+                    },
+                    {
+                        "id": "group20",
+                        "relates_to": "group19"
+                    },
+                    {
+                        "id": "group25",
+                        "relates_to": "group24"
+                    },
+                    {
+                        "id": "group26",
+                        "relates_to": "group24"
+                    }
+                ],
+                "multiple_verification": [
+                    {
+                        "id": "group17",
+                        "relates_to": "group16",
+                        "method": "Alternative approach using prefix ranges"
+                    },
+                    {
+                        "id": "group22",
+                        "relates_to": "group21",
+                        "method": "Combinatorial calculation using remaining 10 bits"
+                    }
+                ],
+                "error_correction": [
+                    {
+                        "id": "group21",
+                        "relates_to": "group16"
+                    }
+                ]
+            },
+            "group_meta": {
+                "group1": {
+                    "start": 0,
+                    "end": 1101,
+                    "answer_exist": false
+                },
+                "group2": {
+                    "start": 1103,
+                    "end": 1766,
+                    "answer_exist": false,
+                    "ppl_with": 8.041658785740541,
+                    "ppl_without": 7.102515753495405,
+                    "importantance": 0.8832152597781912
+                },
+                "group3": {
+                    "start": 1768,
+                    "end": 2153,
+                    "answer_exist": false,
+                    "ppl_with": 8.041658785740541,
+                    "ppl_without": 7.969684259983501,
+                    "importantance": 0.9910497911345524
+                },
+                "group4": {
+                    "start": 2155,
+                    "end": 2966,
+                    "answer_exist": false,
+                    "ppl_with": 8.041658785740541,
+                    "ppl_without": 7.202439015885373,
+                    "importantance": 0.8956409626154157
+                },
+                "group5": {
+                    "start": 2968,
+                    "end": 3352,
+                    "answer_exist": false,
+                    "ppl_with": 8.041658785740541,
+                    "ppl_without": 7.633219387272629,
+                    "importantance": 0.9492095587054555
+                },
+                "group6": {
+                    "start": 3485,
+                    "end": 3982,
+                    "answer_exist": false,
+                    "ppl_with": 8.041658785740541,
+                    "ppl_without": 8.200223073281993,
+                    "importantance": 1.0197178581889867
+                },
+                "group7": {},
+                "group8": {
+                    "start": 8720,
+                    "end": 9025,
+                    "answer_exist": false,
+                    "ppl_with": 8.041658785740541,
+                    "ppl_without": 8.113325633985978,
+                    "importantance": 1.0089119484120013
+                },
+                "group9": {
+                    "start": 9027,
+                    "end": 9375,
+                    "answer_exist": false,
+                    "ppl_with": 8.041658785740541,
+                    "ppl_without": 8.057540099302106,
+                    "importantance": 1.0019748803057555
+                },
+                "group10": {
+                    "start": 9377,
+                    "end": 9771,
+                    "answer_exist": false,
+                    "ppl_with": 8.041658785740541,
+                    "ppl_without": 8.002078655977106,
+                    "importantance": 0.995078113755135
+                },
+                "group11": {
+                    "start": 9773,
+                    "end": 10091,
+                    "answer_exist": false,
+                    "ppl_with": 8.041658785740541,
+                    "ppl_without": 7.958094221231002,
+                    "importantance": 0.9896085413798313
+                },
+                "group12": {
+                    "start": 10093,
+                    "end": 10441,
+                    "answer_exist": false,
+                    "ppl_with": 8.041658785740541,
+                    "ppl_without": 7.932599649030593,
+                    "importantance": 0.9864382287764644
+                },
+                "group13": {
+                    "start": 10443,
+                    "end": 11169,
+                    "answer_exist": false,
+                    "ppl_with": 8.041658785740541,
+                    "ppl_without": 8.061096920819699,
+                    "importantance": 1.002417179788034
+                },
+                "group14": {
+                    "start": 11171,
+                    "end": 12241,
+                    "answer_exist": false,
+                    "ppl_with": 8.041658785740541,
+                    "ppl_without": 7.90630188334574,
+                    "importantance": 0.9831680370926934
+                },
+                "group15": {
+                    "start": 12243,
+                    "end": 12583,
+                    "answer_exist": false,
+                    "ppl_with": 8.041658785740541,
+                    "ppl_without": 7.98304648024433,
+                    "importantance": 0.9927114160078339
+                },
+                "group16": {
+                    "start": 12585,
+                    "end": 13094,
+                    "answer_exist": false,
+                    "ppl_with": 8.041658785740541,
+                    "ppl_without": 8.040182956455032,
+                    "importantance": 0.9998164770074396
+                },
+                "group17": {
+                    "start": 16286,
+                    "end": 33262,
+                    "answer_exist": false,
+                    "ppl_with": 8.041658785740541,
+                    "ppl_without": 7.128984992265139,
+                    "importantance": 0.8865067745607718
+                },
+                "group18": {
+                    "start": 28443,
+                    "end": 29663,
+                    "answer_exist": false,
+                    "ppl_with": 8.041658785740541,
+                    "ppl_without": 7.875415110935225,
+                    "importantance": 0.9793271911635819
+                },
+                "group19": {
+                    "start": 29665,
+                    "end": 29879,
+                    "answer_exist": false,
+                    "ppl_with": 8.041658785740541,
+                    "ppl_without": 7.831642607201223,
+                    "importantance": 0.9738839729296003
+                },
+                "group20": {},
+                "group21": {
+                    "start": 38815,
+                    "end": 41096,
+                    "answer_exist": false,
+                    "ppl_with": 8.041658785740541,
+                    "ppl_without": 7.851512451607849,
+                    "importantance": 0.9763548368316921
+                },
+                "group22": {
+                    "start": 41098,
+                    "end": 41635,
+                    "answer_exist": false,
+                    "ppl_with": 8.041658785740541,
+                    "ppl_without": 8.00418831005588,
+                    "importantance": 0.99534045441581
+                },
+                "group23": {
+                    "start": 41802,
+                    "end": 42856,
+                    "answer_exist": false,
+                    "ppl_with": 8.041658785740541,
+                    "ppl_without": 7.866662588216695,
+                    "importantance": 0.978238793489454
+                },
+                "group24": {
+                    "start": 42858,
+                    "end": 43140,
+                    "answer_exist": false,
+                    "ppl_with": 8.041658785740541,
+                    "ppl_without": 8.021999361146035,
+                    "importantance": 0.9975553023178046
+                },
+                "group25": {
+                    "start": 43142,
+                    "end": 43516,
+                    "answer_exist": false,
+                    "ppl_with": 8.041658785740541,
+                    "ppl_without": 7.926072867241353,
+                    "importantance": 0.9856266074476892
+                },
+                "group26": {
+                    "start": 44325,
+                    "end": 45447,
+                    "answer_exist": false,
+                    "ppl_with": 8.041658785740541,
+                    "ppl_without": 6.850188391978747,
+                    "importantance": 0.8518377332952117
+                },
+                "group27": {
+                    "start": 45413,
+                    "end": 45477,
+                    "answer_exist": true
+                }
+            },
+            "summaries": {
+                "group1": "Interpret the problem requirements and establish an overall counting strategy for integers ≤2003 with more binary 1's than 0's, including modulo computation.",
+                "group2": "Compute the binary representation of 2003 through iterative division by 2.",
+                "group3": "Verify the binary representation calculation of 2003.",
+                "group4": "Determine the range of bit lengths (1-11 bits) and identify the need for special handling of 11-bit numbers.",
+                "group5": "Derive the algebraic condition for having more 1's than 0's in a binary number of length m.",
+                "group6": "Refine the condition to a floor function expression applicable for both even and odd bit lengths.",
+                "group7": "Formulate the counting approach using binomial coefficients for fixed bit lengths, accounting for the leading 1.",
+                "group8": "Validate the counting formula for the m=1 case.",
+                "group9": "Validate the counting formula for the m=2 case.",
+                "group10": "Validate the counting formula for the m=3 case.",
+                "group11": "Confirm the formula's correctness and note the exception for m=11.",
+                "group12": "Outline the counting procedure: separate handling for m=1-10 and m=11, then modulo calculation.",
+                "group13": "Compute binomial coefficient sums for bit lengths m=1 to 10 using the derived formula.",
+                "group14": "Re-verify the binomial coefficient summations for m=1 to 10.",
+                "group15": "Sum the counts obtained for bit lengths m=1 to 10.",
+                "group16": "Establish the counting criteria (≥6 ones) and range constraints for 11-bit numbers (1024-2003).",
+                "group17": "Analyze the binary structure of numbers from 2004-2047 for subsequent exclusion.",
+                "group18": "Implement a digit dynamic programming approach to count valid 11-bit numbers ≤2003.",
+                "group19": "Sum the loose-path contributions from the digit DP calculation.",
+                "group20": "Recompute the loose-path summation for accuracy.",
+                "group21": "Re-examine the fundamental counting principle for 11-bit numbers with leading 1.",
+                "group22": "Calculate the total count of 11-bit numbers (1024-2047) satisfying the ones condition using binomial coefficients.",
+                "group23": "Compute the count of valid 11-bit numbers ≤2003 by excluding numbers in 2004-2047.",
+                "group24": "Sum the counts from m=1-10 and m=11, then compute modulo 1000.",
+                "group25": "Re-verify the binomial coefficient sum for 11-bit numbers and the final modulo.",
+                "group26": "Validate the methodology with a small-scale example (numbers ≤7).",
+                "group27": "Finalize the answer and prepare the output format."
+            },
+            "difficulties": {
+                "group1": 2,
+                "group2": 1,
+                "group3": 1,
+                "group4": 3,
+                "group5": 3,
+                "group6": 3,
+                "group7": 5,
+                "group8": 2,
+                "group9": 2,
+                "group10": 2,
+                "group11": 2,
+                "group12": 2,
+                "group13": 3,
+                "group14": 2,
+                "group15": 1,
+                "group16": 4,
+                "group17": 6,
+                "group18": 7,
+                "group19": 2,
+                "group20": 2,
+                "group21": 6,
+                "group22": 4,
+                "group23": 5,
+                "group24": 2,
+                "group25": 2,
+                "group26": 3,
+                "group27": 1
+            },
+            "relations": {
+                "group1": [],
+                "group2": [
+                    "group1"
+                ],
+                "group3": [
+                    "group2"
+                ],
+                "group4": [
+                    "group2"
+                ],
+                "group5": [
+                    "group4"
+                ],
+                "group6": [
+                    "group5"
+                ],
+                "group7": [
+                    "group6"
+                ],
+                "group8": [
+                    "group7"
+                ],
+                "group9": [
+                    "group7"
+                ],
+                "group10": [
+                    "group7"
+                ],
+                "group11": [
+                    "group4",
+                    "group7"
+                ],
+                "group12": [
+                    "group11"
+                ],
+                "group13": [
+                    "group7"
+                ],
+                "group14": [
+                    "group13"
+                ],
+                "group15": [
+                    "group13"
+                ],
+                "group16": [
+                    "group4",
+                    "group6"
+                ],
+                "group17": [
+                    "group2",
+                    "group4",
+                    "group6"
+                ],
+                "group18": [
+                    "group2",
+                    "group6"
+                ],
+                "group19": [
+                    "group18"
+                ],
+                "group20": [
+                    "group19"
+                ],
+                "group21": [
+                    "group4",
+                    "group6"
+                ],
+                "group22": [
+                    "group4",
+                    "group6",
+                    "group7"
+                ],
+                "group23": [
+                    "group2",
+                    "group17",
+                    "group22"
+                ],
+                "group24": [
+                    "group15",
+                    "group23"
+                ],
+                "group25": [
+                    "group24"
+                ],
+                "group26": [],
+                "group27": [
+                    "group25"
+                ]
+            }
+        },
+        "analysis_model": "claude-3-7",
+        "original_token_count": 14856,
+        "analysis_model_new": "deepseek-ai\/DeepSeek-R1"
+    }
+]
