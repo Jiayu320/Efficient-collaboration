@@ -33,6 +33,7 @@ def generate_cot_summary(question, sentence_groups, api_key=None, analysis_model
     5. Present the bullets as a single “To-Do List”.  
     6. Preserve the original group numbering order.  
     7. Write in clear, concise English.
+    8. Make sure groups numbers are complete and sequential, starting from 1.
 
     Example (for few-shot in-context learning – keep it verbatim):
 
@@ -95,8 +96,9 @@ def generate_cot_summary(question, sentence_groups, api_key=None, analysis_model
     
     try:
         # 初始化OpenAI客户端
-        client = OpenAI(base_url="https://api.bianxie.ai/v1", api_key=api_key)
-        
+        # client = OpenAI(base_url="https://api.bianxie.ai/v1", api_key=api_key)
+        client = OpenAI(base_url="https://api.deepseek.com", api_key=api_key)
+
         # 调用API
         response = client.chat.completions.create(
             model=analysis_model,
@@ -108,6 +110,7 @@ def generate_cot_summary(question, sentence_groups, api_key=None, analysis_model
         
         # 提取并返回总结
         summary = response.choices[0].message.content.strip()
+        # print(f"生成的总结: {summary}")
         return summary
     
     except Exception as e:
@@ -141,6 +144,7 @@ def rate_cot_difficulty(question, sentence_groups, api_key=None, analysis_model=
     3. Do not justify or explain the score; supply only the integer.  
     4. Use plain digits 1-10 (no decimals).  
     5. Place the list under the heading “Difficulty Scores”.
+    6. Make sure groups numbers are complete and sequential, starting from 1.
 
     Example (few-shot, keep exactly as is)
     Query: Find the last three digits of the product of $\\sqrt{1995}x^{\\log_{1995}x}=x^2.$.
@@ -191,7 +195,7 @@ def rate_cot_difficulty(question, sentence_groups, api_key=None, analysis_model=
     End of example.
     """
     rating_template = """
-    Now it is your turn. Please evaluate the difficulty of the following groups on a 1-10 scale, using the rubric provided above.
+    Now it is your turn. Please evaluate the difficulty of the following groups on a 1-10 scale, using the rubric provided above. Do not explain or justify your scores, just follow the format exactly.
     Query: {Question}
     CoT steps:
     {CoT}
@@ -200,8 +204,9 @@ def rate_cot_difficulty(question, sentence_groups, api_key=None, analysis_model=
     
     try:
         # 初始化OpenAI客户端
-        client = OpenAI(base_url="https://api.bianxie.ai/v1", api_key=api_key)
-        
+        # client = OpenAI(base_url="https://api.bianxie.ai/v1", api_key=api_key)
+        client = OpenAI(base_url="https://api.deepseek.com", api_key=api_key)
+
         # 调用API
         response = client.chat.completions.create(
             model=analysis_model,
@@ -213,6 +218,7 @@ def rate_cot_difficulty(question, sentence_groups, api_key=None, analysis_model=
         
         # 提取并返回评分
         scores = response.choices[0].message.content.strip()
+        # print(f"生成的评分: {scores}")
         return scores
     
     except Exception as e:
@@ -241,6 +247,7 @@ def analyzing_step_dependencies(question, sentence_groups, api_key=None, analysi
     4. If a group has no dependencies, its value is an empty array [].
     5. Favor parallelism: include only the minimal, truly necessary dependencies so that independent groups can be processed concurrently; avoid long serial chains whenever possible.
     6. Directly output the result without any additional words or explanations.
+    7. Make sure groups numbers are complete and sequential.
     Example (few-shot, keep exactly as is)
     Query: Find the last three digits of the product of the positive roots of √(1995) x^{log_{1995} x} = x².
     CoT steps:
@@ -300,20 +307,21 @@ def analyzing_step_dependencies(question, sentence_groups, api_key=None, analysi
     
     try:
         # 初始化OpenAI客户端
-        client = OpenAI(base_url="https://api.bianxie.ai/v1", api_key=api_key)
-        
+        # client = OpenAI(base_url="https://api.bianxie.ai/v1", api_key=api_key)
+        client = OpenAI(base_url="https://api.deepseek.com", api_key=api_key)
         # 调用API
         response = client.chat.completions.create(
             model=analysis_model,
             messages=[
                 {"role": "system", "content": system_content},
                 {"role": "user", "content": user_template.format(Question=question, CoT=sentence_groups)}
-            ],
-            response_format={"type": "json_object"}
+            ]
+            # response_format={"type": "json_object"}
         )
         
         # 获取API返回的依赖关系并解析为字典
         dependencies_json = response.choices[0].message.content.strip()
+        # print(f"生成的依赖关系: {dependencies_json}")
         dependencies = json.loads(dependencies_json)
         
         # 标准化依赖关系格式
@@ -469,7 +477,8 @@ def process_file(file_path, output_dir=None, api_key=None, analysis_model="gpt-4
         处理结果字典
     """
     try:
-        data = read_json(file_path)[0]
+        data = read_json(file_path)[0] # 原始数据
+        # data = read_json(file_path)
         question = data.get("question", "")
         sentence_groups = data.get("analysis", {}).get("sentence_groups", {})
 
@@ -552,7 +561,7 @@ def process_file(file_path, output_dir=None, api_key=None, analysis_model="gpt-4
 
 def process_directory(input_dir, output_dir, api_key=None, max_workers=4, analysis_model=None):
     """
-    处理目录中的所有JSON文件
+    处理目录中的所有JSON文件，如果输出目录中已存在处理好的文件则跳过
     
     参数:
         input_dir: 输入目录路径
@@ -571,14 +580,30 @@ def process_directory(input_dir, output_dir, api_key=None, max_workers=4, analys
     json_files = [os.path.join(input_dir, f) for f in os.listdir(input_dir) 
                  if os.path.isfile(os.path.join(input_dir, f)) and f.endswith('.json')]
     
+    # 获取已处理的文件列表
+    processed_files = set()
+    if os.path.exists(output_dir):
+        processed_files = {os.path.basename(f) for f in os.listdir(output_dir) 
+                          if os.path.isfile(os.path.join(output_dir, f)) and f.endswith('.json')}
+    
+    # 筛选未处理的文件
+    files_to_process = [f for f in json_files if os.path.basename(f) not in processed_files]
+    
+    print(f"找到 {len(json_files)} 个文件，其中 {len(json_files) - len(files_to_process)} 个已处理，{len(files_to_process)} 个待处理")
+    
     successful_files = []
     failed_files = []
     
+    # 将已处理的文件添加到成功列表中
+    for file_path in json_files:
+        if os.path.basename(file_path) in processed_files:
+            successful_files.append(file_path)
+    
     # 并行处理文件
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_file = {executor.submit(process_file, file_path, output_dir, api_key, analysis_model): file_path for file_path in json_files}
+        future_to_file = {executor.submit(process_file, file_path, output_dir, api_key, analysis_model): file_path for file_path in files_to_process}
         
-        for future in tqdm.tqdm(concurrent.futures.as_completed(future_to_file), total=len(json_files), desc="Processing files"):
+        for future in tqdm.tqdm(concurrent.futures.as_completed(future_to_file), total=len(files_to_process), desc="Processing files"):
             file_path = future_to_file[future]
             try:
                 result = future.result()
@@ -615,11 +640,13 @@ if __name__ == "__main__":
     import argparse
     
     parser = argparse.ArgumentParser(description="处理JSON文件中的思维链（CoT）数据")
-    parser.add_argument("--input", default="data/structure/limo_test", help="输入文件或目录路径")
-    parser.add_argument("--output", default="data/structure/limo_test_out", help="输出目录路径，默认为None（直接修改原文件）")
-    parser.add_argument("--api_key", default=get_api_key("bianxie"), help="OpenAI API密钥")
+    # parser.add_argument("--input", default="data\\structure\\limo\\583.json", help="输入文件或目录路径")
+    parser.add_argument("--input", default="data\\structure\\fix", help="输入文件或目录路径")
+    parser.add_argument("--output", default="data\\structure\\limo_out", help="输出目录路径，默认为None（直接修改原文件）")
+    # parser.add_argument("--output", default=None, help="输出目录路径，默认为None（直接修改原文件）")
+    parser.add_argument("--api_key", default=get_api_key("deepseek"), help="API密钥")
     parser.add_argument("--workers", type=int, default=4, help="并行处理的最大线程数")
-    parser.add_argument("--analysis_model", default="deepseek-ai/DeepSeek-R1", help="模型的版本号") # gpt-4, deepseek-ai/DeepSeek-R1
+    parser.add_argument("--analysis_model", default="deepseek-reasoner", help="模型的版本号") # gpt-4.1, deepseek-ai/DeepSeek-R1,o3-mini-high, claude-3-7-sonnet-latest
     args = parser.parse_args()
 
     if os.path.isfile(args.input):

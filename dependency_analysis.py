@@ -208,7 +208,7 @@ def process_directory(args):
 def main():
     import argparse
     parser = argparse.ArgumentParser(description='分析JSON文件中的依赖关系')
-    parser.add_argument('--dir', type=str, default='data/structure/claude_out', help='要处理的目录路径')
+    parser.add_argument('--dir', type=str, default='data/structure/limo_v2_out', help='要处理的目录路径')
     parser.add_argument('--file', type=str, default=None, help='要处理的单个文件路径')
     parser.add_argument('--tokenizer',  type=str, default='Qwen/Qwen2.5-Math-1.5B', help='分词器名称')
     args = parser.parse_args()
