@@ -261,25 +261,12 @@ def build_step_prompt(current_step, tasks, query):
     """构建当前步骤的提示"""
     prompt_template = """
     You are a mathematical problem-solving assistant. I will provide you with a math problem and a specific step from my solution plan. Your task is to complete ONLY this specific step based on the description and token limit.
-
     PROBLEM:
     {Problem}
-
     CURRENT STEP:
     Task: {Task}
-    Token Limit: {Token}
     Relied Results: {Relied_Results}
-
-    INSTRUCTIONS:
-    1. Focus ONLY on completing the specific task described above
-    2. Keep your response within the token limit (approximately {Token} tokens)
-    3. Use the results from previous steps as necessary
-    4. Show your work clearly with mathematical reasoning
-    5. Provide a concise conclusion for this step
-    6. Do NOT attempt to solve other parts of the problem
-    7. Format mathematical expressions properly
-
-    Complete only the task described above within the token limit:
+    Let's think step by step and use less than {Token} tokens:
     """
     # 获得依赖的任务的具体结果
     relied_results = tasks[current_step].get('Rely', '')
@@ -513,12 +500,13 @@ class PerformanceTracker:
         # 成本估算 (美元/1K tokens)
         self.cost_rates = {
             "small_model": {
-                "prompt": 0.0015,
-                "completion": 0.0020
+                "prompt": 0.0,
+                "completion": 0.0
             },
+            # $2.50/M input tokens $10/M output tokens
             "large_model": {
-                "prompt": 0.0100,
-                "completion": 0.0150
+                "prompt": 0.0025,  # $2.50 per 1M input tokens
+                "completion": 0.0100  # $10 per 1M output tokens
             }
         }
     
