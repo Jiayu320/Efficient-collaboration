@@ -16,6 +16,7 @@ class ModelConfig:
     def __init__(self, 
                  small_model="qwen/qwen3-14b:free", 
                  large_model="qwen/qwen3-235b-a22b", 
+                 router_model=None,
                  threshold=2,
                  api_key_path="usage/openrouter",
                  prompt_path="prompt/generate_prompt.txt",
@@ -26,6 +27,7 @@ class ModelConfig:
         参数:
             small_model: 小模型的名称
             large_model: 大模型的名称
+            router_model: 路由模型的名称，用于生成任务计划，如果为None则使用small_model
             threshold: 使用大模型的难度阈值
             api_key_path: API密钥文件路径
             prompt_path: 提示词文件路径
@@ -33,6 +35,7 @@ class ModelConfig:
         """
         self.small_model = small_model
         self.large_model = large_model
+        self.router_model = router_model if router_model else small_model
         self.threshold = threshold
         self.api_key_path = api_key_path
         self.api_base = api_base
@@ -111,6 +114,7 @@ def load_config(config_path="config.yaml") -> Dict[str, Any]:
             "models": {
                 "small_model": "qwen/qwen3-14b:free",
                 "large_model": "qwen/qwen3-235b-a22b",
+                "router_model": "qwen/qwen-2.5-7b-instruct",
                 "threshold": 2
             },
             "api": {
@@ -129,20 +133,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='并行任务处理系统')
     parser.add_argument('--config', type=str, default="config.yaml",
                       help='配置文件路径')
-    parser.add_argument('--query', type=str,
-                      help='要解决的问题 (覆盖配置文件)')
-    parser.add_argument('--small-model', type=str,
-                      help='小模型名称 (覆盖配置文件)')
-    parser.add_argument('--large-model', type=str,
-                      help='大模型名称 (覆盖配置文件)')
-    parser.add_argument('--threshold', type=int,
-                      help='使用大模型的难度阈值 (覆盖配置文件)')
-    parser.add_argument('--api-key', type=str,
-                      help='API密钥文件路径 (覆盖配置文件)')
-    parser.add_argument('--workers', type=int,
-                      help='并行工作线程数 (覆盖配置文件)')
     return parser.parse_args()
-
 
 # 解析命令行参数
 args = parse_args()
@@ -151,18 +142,20 @@ args = parse_args()
 yaml_config = load_config(args.config)
 
 # 构建最终配置（命令行参数优先）
-small_model = args.small_model if args.small_model else yaml_config["models"]["small_model"]
-large_model = args.large_model if args.large_model else yaml_config["models"]["large_model"]
-threshold = args.threshold if args.threshold is not None else yaml_config["models"]["threshold"]
-api_key_path = args.api_key if args.api_key else yaml_config["api"]["key_path"]
+small_model = yaml_config["models"]["small_model"]
+large_model = yaml_config["models"]["large_model"]
+router_model = yaml_config["models"].get("router_model", small_model)  # 如果未设置，默认使用小模型
+threshold = yaml_config["models"]["threshold"]
+api_key_path = yaml_config["api"]["key_path"]
 api_base = yaml_config["api"]["base_url"]
 prompt_path = yaml_config["system"]["prompt_path"]
-workers = args.workers if args.workers is not None else yaml_config["system"]["workers"]
+workers = yaml_config["system"]["workers"]
 
 # 初始化模型配置
 config = ModelConfig(
     small_model=small_model,
     large_model=large_model,
+    router_model=router_model,
     threshold=threshold,
     api_key_path=api_key_path,
     prompt_path=prompt_path,
@@ -170,7 +163,7 @@ config = ModelConfig(
 )
 
 # 设置查询
-query = args.query if args.query else yaml_config["query"]
+query = yaml_config["query"]
 
 # 用于存储解析后的任务数据
 tasks = defaultdict(dict)
@@ -236,23 +229,128 @@ def generate_step_result(prompt, difficulty, model_config, stats_tracker=None):
     
     # 调用API
     try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "user", "content": prompt}
-            ]
-        )
+        start_time = time.time()
+        first_token_time = None
         
-        # 如果有统计跟踪器，更新token使用统计
+        # 使用流式API来测量首个令牌响应时间
+        try:
+            response_stream = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ],
+                stream=True
+            )
+        except Exception as e:
+            # 如果流式API调用失败，尝试使用非流式API
+            print(f"流式API调用失败，尝试使用非流式API: {e}")
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ],
+                stream=False
+            )
+            used_time = time.time() - start_time
+            # 在这种情况下我们无法测量TTFT
+            ttft = None
+            return response.choices[0].message.content
+        
+        # 收集完整响应
+        collected_content = ""
+        completion_tokens = 0
+        prompt_tokens = 0
+        
+        for chunk in response_stream:
+            if first_token_time is None:
+                first_token_time = time.time()
+                
+            # 从每个块中提取内容并累加
+            if hasattr(chunk.choices[0], 'delta') and hasattr(chunk.choices[0].delta, 'content'):
+                content = chunk.choices[0].delta.content
+                if content:
+                    collected_content += content
+                    completion_tokens += 1  # 近似计算完成tokens
+            
+        # 计算首个令牌响应时间
+        ttft = first_token_time - start_time if first_token_time else None
+        
+        # 创建一个模拟的完整响应对象
+        class MockResponse:
+            def __init__(self, content, model_name):
+                self.choices = [type('obj', (object,), {
+                    'message': type('obj', (object,), {
+                        'content': content
+                    })
+                })]
+                
+                # 估算token数量 - 使用更准确的方法
+                # 粗略估计英文token为单词数的1.3倍，中文为字符数的1.5倍
+                prompt_words = len(prompt.split())
+                prompt_chinese_chars = sum(1 for c in prompt if '\u4e00' <= c <= '\u9fff')
+                content_words = len(content.split())
+                content_chinese_chars = sum(1 for c in content if '\u4e00' <= c <= '\u9fff')
+                
+                estimated_prompt_tokens = int((prompt_words * 1.3) + (prompt_chinese_chars * 1.5))
+                estimated_completion_tokens = int((content_words * 1.3) + (content_chinese_chars * 1.5))
+                
+                if estimated_prompt_tokens < 1:
+                    estimated_prompt_tokens = 1
+                if estimated_completion_tokens < 1:
+                    estimated_completion_tokens = 1
+                
+                self.usage = type('obj', (object,), {
+                    'prompt_tokens': estimated_prompt_tokens,
+                    'completion_tokens': estimated_completion_tokens,
+                    'total_tokens': estimated_prompt_tokens + estimated_completion_tokens
+                })
+                self.model = model_name
+                
+        # 使用收集的内容创建模拟响应
+        response = MockResponse(collected_content, model)
+        
+        # 如果没有收集到内容，可能是API调用有问题
+        if not collected_content:
+            print("警告: 流式API未返回任何内容")
+            # 尝试非流式调用作为后备
+            try:
+                backup_response = client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "user", "content": prompt}
+                    ],
+                    stream=False
+                )
+                return backup_response.choices[0].message.content
+            except Exception as backup_error:
+                print(f"备份调用也失败: {backup_error}")
+                return f"错误: API调用未返回内容"
+        used_time = time.time() - start_time
+        model_name = model_config.small_model if model == model_config.small_model else model_config.large_model
+        model_type = "small_model" if model == model_config.small_model else "large_model"
+        
+        print(f"{model_name} API调用成功，使用时间: {used_time:.2f}秒")
+        if ttft is not None:
+            print(f"首个令牌响应时间 (TTFT): {ttft:.3f}秒")
+            
+        # 如果有统计跟踪器，更新token使用统计和TTFT统计
         if stats_tracker and hasattr(response, 'usage'):
-            model_type = "small_model" if model == model_config.small_model else "large_model"
             stats_tracker.update_token_usage(
                 model_type,
                 response.usage.prompt_tokens,
                 response.usage.completion_tokens
             )
+            # 更新首个令牌响应时间
+            if ttft is not None:
+                stats_tracker.update_ttft(model_type, ttft)
         
-        return response.choices[0].message.content
+        try:
+            return response.choices[0].message.content
+        except AttributeError:
+            print("错误: 无法从响应中提取内容")
+            if hasattr(response, 'choices') and response.choices and hasattr(response.choices[0], 'message'):
+                return str(response.choices[0].message)
+            return "API调用失败，未能获取有效响应"
     except Exception as e:
         print(f"API调用失败: {e}")
         return f"错误: API调用失败 - {str(e)}"
@@ -386,17 +484,6 @@ def print_results(tasks):
             print("(无结果)")
         print(f"--- 步骤 {step_id} 结束 ---")
     
-    # 可选：打印详细任务信息的代码，默认注释掉
-    '''
-    print("\n\n解析的任务详情:")
-    for step_id, attrs in sorted(tasks.items(), key=lambda x: int(x[0])):
-        print(f"步骤 {step_id}:")
-        for k, v in attrs.items():
-            if k != 'Result':  # 不打印详细结果，避免输出过多
-                print(f"  {k}: {v}")
-        print()
-    '''
-    
 def wait_for_completion_and_get_final_result(tasks, query, config, stats_tracker=None):
     """等待所有任务完成并返回最终结果
     
@@ -433,7 +520,7 @@ def wait_for_completion_and_get_final_result(tasks, query, config, stats_tracker
             final_result += "（此步骤未完成）\n\n"
     
     # 已经完成了所有的subtask,向router小模型询问最终结果
-    prompt = """All subtasks have been completed. Based on the results of all steps below, please provide the final answer. Be concise and clear in your response without additional explanation or clarification.
+    prompt = """All subtasks have been completed. Based on the results of all steps below, please provide only the final answer.
 
     PROBLEM:
     {query}
@@ -457,6 +544,9 @@ def wait_for_completion_and_get_final_result(tasks, query, config, stats_tracker
         final_prompt = prompt.format(query=query, steps=steps_text)
         final_answer = generate_step_result(final_prompt, "1", config, stats_tracker)  # 使用小模型（难度为1，低于阈值）
         final_result += f"## 最终答案\n{final_answer}\n"
+        # 停止性能跟踪
+        stats_tracker.stop_tracking()
+
     except Exception as e:
         print(f"获取最终答案时出错: {e}")
         # 如果失败，回退到使用最后一个步骤的结果
@@ -465,8 +555,12 @@ def wait_for_completion_and_get_final_result(tasks, query, config, stats_tracker
             final_result += f"## 最终答案\n"
             if 'Result' in last_step and last_step['Result']:
                 final_result += f"{last_step['Result']}\n"
+                # 停止性能跟踪
+                stats_tracker.stop_tracking()
             else:
                 final_result += "（未能获得最终答案）\n"
+                # 停止性能跟踪
+                stats_tracker.stop_tracking()
     
     return final_result
 
@@ -477,6 +571,13 @@ class PerformanceTracker:
         """初始化性能跟踪器"""
         self.start_time = time.time()
         self.end_time = None
+        
+        # 首个令牌响应时间统计
+        self.ttft_metrics = {
+            "small_model": [],
+            "large_model": [],
+            "total": []
+        }
         
         # Token使用统计
         self.token_usage = {
@@ -527,6 +628,19 @@ class PerformanceTracker:
         self.token_usage["total"]["prompt_tokens"] += prompt_tokens
         self.token_usage["total"]["completion_tokens"] += completion_tokens
         self.token_usage["total"]["total_tokens"] += prompt_tokens + completion_tokens
+        
+    def update_ttft(self, model_type, ttft):
+        """更新首个令牌响应时间 (Time to First Token)
+        
+        参数:
+            model_type: 模型类型 ("small_model" 或 "large_model")
+            ttft: 首个令牌响应时间（秒）
+        """
+        if ttft is not None:
+            # 更新指定模型的统计
+            self.ttft_metrics[model_type].append(ttft)
+            # 更新总统计
+            self.ttft_metrics["total"].append(ttft)
     
     def stop_tracking(self):
         """停止性能跟踪"""
@@ -575,6 +689,44 @@ class PerformanceTracker:
         report = "# 性能统计报告\n\n"
         report += f"## 总执行时间\n{elapsed_time:.2f} 秒\n\n"
         
+        # 首个令牌响应时间报告
+        report += "## 首个令牌响应时间 (TTFT)\n\n"
+        
+        # 计算平均TTFT
+        def calc_avg_ttft(ttft_list):
+            return sum(ttft_list) / len(ttft_list) if ttft_list else 0
+            
+        small_ttft = self.ttft_metrics["small_model"]
+        large_ttft = self.ttft_metrics["large_model"]
+        all_ttft = self.ttft_metrics["total"]
+        
+        report += "### 小模型\n"
+        if small_ttft:
+            report += f"- 平均首个令牌响应时间: {calc_avg_ttft(small_ttft):.3f} 秒\n"
+            report += f"- 最短响应时间: {min(small_ttft):.3f} 秒\n"
+            report += f"- 最长响应时间: {max(small_ttft):.3f} 秒\n"
+            report += f"- 响应次数: {len(small_ttft)}\n\n"
+        else:
+            report += "- 无数据\n\n"
+            
+        report += "### 大模型\n"
+        if large_ttft:
+            report += f"- 平均首个令牌响应时间: {calc_avg_ttft(large_ttft):.3f} 秒\n"
+            report += f"- 最短响应时间: {min(large_ttft):.3f} 秒\n"
+            report += f"- 最长响应时间: {max(large_ttft):.3f} 秒\n"
+            report += f"- 响应次数: {len(large_ttft)}\n\n"
+        else:
+            report += "- 无数据\n\n"
+            
+        report += "### 总计\n"
+        if all_ttft:
+            report += f"- 平均首个令牌响应时间: {calc_avg_ttft(all_ttft):.3f} 秒\n"
+            report += f"- 最短响应时间: {min(all_ttft):.3f} 秒\n"
+            report += f"- 最长响应时间: {max(all_ttft):.3f} 秒\n"
+            report += f"- 响应总次数: {len(all_ttft)}\n\n"
+        else:
+            report += "- 无数据\n\n"
+        
         report += "## Token 使用情况\n\n"
         report += "### 小模型\n"
         report += f"- 输入 Tokens: {self.token_usage['small_model']['prompt_tokens']}\n"
@@ -612,6 +764,34 @@ def calculate_performance_metrics(stats_tracker):
     return stats_tracker.format_performance_report()
 
 
+def generate_task_dependency_report(tasks):
+    """生成任务依赖关系报告
+    
+    参数:
+        tasks: 任务字典
+    
+    返回:
+        任务依赖关系报告文本
+    """
+    report = "# 任务规划依赖关系\n\n"
+    
+    # 按步骤ID排序
+    sorted_tasks = sorted(tasks.items(), key=lambda x: int(x[0]))
+    
+    report += "| 步骤ID | 任务描述 | 依赖步骤 | 难度 | Token限制 |\n"
+    report += "| ------ | -------- | -------- | ---- | --------- |\n"
+    
+    for step_id, attrs in sorted_tasks:
+        task_desc = attrs.get('Task', '未知任务')
+        rely = attrs.get('Rely', '无')
+        difficulty = attrs.get('Difficulty', '未指定')
+        token_limit = attrs.get('Token', '未指定')
+        
+        report += f"| {step_id} | {task_desc} | {rely} | {difficulty} | {token_limit} |\n"
+    
+    return report
+
+
 def run_parallel_execution(query, config):
     """运行并行执行流程
     
@@ -638,12 +818,10 @@ def run_parallel_execution(query, config):
     # 设置请求参数
     url = f"{config.api_base}/chat/completions"
     headers = config.get_headers()
-    payload = config.get_payload(query)
+    # 使用router_model而不是默认的small_model
+    payload = config.get_payload(query, model_override=config.router_model)
     
-    # 设置请求参数
-    url = f"{config.api_base}/chat/completions"
-    headers = config.get_headers()
-    payload = config.get_payload(query)
+    print(f"使用路由模型: {config.router_model} 生成解决方案计划")
     
     # 流式处理
     try:
@@ -703,9 +881,6 @@ def run_parallel_execution(query, config):
     # 关闭线程池
     executor.shutdown()
     
-    # 停止性能跟踪
-    stats_tracker.stop_tracking()
-    
     return tasks, stats_tracker
 
 
@@ -715,6 +890,7 @@ if __name__ == "__main__":
     print(f"配置文件: {args.config}")
     print(f"使用小模型: {config.small_model}")
     print(f"使用大模型: {config.large_model}")
+    print(f"使用路由模型: {config.router_model}")
     print(f"难度阈值: {config.threshold}")
     print(f"工作线程数: {workers}")
     print(f"当前查询: {query}")
@@ -738,6 +914,11 @@ if __name__ == "__main__":
     print("\n性能统计:")
     print(performance_report)
     
+    # 生成任务依赖关系报告
+    dependency_report = generate_task_dependency_report(tasks)
+    print("\n任务规划依赖关系:")
+    print(dependency_report)
+    
     # 可选：将最终结果保存到文件
     try:
         output_dir = "results"
@@ -745,10 +926,11 @@ if __name__ == "__main__":
             os.makedirs(output_dir)
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         output_file = os.path.join(output_dir, f"result_{timestamp}.md")
-        
-        # 将性能报告添加到最终结果中
-        final_result_with_stats = final_result + "\n\n" + performance_report
-        
+
+        model_usage = f"使用小模型: {config.small_model}\n使用大模型: {config.large_model}\n使用路由模型: {config.router_model}\n"
+        # 将性能报告和依赖关系报告添加到最终结果中
+        final_result_with_stats = model_usage + "\n\n" +final_result + "\n\n" + performance_report + "\n\n" + dependency_report
+
         with open(output_file, "w", encoding="utf-8") as f:
             f.write(final_result_with_stats)
         print(f"结果已保存至: {output_file}")

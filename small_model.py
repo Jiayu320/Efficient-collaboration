@@ -200,10 +200,11 @@ if __name__ == "__main__":
     yaml_config = load_config(args.config)
     
     # 构建最终配置（命令行参数优先）
-    small_model = args.small_model if args.small_model else yaml_config["models"]["small_model"]
-    large_model = args.large_model if args.large_model else yaml_config["models"]["large_model"]
-    threshold = args.threshold if args.threshold is not None else yaml_config["models"]["threshold"]
-    api_key_path = args.api_key if args.api_key else yaml_config["api"]["key_path"]
+    small_model = yaml_config["models"]["small_model"]
+    large_model = yaml_config["models"]["large_model"]
+    router_model = yaml_config["models"].get("router_model", small_model)  # 如果未设置，默认使用小模型
+    threshold = yaml_config["models"]["threshold"]
+    api_key_path = yaml_config["api"]["key_path"]
     api_base = yaml_config["api"]["base_url"]
     prompt_path = yaml_config["system"]["prompt_path"]
     
@@ -218,7 +219,7 @@ if __name__ == "__main__":
     )
     
     # 设置查询
-    query = args.query if args.query else yaml_config["query"]
+    query = yaml_config["query"]
     
     print(f"配置文件: {args.config}")
     print(f"使用大模型: {config.large_model}")
