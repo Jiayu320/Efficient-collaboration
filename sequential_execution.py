@@ -123,7 +123,6 @@ def load_config(config_path="config.yaml") -> Dict[str, Any]:
             },
             "system": {
                 "prompt_path": "prompt/generate_prompt.txt",
-                "workers": 4,
                 "enable_judge": False,
                 "gold_answer": ""
             },
@@ -132,7 +131,7 @@ def load_config(config_path="config.yaml") -> Dict[str, Any]:
 
 def parse_args():
     """解析命令行参数，可覆盖配置文件中的设置"""
-    parser = argparse.ArgumentParser(description='并行任务处理系统')
+    parser = argparse.ArgumentParser(description='顺序任务处理系统')
     parser.add_argument('--config', type=str, default="config.yaml",
                       help='配置文件路径')
     return parser.parse_args()
@@ -151,7 +150,6 @@ threshold = yaml_config["models"]["threshold"]
 api_key_path = yaml_config["api"]["key_path"]
 api_base = yaml_config["api"]["base_url"]
 prompt_path = yaml_config["system"]["prompt_path"]
-workers = yaml_config["system"]["workers"]
 
 # 获取判断相关配置
 enable_judge = yaml_config["system"].get("enable_judge", False)
@@ -372,108 +370,27 @@ def build_step_prompt(current_step, tasks, query):
     Relied Results: {Relied_Results}
     Let's think step by step and use less than {Token} tokens:
     """
-    # 获得依赖的任务的具体结果
+    # 获得依赖的任务的具体结果 - 顺序执行时，可能依赖的结果尚未生成
     relied_results = tasks[current_step].get('Rely', '')
     if relied_results:
-        relied_results = [tasks[step_id]['Result'] for step_id in relied_results.split(',') if step_id in tasks]
+        relied_steps = relied_results.split(',')
+        # 对于顺序执行，我们只能使用已完成的步骤的结果
+        available_results = []
+        for step_id in relied_steps:
+            if step_id in tasks and 'Result' in tasks[step_id] and tasks[step_id]['Result']:
+                available_results.append(tasks[step_id]['Result'])
+            else:
+                available_results.append(f"(步骤 {step_id} 的结果尚未生成，顺序执行模式下无法使用)")
+        relied_results = available_results
     else:
         relied_results = []
+    
     return prompt_template.format(
         Problem=query,
         Task=tasks[current_step].get('Task', ''),
         Token=tasks[current_step].get('Token', ''),
         Relied_Results=relied_results
     ), tasks[current_step].get('Difficulty', '')
-
-import concurrent.futures
-
-# 全局变量
-# Track completed steps
-completed_steps = set()
-# Create a thread pool executor - 使用配置设置线程数
-executor = concurrent.futures.ThreadPoolExecutor(max_workers=workers)
-# Store futures for each step
-futures = {}
-
-def is_step_ready(step_id, tasks):
-    """Check if a step is ready to be processed (dependencies completed or none)"""
-    rely_str = tasks[step_id].get('Rely', '')
-    if not rely_str:
-        return True
-    
-    rely_steps = rely_str.split(',')
-    return all(step in completed_steps for step in rely_steps)
-
-def process_step(step_id, tasks, query, model_config, stats_tracker=None):
-    """处理单个步骤
-    
-    参数:
-        step_id: 步骤ID
-        tasks: 任务字典
-        query: 原始查询
-        model_config: 模型配置对象
-        stats_tracker: 性能统计跟踪器
-    """
-    try:
-        print(f"\n开始执行步骤 {step_id}: {tasks[step_id].get('Task', '未知任务')}")
-        prompt, difficulty = build_step_prompt(step_id, tasks, query)
-        
-        # 使用模型配置生成结果
-        result = generate_step_result(prompt, difficulty, model_config, stats_tracker)
-        
-        tasks[step_id]['Result'] = result
-        completed_steps.add(step_id)
-        print(f"步骤 {step_id} 执行完成")
-        return step_id
-    except Exception as e:
-        print(f"步骤 {step_id} 执行出错: {e}")
-        # 即使出错也标记为完成，避免死锁
-        completed_steps.add(step_id)
-        tasks[step_id]['Result'] = f"错误: {str(e)}"
-        return step_id
-
-def router(tasks, model_config, query, stats_tracker=None):
-    """调度任务并行执行
-    
-    参数:
-        tasks: 任务字典
-        model_config: 模型配置对象
-        query: 原始查询
-        stats_tracker: 性能统计跟踪器
-    """
-    has_new_tasks = False
-    
-    # 检查可以开始的新任务
-    for step_id in tasks:
-        if step_id not in futures and step_id not in completed_steps:
-            if is_step_ready(step_id, tasks):
-                print(f"调度步骤 {step_id}: {tasks[step_id].get('Task', '未知任务')}")
-                # 传递模型配置和性能统计器
-                future = executor.submit(process_step, step_id, tasks, query, model_config, stats_tracker)
-                futures[step_id] = future
-                has_new_tasks = True
-    
-    # 检查完成的任务
-    completed_future_ids = [step_id for step_id, f in list(futures.items()) if f.done()]
-    for step_id in completed_future_ids:
-        try:
-            f = futures[step_id]
-            f.result()  # 获取结果，如果有异常会抛出
-            del futures[step_id]
-            # 当一个任务完成后，立即重新检查依赖项，可能会启动新任务
-            has_new_tasks = True
-        except Exception as e:
-            print(f"任务 {step_id} 执行错误: {e}")
-            # 处理错误的任务也应该从队列中移除
-            del futures[step_id]
-    
-    # 如果有正在运行的任务，继续路由
-    if futures:
-        # time.sleep(0.1)  # 小延迟防止CPU过载
-        return True  # 继续路由
-    
-    # 如果有新任务被添加但没有正在运行的任务，也继续路由
-    return has_new_tasks
 
 def print_results(tasks):
     """打印任务执行结果
@@ -551,7 +468,8 @@ def wait_for_completion_and_get_final_result(tasks, query, config, stats_tracker
         final_answer = generate_step_result(final_prompt, "1", config, stats_tracker)  # 使用小模型（难度为1，低于阈值）
         final_result += f"## 最终答案\n{final_answer}\n"
         # 停止性能跟踪
-        stats_tracker.stop_tracking()
+        if stats_tracker:
+            stats_tracker.stop_tracking()
 
     except Exception as e:
         print(f"获取最终答案时出错: {e}")
@@ -562,11 +480,13 @@ def wait_for_completion_and_get_final_result(tasks, query, config, stats_tracker
             if 'Result' in last_step and last_step['Result']:
                 final_result += f"{last_step['Result']}\n"
                 # 停止性能跟踪
-                stats_tracker.stop_tracking()
+                if stats_tracker:
+                    stats_tracker.stop_tracking()
             else:
                 final_result += "（未能获得最终答案）\n"
                 # 停止性能跟踪
-                stats_tracker.stop_tracking()
+                if stats_tracker:
+                    stats_tracker.stop_tracking()
     
     return final_result
 
@@ -616,19 +536,6 @@ class PerformanceTracker:
                 "completion": 0.0100  # $10 per 1M output tokens
             }
         }
-        '''
-        self.cost_rates = {
-            "small_model": {
-                "prompt": 0.0025,
-                "completion": 0.0100
-            },
-            # $2.50/M input tokens $10/M output tokens
-            "large_model": {
-                "prompt": 0.0025,  # $2.50 per 1M input tokens
-                "completion": 0.0100  # $10 per 1M output tokens
-            }
-        }
-        '''
     
     def update_token_usage(self, model_type, prompt_tokens, completion_tokens):
         """更新token使用情况
@@ -841,98 +748,6 @@ def generate_task_dependency_report(tasks):
     return report
 
 
-def run_parallel_execution(query, config):
-    """运行并行执行流程
-    
-    参数:
-        query: 要解决的问题
-        config: 模型配置对象
-    """
-    global xml_buffer, tasks, completed_steps, futures
-    
-    # 创建性能统计跟踪器
-    stats_tracker = PerformanceTracker()
-    
-    # 重置全局状态
-    xml_buffer = ""
-    tasks = defaultdict(dict)
-    completed_steps = set()
-    futures = {}
-    
-    # 初始化变量跟踪解析进度
-    task_count = 0
-    print("开始处理问题：", query)
-    print("正在获取解决方案计划...")
-    
-    # 设置请求参数
-    url = f"{config.api_base}/chat/completions"
-    headers = config.get_headers()
-    # 使用router_model而不是默认的small_model
-    payload = config.get_payload(query, model_override=config.router_model)
-    
-    print(f"使用路由模型: {config.router_model} 生成解决方案计划")
-    
-    # 流式处理
-    try:
-        with requests.post(url, headers=headers, json=payload, stream=True) as r:
-            r.raise_for_status()  # 检查HTTP错误
-            for chunk in r.iter_content(chunk_size=1024, decode_unicode=True):
-                if not chunk:
-                    continue
-                    
-                # 处理SSE格式
-                for line in chunk.splitlines():
-                    line = line.strip()
-                    if not line or line == "data: [DONE]":
-                        continue
-                        
-                    if line.startswith('data: '):
-                        try:
-                            data_obj = json.loads(line[6:])
-                            content = data_obj["choices"][0]["delta"].get("content", "")
-                            print(content, end="", flush=True)  # 实时输出
-                            
-                            # 添加到XML缓冲区
-                            xml_buffer += content
-                            
-                            # 尝试解析缓冲区中的完整标签
-                            parsed_count = 0
-                            while process_xml_buffer():
-                                parsed_count += 1
-                                task_count += 1
-                            
-                            # 只有在解析到新任务时才启动路由
-                            if parsed_count > 0:
-                                print(f"\n已解析 {task_count} 个任务，启动任务调度...")
-                                router(tasks, config, query)
-    
-                        except json.JSONDecodeError:
-                            pass  # 忽略解析错误，继续处理
-                        except Exception as e:
-                            print(f"\n处理响应时出错: {e}")
-    except requests.RequestException as e:
-        print(f"\n请求错误: {e}")
-    except Exception as e:
-        print(f"\n未知错误: {e}")
-    
-    print(f"\n计划生成完成，共解析 {task_count} 个任务")
-    
-    # 继续处理可能的剩余XML标签
-    while process_xml_buffer():
-        pass
-    
-    # 处理所有剩余任务直到全部完成
-    print("\n\n开始执行所有任务...")
-    while tasks and any(step_id not in completed_steps for step_id in tasks):
-        if not router(tasks, config, query, stats_tracker):
-            break
-    
-    # 关闭线程池
-    executor.shutdown()
-    
-    return tasks, stats_tracker
-
-
 def judge_correct(question, gold_answer, final_answer, model_config):
     """判断最终答案是否正确
     
@@ -978,19 +793,114 @@ def judge_correct(question, gold_answer, final_answer, model_config):
         print(f"判断答案正确性时出错: {e}")
         return False, f"判断错误: {str(e)}"
 
+
+def run_sequential_execution(query, config):
+    """运行顺序执行流程
+    
+    参数:
+        query: 要解决的问题
+        config: 模型配置对象
+        
+    返回:
+        任务字典和性能统计跟踪器
+    """
+    global xml_buffer, tasks
+    
+    # 创建性能统计跟踪器
+    stats_tracker = PerformanceTracker()
+    
+    # 重置全局状态
+    xml_buffer = ""
+    tasks = defaultdict(dict)
+    
+    # 初始化变量跟踪解析进度
+    task_count = 0
+    print("开始处理问题：", query)
+    print("正在获取解决方案计划...")
+    
+    # 设置请求参数
+    url = f"{config.api_base}/chat/completions"
+    headers = config.get_headers()
+    # 使用router_model而不是默认的small_model
+    payload = config.get_payload(query, model_override=config.router_model)
+    
+    print(f"使用路由模型: {config.router_model} 生成解决方案计划")
+    
+    # 流式处理
+    try:
+        with requests.post(url, headers=headers, json=payload, stream=True) as r:
+            r.raise_for_status()  # 检查HTTP错误
+            for chunk in r.iter_content(chunk_size=1024, decode_unicode=True):
+                if not chunk:
+                    continue
+                    
+                # 处理SSE格式
+                for line in chunk.splitlines():
+                    line = line.strip()
+                    if not line or line == "data: [DONE]":
+                        continue
+                        
+                    if line.startswith('data: '):
+                        try:
+                            data_obj = json.loads(line[6:])
+                            content = data_obj["choices"][0]["delta"].get("content", "")
+                            print(content, end="", flush=True)  # 实时输出
+                            
+                            # 添加到XML缓冲区
+                            xml_buffer += content
+                            
+                            # 尝试解析缓冲区中的完整标签
+                            while process_xml_buffer():
+                                task_count += 1
+    
+                        except json.JSONDecodeError:
+                            pass  # 忽略解析错误，继续处理
+                        except Exception as e:
+                            print(f"\n处理响应时出错: {e}")
+    except requests.RequestException as e:
+        print(f"\n请求错误: {e}")
+    except Exception as e:
+        print(f"\n未知错误: {e}")
+    
+    print(f"\n计划生成完成，共解析 {task_count} 个任务")
+    
+    # 继续处理可能的剩余XML标签
+    while process_xml_buffer():
+        pass
+    
+    print("\n\n开始顺序执行所有任务...")
+    
+    # 顺序执行所有任务
+    sorted_tasks = sorted(tasks.items(), key=lambda x: int(x[0]))
+    for step_id, task in sorted_tasks:
+        try:
+            print(f"\n开始执行步骤 {step_id}: {task.get('Task', '未知任务')}")
+            prompt, difficulty = build_step_prompt(step_id, tasks, query)
+            
+            # 使用模型配置生成结果
+            result = generate_step_result(prompt, difficulty, config, stats_tracker)
+            
+            tasks[step_id]['Result'] = result
+            print(f"步骤 {step_id} 执行完成")
+        except Exception as e:
+            print(f"步骤 {step_id} 执行出错: {e}")
+            tasks[step_id]['Result'] = f"错误: {str(e)}"
+    
+    return tasks, stats_tracker
+
+
 # 执行主流程
 if __name__ == "__main__":
-    print("启动程序...")
+    print("启动顺序执行程序...")
     print(f"配置文件: {args.config}")
     print(f"使用小模型: {config.small_model}")
     print(f"使用大模型: {config.large_model}")
     print(f"使用路由模型: {config.router_model}")
     print(f"难度阈值: {config.threshold}")
-    print(f"工作线程数: {workers}")
     print(f"当前查询: {query}")
     
-    # 运行并行执行流程
-    tasks, stats_tracker = run_parallel_execution(query, config)
+    # 运行顺序执行流程
+    tasks, stats_tracker = run_sequential_execution(query, config)
     
     # 结果处理在main函数内完成
     print("\n\n所有任务已完成！")
@@ -1026,17 +936,17 @@ if __name__ == "__main__":
     
     # 可选：将最终结果保存到文件
     try:
-        output_dir = "results"
+        output_dir = "comparison_results"
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
         timestamp = time.strftime("%Y%m%d_%H%M%S")
-        output_file = os.path.join(output_dir, f"result_{timestamp}.md")
+        output_file = os.path.join(output_dir, f"sequential_result_{timestamp}.md")
         model_usage = f"使用小模型: {config.small_model}\n\n使用大模型: {config.large_model}\n\n使用路由模型: {config.router_model}\n\n"
-        threshold_info = f"难度阈值: {config.threshold}\n\n工作线程数: {workers}\n\n"
+        threshold_info = f"难度阈值: {config.threshold}\n\n"
         model_usage += threshold_info
         
         # 将性能报告和依赖关系报告添加到最终结果中
-        final_result_with_stats = model_usage + "\n\n" + final_result + "\n\n" + correctness_report + performance_report + "\n\n" + dependency_report
+        final_result_with_stats = model_usage + "\n\n顺序执行模式报告\n\n" + final_result + "\n\n" + correctness_report + performance_report + "\n\n" + dependency_report
 
         with open(output_file, "w", encoding="utf-8") as f:
             f.write(final_result_with_stats)
