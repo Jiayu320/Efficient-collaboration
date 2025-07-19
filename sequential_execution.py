@@ -638,19 +638,21 @@ class PerformanceTracker:
         tokens_per_second = self.calculate_tokens_per_second()
         
         report = "# 性能统计报告\n\n"
-        report += f"## 总执行时间\n{elapsed_time:.2f} 秒\n\n"
-        
+        report += f"## 总执行时间\n{elapsed_time:.3f} 秒\n\n"
+
+        def calc_total_ttft(ttft_list):
+            return sum(ttft_list) if ttft_list else 0
+        small_ttft = self.ttft_metrics["small_model"]
+        large_ttft = self.ttft_metrics["large_model"]
+        all_ttft = self.ttft_metrics["total"]
+
+        report += f"## 去除ttft的总执行时间\n{elapsed_time - calc_total_ttft(all_ttft):.3f} 秒\n\n"
         # 首个令牌响应时间报告
         report += "## 首个令牌响应时间 (TTFT)\n\n"
         
         # 计算平均TTFT
         def calc_avg_ttft(ttft_list):
             return sum(ttft_list) / len(ttft_list) if ttft_list else 0
-            
-        small_ttft = self.ttft_metrics["small_model"]
-        large_ttft = self.ttft_metrics["large_model"]
-        all_ttft = self.ttft_metrics["total"]
-        
         report += "### 小模型\n"
         if small_ttft:
             report += f"- 平均首个令牌响应时间: {calc_avg_ttft(small_ttft):.3f} 秒\n"
