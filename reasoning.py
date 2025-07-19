@@ -932,6 +932,46 @@ def run_parallel_execution(query, config):
     
     return tasks, stats_tracker
 
+def LLM_judge(question, final_answer, model_config):
+    """使用大模型判断答案是否正确
+    
+    参数:
+        question: 问题文本
+        final_answer: 最终生成的答案
+        model_config: 模型配置对象
+        
+    返回:
+        是否正确的布尔值和判断结果文本
+    """
+    prompt = f"""Here is a math problem and a student's solution. Please help me determine if the student's solution is correct. If the numerical value are same, then it is correct.
+                               
+                Problem: {question}
+
+                Answer: {final_answer}
+
+                If the student's answer is correct, just output True; otherwise, just output False.
+                No explanation is required.
+    """
+    
+    client = model_config.get_client()
+    
+    try:
+        response = client.chat.completions.create(
+            model=model_config.large_model,
+            messages=[
+                {"role": "user", "content": prompt}
+            ],
+            stream=False
+        )
+        
+        result_text = response.choices[0].message.content.strip()
+        # 解析结果文本，确定是否正确
+        is_correct = "true" in result_text.lower() and "false" not in result_text.lower()
+        
+        return is_correct, result_text
+    except Exception as e:
+        print(f"判断答案正确性时出错: {e}")
+        return False, f"判断错误: {str(e)}"
 
 def judge_correct(question, gold_answer, final_answer, model_config):
     """判断最终答案是否正确
@@ -978,6 +1018,56 @@ def judge_correct(question, gold_answer, final_answer, model_config):
         print(f"判断答案正确性时出错: {e}")
         return False, f"判断错误: {str(e)}"
 
+def judge_question_difficulty(question, model_config):
+    """判断问题难度
+    
+    参数:
+        question: 问题文本
+        model_config: 模型配置对象
+        
+    返回:
+        问题难度（字符串）
+    """
+    prompt = f"""Please determine the difficulty of the following math problem. 
+    Difficulty scale:
+    1=Basic 2=Simple 3=Moderate 4=Complex 5=Advanced
+    Problem: {question}
+    Please output only the difficulty level as a number. No other explanations or details are needed.
+    """
+    client = model_config.get_client()
+    try:
+        response = client.chat.completions.create(
+            model=model_config.small_model,
+            messages=[
+                {"role": "user", "content": prompt.format(question=question)}
+            ],
+            stream=False
+        )
+        
+        difficulty = response.choices[0].message.content.strip()
+        return difficulty
+    except Exception as e:
+        return f"错误: 判断问题难度时出错 - {str(e)}" 
+
+def call_small_model_directly(question, model_config, stats_tracker=None):
+    """直接调用小模型进行处理
+    
+    参数:
+        question: 问题文本
+        model_config: 模型配置对象
+        stats_tracker: 性能统计跟踪器（可选）
+        
+    返回:
+        小模型的响应内容
+    """
+    # 构建提示词
+    prompt = """You are a math problem-solving assistant. I will provide you with a math problem. Your task is to solve it step by step and provide the final answer.
+
+    PROBLEM:
+    {question}
+    """.format(question=question)
+    return generate_step_result(prompt, "1", model_config, stats_tracker)
+
 # 执行主流程
 if __name__ == "__main__":
     print("启动程序...")
@@ -988,58 +1078,105 @@ if __name__ == "__main__":
     print(f"难度阈值: {config.threshold}")
     print(f"工作线程数: {workers}")
     print(f"当前查询: {query}")
-    
-    # 运行并行执行流程
-    tasks, stats_tracker = run_parallel_execution(query, config)
-    
-    # 结果处理在main函数内完成
-    print("\n\n所有任务已完成！")
-    
-    # 打印结果
-    print_results(tasks)
-    
-    # 获取最终结果
-    final_result = wait_for_completion_and_get_final_result(tasks, query, config, stats_tracker)
-    print("\n最终合并结果:")
-    print(final_result)
-    
-    # 判断结果正确性
-    correctness_report = ""
-    if enable_judge and gold_answer:
-        print("\n判断答案正确性...")
-        is_correct, judge_result = judge_correct(query, gold_answer, final_result, config)
-        correctness_status = "正确" if is_correct else "不正确"
-        print(f"判断结果: 答案{correctness_status}")
-        print(f"模型返回: {judge_result}")
-        
-        correctness_report = f"## 答案正确性判断\n\n标准答案: {gold_answer}\n\n判断结果: 答案{correctness_status}\n\n模型反馈: {judge_result}\n\n"
-    
-    # 计算并打印性能指标
-    performance_report = calculate_performance_metrics(stats_tracker)
-    print("\n性能统计:")
-    print(performance_report)
-    
-    # 生成任务依赖关系报告
-    dependency_report = generate_task_dependency_report(tasks)
-    print("\n任务规划依赖关系:")
-    print(dependency_report)
-    
-    # 可选：将最终结果保存到文件
-    try:
-        output_dir = "results"
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-        timestamp = time.strftime("%Y%m%d_%H%M%S")
-        output_file = os.path.join(output_dir, f"result_{timestamp}.md")
-        model_usage = f"使用小模型: {config.small_model}\n\n使用大模型: {config.large_model}\n\n使用路由模型: {config.router_model}\n\n"
-        threshold_info = f"难度阈值: {config.threshold}\n\n工作线程数: {workers}\n\n"
-        model_usage += threshold_info
-        
-        # 将性能报告和依赖关系报告添加到最终结果中
-        final_result_with_stats = model_usage + "\n\n" + final_result + "\n\n" + correctness_report + performance_report + "\n\n" + dependency_report
 
-        with open(output_file, "w", encoding="utf-8") as f:
-            f.write(final_result_with_stats)
-        print(f"结果已保存至: {output_file}")
+    try:
+        difficulty = judge_question_difficulty(query, config)
+        # 创建性能统计跟踪器（无论使用哪种方法都需要）
+        stats_tracker = PerformanceTracker()
+        
+        if int(difficulty) < 2:
+            print(f"问题难度 {difficulty} 低于阈值 2，使用小模型处理")
+
+            # 直接调用小模型处理，传入性能跟踪器
+            model_result = call_small_model_directly(query, config, stats_tracker)
+            
+            # 创建一个只包含一个任务的任务字典，以便生成一致的报告
+            tasks = {
+                "1": {
+                    "Task": "直接使用小模型解答问题",
+                    "Difficulty": difficulty,
+                    "Token": "1000",
+                    "Rely": "",
+                    "Result": model_result
+                }
+            }
+            
+            # 构建最终结果
+            final_result = "# 问题求解最终结果\n\n"
+            final_result += f"## 原始问题\n{query}\n\n"
+            final_result += "## 解决步骤\n\n"
+            final_result += f"### 步骤 1: 直接使用小模型解答问题\n{model_result}\n\n"
+            final_result += f"## 最终答案\n{model_result}\n"
+            
+            # 停止跟踪性能
+            stats_tracker.stop_tracking()
+            
+            print("\n最终结果:")
+            print(final_result)
+        else:
+            # 运行并行执行流程
+            tasks, stats_tracker = run_parallel_execution(query, config)
+            
+            # 结果处理在main函数内完成
+            print("\n\n所有任务已完成！")
+            
+            # 打印结果
+            print_results(tasks)
+            
+            # 获取最终结果
+            final_result = wait_for_completion_and_get_final_result(tasks, query, config, stats_tracker)
+            print("\n最终合并结果:")
+            print(final_result)
+    
+        # 判断结果正确性
+        correctness_report = ""
+        if enable_judge and gold_answer:
+            print("\n判断答案正确性...")
+            is_correct, judge_result = judge_correct(query, gold_answer, final_result, config)
+            correctness_status = "正确" if is_correct else "不正确"
+            print(f"判断结果: 答案{correctness_status}")
+            print(f"模型返回: {judge_result}")
+            
+            correctness_report = f"## 答案正确性判断\n\n标准答案: {gold_answer}\n\n判断结果: 答案{correctness_status}\n\n模型反馈: {judge_result}\n\n"
+        elif enable_judge:
+            print("\n判断答案正确性...")
+            is_correct, judge_result = LLM_judge(query, final_result, config)
+            correctness_status = "正确" if is_correct else "不正确"
+            print(f"判断结果: 答案{correctness_status}")
+            print(f"模型返回: {judge_result}")
+            
+            correctness_report = f"## 答案正确性判断\n\n判断结果: 答案{correctness_status}\n\n模型反馈: {judge_result}\n\n"
+
+        # 计算并打印性能指标
+        performance_report = calculate_performance_metrics(stats_tracker)
+        print("\n性能统计:")
+        print(performance_report)
+        
+        # 生成任务依赖关系报告
+        dependency_report = generate_task_dependency_report(tasks)
+        print("\n任务规划依赖关系:")
+        print(dependency_report)
+        
+        # 可选：将最终结果保存到文件
+        try:
+            output_dir = "results"
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            output_file = os.path.join(output_dir, f"result_{timestamp}.md")
+            model_usage = f"使用小模型: {config.small_model}\n\n使用大模型: {config.large_model}\n\n使用路由模型: {config.router_model}\n\n"
+            threshold_info = f"难度阈值: {config.threshold}\n\n工作线程数: {workers}\n\n"
+            model_usage += threshold_info
+            
+            # 将性能报告和依赖关系报告添加到最终结果中
+            final_result_with_stats = model_usage + "\n\n" + final_result + "\n\n" + correctness_report + performance_report + "\n\n" + dependency_report
+
+            with open(output_file, "w", encoding="utf-8") as f:
+                f.write(final_result_with_stats)
+            print(f"结果已保存至: {output_file}")
+        except Exception as e:
+            print(f"保存结果时出错: {e}")
+            
+
     except Exception as e:
-        print(f"保存结果时出错: {e}")
+        print(f"判断问题难度时出错: {e}")

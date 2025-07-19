@@ -442,7 +442,7 @@ def wait_for_completion_and_get_final_result(tasks, query, config, stats_tracker
         else:
             final_result += "（此步骤未完成）\n\n"
     
-    # 已经完成了所有的subtask,向router小模型询问最终结果
+    # 已经完成了所有的subtask,向小模型询问最终结果
     prompt = """Based on the results of all steps below, please provide only the final answer. No other explanations or details are needed.
 
     PROBLEM:
