@@ -7,6 +7,8 @@ from execution import (
     judge_question_difficulty, call_small_model_directly, generate_task_dependency_report,
     judge_correct, LLM_judge, save_result_to_file
 )
+# 导入数据集处理模块
+from dataset_runner import run_dataset_evaluation
 
 def main():
     """主程序入口"""
@@ -44,9 +46,36 @@ def main():
         api_base=api_base
     )
 
+    # 检查是否为数据集处理模式
+    # 优先使用命令行参数，其次使用配置文件
+    dataset_enabled = args.dataset or yaml_config.get("dataset", {}).get("enabled", False)
+    dataset_path = args.dataset_path or yaml_config.get("dataset", {}).get("path", "")
+    dataset_limit = args.dataset_limit or yaml_config.get("dataset", {}).get("limit", None)
+
+    if dataset_enabled and dataset_path:
+        print("===== 数据集处理模式 =====")
+        print(f"使用小模型: {config.small_model}")
+        print(f"使用大模型: {config.large_model}")
+        print(f"使用路由模型: {config.router_model}")
+        print(f"难度阈值: {config.threshold}")
+        print(f"工作线程数: {workers}")
+        print(f"数据集路径: {dataset_path}")
+        if dataset_limit:
+            print(f"数据集限制: {dataset_limit} 条")
+        
+        try:
+            # 运行数据集评估
+            report_file = run_dataset_evaluation(config, dataset_path, dataset_limit, workers)
+            print(f"数据集评估完成，报告已保存至: {report_file}")
+            return
+        except Exception as e:
+            print(f"数据集处理过程中出错: {e}")
+            return
+    
+    # 单问题处理模式
+    print("===== 单问题处理模式 =====")
     # 设置查询
     query = yaml_config["query"]
-
     print(f"使用小模型: {config.small_model}")
     print(f"使用大模型: {config.large_model}")
     print(f"使用路由模型: {config.router_model}")

@@ -1039,7 +1039,7 @@ def judge_question_difficulty(question, model_config):
         response = client.chat.completions.create(
             model=model_config.small_model,
             messages=[
-                {"role": "user", "content": prompt.format(question=question)}
+                {"role": "user", "content": prompt}
             ],
             stream=False
         )

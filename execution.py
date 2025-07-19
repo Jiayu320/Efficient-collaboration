@@ -27,6 +27,8 @@ xml_buffer = ""
 completed_steps = set()
 # Store futures for each step
 futures = {}
+# 映射future对象到step_id，用于回调
+future_to_id = {}
 
 def parse_step_attributes(attr_str):
     """解析属性字符串为字典"""
@@ -274,48 +276,79 @@ def process_step(step_id, tasks, query, model_config, stats_tracker=None):
         tasks[step_id]['Result'] = f"错误: {str(e)}"
         return step_id
 
-def router(tasks, model_config, query, executor, stats_tracker=None):
-    """调度任务并行执行
+def completion_callback(future):
+    """处理完成任务的回调函数
     
     参数:
-        tasks: 任务字典
-        model_config: 模型配置对象
-        query: 原始查询
-        executor: 线程池执行器
-        stats_tracker: 性能统计跟踪器
+        future: 已完成的Future对象
     """
-    global futures
+    global future_to_id, futures, completed_steps, tasks
+    
+    # 获取对应的step_id
+    step_id = future_to_id.get(future)
+    if not step_id:
+        print("警告: 无法找到与Future对应的任务ID")
+        return
+        
+    try:
+        # 获取结果，这里不会阻塞因为任务已完成
+        future.result()
+        print(f"回调中: 步骤 {step_id} 已完成")
+        # 标记为已完成
+        completed_steps.add(step_id)
+    except Exception as e:
+        print(f"回调中: 任务 {step_id} 执行错误: {e}")
+        # 即使出错也标记为完成，避免死锁
+        completed_steps.add(step_id)
+        tasks[step_id]['Result'] = f"错误: {str(e)}"
+    finally:
+        # 从跟踪字典中移除
+        if future in future_to_id:
+            del future_to_id[future]
+        if step_id in futures:
+            del futures[step_id]
+
+def router(tasks, model_config, query, executor, stats_tracker=None):
+    """调度任务并行执行"""
+    global futures, future_to_id
     has_new_tasks = False
     
-    # 检查可以开始的新任务
+    # 计算可以执行的任务及其优先级
+    ready_tasks = []
     for step_id in tasks:
         if step_id not in futures and step_id not in completed_steps:
             if is_step_ready(step_id, tasks):
-                print(f"调度步骤 {step_id}: {tasks[step_id].get('Task', '未知任务')}")
-                # 传递模型配置和性能统计器
-                future = executor.submit(process_step, step_id, tasks, query, model_config, stats_tracker)
-                futures[step_id] = future
-                has_new_tasks = True
+                # 优先级计算：基于依赖任务的数量和任务ID（较早的任务优先）
+                rely_str = tasks[step_id].get('Rely', '')
+                rely_count = len(rely_str.split(',')) if rely_str else 0
+                priority = (rely_count, int(step_id))
+                ready_tasks.append((step_id, priority))
     
-    # 检查完成的任务
+    # 按优先级排序（依赖少的先执行）
+    ready_tasks.sort(key=lambda x: x[1])
+    
+    # 批量提交任务到执行器
+    for step_id, _ in ready_tasks:
+        print(f"调度步骤 {step_id}: {tasks[step_id].get('Task', '未知任务')}")
+        future = executor.submit(process_step, step_id, tasks, query, model_config, stats_tracker)
+        # 添加回调
+        future.add_done_callback(completion_callback)
+        # 保存映射关系
+        futures[step_id] = future
+        future_to_id[future] = step_id
+        has_new_tasks = True
+    
+    # 使用回调而非主动检查已完成任务
+    # 不需要在这里检查完成的任务，因为有回调处理
+    # 但保留对已完成任务的检查，确保路由算法正常运行
     completed_future_ids = [step_id for step_id, f in list(futures.items()) if f.done()]
-    for step_id in completed_future_ids:
-        try:
-            f = futures[step_id]
-            f.result()  # 获取结果，如果有异常会抛出
-            del futures[step_id]
-            # 当一个任务完成后，立即重新检查依赖项，可能会启动新任务
-            has_new_tasks = True
-        except Exception as e:
-            print(f"任务 {step_id} 执行错误: {e}")
-            # 处理错误的任务也应该从队列中移除
-            del futures[step_id]
+    if completed_future_ids:
+        has_new_tasks = True
     
     # 如果有正在运行的任务，继续路由
     if futures:
-        return True  # 继续路由
+        return True
     
-    # 如果有新任务被添加但没有正在运行的任务，也继续路由
     return has_new_tasks
 
 def print_results(tasks):
@@ -457,6 +490,7 @@ def run_parallel_execution(query, config, workers=4):
     tasks = defaultdict(dict)
     completed_steps = set()
     futures = {}
+    future_to_id = {}
     
     # 创建线程池
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=workers)
@@ -641,12 +675,13 @@ def judge_question_difficulty(question, model_config):
         response = client.chat.completions.create(
             model=model_config.small_model,
             messages=[
-                {"role": "user", "content": prompt.format(question=question)}
+                {"role": "user", "content": prompt}
             ],
             stream=False
         )
         
         difficulty = response.choices[0].message.content.strip()
+
         return difficulty
     except Exception as e:
         return f"错误: 判断问题难度时出错 - {str(e)}" 

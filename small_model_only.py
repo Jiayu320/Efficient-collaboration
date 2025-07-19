@@ -4,7 +4,10 @@ import os
 import time
 import argparse
 import yaml
-from typing import Dict, Any
+from tqdm import tqdm
+import pandas as pd
+import matplotlib.pyplot as plt
+from typing import Dict, Any, List, Union
 from openai import OpenAI
 
 
@@ -112,7 +115,285 @@ def parse_args():
                       help='配置文件路径')
     parser.add_argument('--query', type=str,
                       help='要解决的问题')
+    parser.add_argument('--dataset', type=str,
+                      help='数据集文件路径')
+    parser.add_argument('--limit', type=int,
+                      help='处理数据集的最大问题数')
     return parser.parse_args()
+
+
+class SmallModelDatasetRunner:
+    """小模型数据集处理器，用于批量处理数据集并生成统计报告"""
+    
+    def __init__(self, config, dataset_path, limit=None):
+        """初始化数据集处理器
+        
+        参数:
+            config: 模型配置对象
+            dataset_path: 数据集文件路径
+            limit: 处理的最大问题数量，None表示处理所有问题
+        """
+        self.config = config
+        self.dataset_path = dataset_path
+        self.limit = limit
+        self.results = []
+        
+        # 加载数据集
+        self.dataset = self._load_dataset()
+        
+    def _load_dataset(self):
+        """加载数据集
+        
+        返回:
+            数据集列表
+        """
+        try:
+            with open(self.dataset_path, 'r', encoding='utf-8') as f:
+                dataset = json.load(f)
+            
+            # 如果设置了限制，则只取前N个问题
+            if self.limit is not None:
+                dataset = dataset[:self.limit]
+            
+            return dataset
+        except Exception as e:
+            print(f"加载数据集时出错: {e}")
+            return []
+    
+    def process_dataset(self):
+        """处理整个数据集
+        
+        返回:
+            处理结果列表
+        """
+        if not self.dataset:
+            print("数据集为空，无法处理")
+            return []
+        
+        print(f"开始使用小模型处理数据集，共 {len(self.dataset)} 个问题...")
+        
+        # 使用tqdm显示进度
+        for i, problem_data in enumerate(tqdm(self.dataset, desc="处理数据集")):
+            problem = problem_data.get("problem", "")
+            solution = problem_data.get("solution", "")
+            
+            # 每个问题的性能统计
+            result = self.process_single_problem(problem, solution)
+            self.results.append(result)
+            
+            # 打印当前进度
+            print(f"完成进度: {i+1}/{len(self.dataset)}")
+            
+        return self.results
+    
+    def process_single_problem(self, problem, solution):
+        """处理单个问题
+        
+        参数:
+            problem: 问题文本
+            solution: 标准答案
+            
+        返回:
+            处理结果字典
+        """
+        print(f"\n处理问题: {problem[:100]}...")
+        
+        # 初始化结果字典
+        result = {
+            "problem": problem,
+            "gold_solution": solution,
+            "model_solution": "",
+            "is_correct": False,
+            "judge_result": "",
+            "stats": None,
+            "execution_time": 0
+        }
+        
+        start_time = time.time()
+        
+        try:
+            # 创建性能统计跟踪器
+            stats_tracker = PerformanceTracker()
+            
+            # 使用小模型处理问题
+            model_solution = solve_problem_with_small_model(problem, self.config, stats_tracker)
+            result["model_solution"] = model_solution
+            
+            # 判断结果正确性（使用LLM进行判断）
+            is_correct, judge_result = self._judge_answer(problem, solution, model_solution)
+            result["is_correct"] = is_correct
+            result["judge_result"] = judge_result
+            
+            # 记录性能统计
+            stats_tracker.stop_tracking()
+            result["stats"] = stats_tracker
+            
+        except Exception as e:
+            print(f"处理问题时出错: {e}")
+            result["error"] = str(e)
+        
+        # 计算总执行时间
+        result["execution_time"] = time.time() - start_time
+        
+        return result
+    
+    def _judge_answer(self, problem, gold_solution, model_solution):
+        """判断答案是否正确
+        
+        参数:
+            problem: 问题文本
+            gold_solution: 标准答案
+            model_solution: 模型生成的答案
+            
+        返回:
+            (是否正确的布尔值, 判断结果文本)
+        """
+        prompt = f"""Here is a math problem with a standard answer and a student's solution. Please help me determine if the student's solution is correct. If the numerical value are same, then it is correct.
+                               
+                Problem: {problem}
+
+                Standard answer: {gold_solution}
+
+                Answer: {model_solution}
+
+                If the student's answer is correct, just output True; otherwise, just output False.
+                No explanation is required.
+        """
+        
+        # 使用客户端调用API
+        client = self.config.get_client()
+        
+        try:
+            response = client.chat.completions.create(
+                model=self.config.model,
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.1,  # 低温度以获得更确定的回答
+                max_tokens=10      # 只需要简短回答
+            )
+            
+            judge_result = response.choices[0].message.content.strip().lower()
+            is_correct = "true" in judge_result
+            
+            return is_correct, judge_result
+        except Exception as e:
+            print(f"判断答案时出错: {e}")
+            return False, f"错误: {str(e)}"
+    
+    def generate_report(self):
+        """生成数据集处理报告
+        
+        返回:
+            处理报告文本
+        """
+        if not self.results:
+            return "没有处理结果，无法生成报告"
+        
+        # 统计正确率
+        correct_count = sum(1 for r in self.results if r.get("is_correct", False))
+        accuracy = correct_count / len(self.results) if self.results else 0
+        
+        # 统计平均执行时间
+        avg_time = sum(r.get("execution_time", 0) for r in self.results) / len(self.results) if self.results else 0
+        
+        # 统计平均成本
+        total_cost = sum(r.get("stats").calculate_cost() if r.get("stats") else 0 for r in self.results)
+        avg_cost = total_cost / len(self.results) if self.results else 0
+        
+        # 生成报告
+        report = "# 小模型数据集处理报告\n\n"
+        report += f"## 概述\n\n"
+        report += f"- 数据集: {self.dataset_path}\n"
+        report += f"- 问题总数: {len(self.results)}\n"
+        report += f"- 正确数量: {correct_count}\n"
+        report += f"- 准确率: {accuracy:.2%}\n"
+        report += f"- 平均执行时间: {avg_time:.2f} 秒\n"
+        report += f"- 平均成本: ${avg_cost:.4f}\n\n"
+        
+        # 生成详细结果表格
+        report += f"## 详细结果\n\n"
+        report += "| # | 问题 | 正确? | 执行时间(秒) | 成本($) |\n"
+        report += "| --- | --- | --- | --- | --- |\n"
+        
+        for i, result in enumerate(self.results):
+            is_correct = "✓" if result.get("is_correct", False) else "✗"
+            problem = result.get("problem", "")
+            # 截断问题以适合表格
+            if len(problem) > 50:
+                problem = problem[:47] + "..."
+            problem = problem.replace("\n", " ")
+            
+            exec_time = result.get("execution_time", 0)
+            cost = result.get("stats").calculate_cost() if result.get("stats") else 0
+            
+            report += f"| {i+1} | {problem} | {is_correct} | {exec_time:.2f} | {cost:.4f} |\n"
+        
+        return report
+    
+    def visualize_results(self, output_dir="dataset_reports"):
+        """可视化数据集处理结果
+        
+        参数:
+            output_dir: 输出目录
+        """
+        if not self.results:
+            print("没有处理结果，无法生成可视化")
+            return
+        
+        # 确保输出目录存在
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+        
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        
+        # 准备数据
+        data = []
+        for result in self.results:
+            item = {
+                "问题": result.get("problem", "")[:50],
+                "正确": result.get("is_correct", False),
+                "执行时间": result.get("execution_time", 0),
+                "成本": result.get("stats").calculate_cost() if result.get("stats") else 0
+            }
+            data.append(item)
+        
+        df = pd.DataFrame(data)
+        
+        # 准确率
+        plt.figure(figsize=(10, 6))
+        correct_count = sum(1 for r in self.results if r.get("is_correct", False))
+        labels = ['正确', '错误']
+        sizes = [correct_count, len(self.results) - correct_count]
+        plt.pie(sizes, labels=labels, autopct='%1.1f%%', colors=['#4CAF50', '#F44336'])
+        plt.title('问题解答准确率')
+        plt.savefig(f"{output_dir}/small_model_accuracy_{timestamp}.png")
+        
+        # 执行时间分布
+        plt.figure(figsize=(10, 6))
+        plt.hist(df['执行时间'], bins=10, color='#2196F3')
+        plt.xlabel('执行时间 (秒)')
+        plt.ylabel('问题数量')
+        plt.title('执行时间分布')
+        plt.grid(True, alpha=0.3)
+        plt.savefig(f"{output_dir}/small_model_time_distribution_{timestamp}.png")
+        
+        # 成本分布
+        plt.figure(figsize=(10, 6))
+        plt.hist(df['成本'], bins=10, color='#FF9800')
+        plt.xlabel('成本 (美元)')
+        plt.ylabel('问题数量')
+        plt.title('成本分布')
+        plt.grid(True, alpha=0.3)
+        plt.savefig(f"{output_dir}/small_model_cost_distribution_{timestamp}.png")
+        
+        # 生成完整报告
+        report = self.generate_report()
+        with open(f"{output_dir}/small_model_dataset_report_{timestamp}.md", "w", encoding="utf-8") as f:
+            f.write(report)
+        
+        print(f"可视化和报告已保存到 {output_dir} 目录")
 
 
 class PerformanceTracker:
@@ -326,46 +607,81 @@ if __name__ == "__main__":
     # 加载配置
     yaml_config = load_config(args.config)
     
-    # 获取查询
-    query = args.query if args.query else yaml_config["query"]
-    
     # 构建模型配置
     model_config = ModelConfig(
         model=yaml_config["models"]["small_model"],
         api_key_path=yaml_config["api"]["key_path"],
-        prompt_path=yaml_config["system"]["compare_prompt_path"],
+        prompt_path="prompt/direct_solve_prompt.txt",
         api_base=yaml_config["api"]["base_url"]
     )
     
-    # 创建性能跟踪器
-    stats_tracker = PerformanceTracker()
+    # 检查是否进行数据集处理
+    dataset_path = args.dataset or yaml_config.get("dataset", {}).get("path", None)
+    dataset_limit = args.limit or yaml_config.get("dataset", {}).get("limit", None)
     
-    print("启动小模型单独求解程序...")
-    print(f"使用模型: {model_config.model}")
-    print(f"当前查询: {query}")
-    
-    # 解决问题
-    result = solve_problem_with_small_model(query, model_config, stats_tracker)
-    
-    # 停止性能跟踪
-    stats_tracker.stop_tracking()
-    
-    # 生成性能报告
-    performance_report = stats_tracker.format_performance_report()
-    print("\n性能统计:")
-    print(performance_report)
-    
-    # 保存结果到文件
-    try:
-        output_dir = "comparison_results"
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-        timestamp = time.strftime("%Y%m%d_%H%M%S")
-        output_file = os.path.join(output_dir, f"small_model_result_{timestamp}.md")
-        model_info = f"# 小模型单独求解结果\n\n使用模型: {model_config.model}\n\n"
+    if dataset_path and os.path.exists(dataset_path):
+        print("启动小模型数据集处理程序...")
+        print(f"使用模型: {model_config.model}")
+        print(f"数据集路径: {dataset_path}")
+        if dataset_limit:
+            print(f"处理问题数量限制: {dataset_limit}")
         
-        with open(output_file, "w", encoding="utf-8") as f:
-            f.write(model_info + "## 问题\n\n" + query + "\n\n## 解决方案\n\n" + result + "\n\n" + performance_report)
-        print(f"结果已保存至: {output_file}")
-    except Exception as e:
-        print(f"保存结果时出错: {e}")
+        # 创建数据集运行器
+        dataset_runner = SmallModelDatasetRunner(model_config, dataset_path, limit=dataset_limit)
+        
+        # 处理数据集
+        dataset_runner.process_dataset()
+        
+        # 生成报告和可视化
+        report = dataset_runner.generate_report()
+        print("\n数据集处理报告:")
+        print(report)
+        
+        # 保存报告和生成可视化
+        try:
+            output_dir = "dataset_reports"
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+            
+            # 生成可视化
+            # dataset_runner.visualize_results(output_dir)
+            # print(f"数据集处理完成，报告和可视化已保存到 {output_dir} 目录")
+            print(f"数据集处理完成，报告已保存到 {output_dir} 目录")
+        except Exception as e:
+            print(f"保存报告时出错: {e}")
+    else:
+        # 获取查询
+        query = args.query if args.query else yaml_config["query"]
+        
+        # 创建性能跟踪器
+        stats_tracker = PerformanceTracker()
+        
+        print("启动小模型单独求解程序...")
+        print(f"使用模型: {model_config.model}")
+        print(f"当前查询: {query}")
+        
+        # 解决问题
+        result = solve_problem_with_small_model(query, model_config, stats_tracker)
+        
+        # 停止性能跟踪
+        stats_tracker.stop_tracking()
+        
+        # 生成性能报告
+        performance_report = stats_tracker.format_performance_report()
+        print("\n性能统计:")
+        print(performance_report)
+        
+        # 保存结果到文件
+        try:
+            output_dir = "comparison_results"
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            output_file = os.path.join(output_dir, f"small_model_result_{timestamp}.md")
+            model_info = f"# 小模型单独求解结果\n\n使用模型: {model_config.model}\n\n"
+            
+            with open(output_file, "w", encoding="utf-8") as f:
+                f.write(model_info + "## 问题\n\n" + query + "\n\n## 解决方案\n\n" + result + "\n\n" + performance_report)
+            print(f"结果已保存至: {output_file}")
+        except Exception as e:
+            print(f"保存结果时出错: {e}")

@@ -124,7 +124,12 @@ def load_config(config_path="config.yaml") -> Dict[str, Any]:
                 "enable_judge": False,
                 "gold_answer": ""
             },
-            "query": "What is the result of 1+1?"
+            "query": "What is the result of 1+1?",
+            "dataset": {
+                "enabled": False,
+                "path": "dataset/original_data/math200.json",
+                "limit": 10
+            }
         }
 
 def parse_args():
@@ -132,4 +137,10 @@ def parse_args():
     parser = argparse.ArgumentParser(description='并行任务处理系统')
     parser.add_argument('--config', type=str, default="config.yaml",
                       help='配置文件路径')
+    parser.add_argument('--dataset', action='store_true',
+                      help='启用数据集处理模式')
+    parser.add_argument('--dataset-path', type=str,
+                      help='数据集文件路径')
+    parser.add_argument('--dataset-limit', type=int,
+                      help='处理数据集的最大问题数量')
     return parser.parse_args()
