@@ -28,6 +28,10 @@ def main():
     threshold = yaml_config["models"]["threshold"]
     api_key_path = yaml_config["api"]["key_path"]
     api_base = yaml_config["api"]["base_url"]
+    # 获取各个模型的API基础URL（如果配置中有的话）
+    small_api_base = yaml_config["api"].get("small_api_base_url", api_base)  # 注意配置中使用了 small_api_base_url
+    large_api_base = yaml_config["api"].get("large_base_url", api_base)
+    router_api_base = yaml_config["api"].get("router_base_url", api_base)
     prompt_path = yaml_config["system"]["prompt_path"]
     workers = yaml_config["system"]["workers"]
 
@@ -43,7 +47,10 @@ def main():
         threshold=threshold,
         api_key_path=api_key_path,
         prompt_path=prompt_path,
-        api_base=api_base
+        api_base=api_base,
+        small_api_base=small_api_base,
+        large_api_base=large_api_base,
+        router_api_base=router_api_base
     )
 
     # 检查是否为数据集处理模式
@@ -84,11 +91,16 @@ def main():
     print(f"当前查询: {query}")
 
     try:
+        # 初始化模型客户端
+        from execution import initialize_clients, warmup_models
+        initialize_clients(config)
+        warmup_models(config)
+        
         # 判断问题难度
         difficulty = judge_question_difficulty(query, config)
         
         # 创建性能统计跟踪器（无论使用哪种方法都需要）
-        stats_tracker = PerformanceTracker()
+        stats_tracker = PerformanceTracker(config)
         
         if int(difficulty) < 2:
             print(f"问题难度 {difficulty} 低于阈值 2，使用小模型处理")

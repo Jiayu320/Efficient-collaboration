@@ -16,7 +16,10 @@ class ModelConfig:
                  threshold=2,
                  api_key_path="usage/openrouter",
                  prompt_path="prompt/generate_prompt.txt",
-                 api_base="https://openrouter.ai/api/v1"):
+                 api_base="https://openrouter.ai/api/v1",
+                 small_api_base=None,
+                 large_api_base=None,
+                 router_api_base=None):
         """
         初始化模型配置
         
@@ -27,7 +30,10 @@ class ModelConfig:
             threshold: 使用大模型的难度阈值
             api_key_path: API密钥文件路径
             prompt_path: 提示词文件路径
-            api_base: API基础URL
+            api_base: API基础URL，默认API URL
+            small_api_base: 小模型API基础URL，如果为None则使用api_base
+            large_api_base: 大模型API基础URL，如果为None则使用api_base
+            router_api_base: 路由模型API基础URL，如果为None则使用api_base
         """
         self.small_model = small_model
         self.large_model = large_model
@@ -35,6 +41,9 @@ class ModelConfig:
         self.threshold = threshold
         self.api_key_path = api_key_path
         self.api_base = api_base
+        self.small_api_base = small_api_base if small_api_base else api_base
+        self.large_api_base = large_api_base if large_api_base else api_base
+        self.router_api_base = router_api_base if router_api_base else api_base
         
         # 加载API密钥
         self.api_key = self._get_api_key(api_key_path)
@@ -89,6 +98,46 @@ class ModelConfig:
             return self.small_model
         else:
             return self.large_model
+    
+    def get_model_cost_rates(self):
+        """获取模型价格费率
+        
+        返回:
+            包含各模型价格费率的字典
+        """
+        # 基于模型名称设置费率
+        cost_rates = {
+            "small_model": {
+                "prompt": 0.0,  # 默认小模型免费
+                "completion": 0.0
+            },
+            "large_model": {
+                "prompt": 0.0025,  # $2.50 per 1M input tokens
+                "completion": 0.0100  # $10 per 1M output tokens
+            },
+            "router_model": {
+                "prompt": 0.003,  # $3.00 per 1M input tokens
+                "completion": 0.015
+            }
+        }
+        
+        # 根据模型名称调整费率
+        # 如果路由模型与大模型相同
+        if self.router_model == self.large_model:
+            cost_rates["router_model"] = cost_rates["large_model"]
+        # 如果路由模型与小模型相同
+        elif self.router_model == self.small_model:
+            cost_rates["router_model"] = cost_rates["small_model"]
+        # 其他情况，可以根据模型名称设置费率
+        else:
+            # 可以在这里添加更多的模型费率设置
+            if "gpt-4" in self.router_model or "claude-3" in self.router_model:
+                cost_rates["router_model"] = {
+                    "prompt": 0.0010,  # 示例值
+                    "completion": 0.0030  # 示例值
+                }
+            
+        return cost_rates
 
 
 def load_config(config_path="config.yaml") -> Dict[str, Any]:

@@ -265,9 +265,8 @@ class SmallModelDatasetRunner:
         
         try:
             response = client.chat.completions.create(
-                model=self.config.model,
+                model="openai/gpt-4o",
                 messages=[
-                    {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.1,  # 低温度以获得更确定的回答
@@ -304,6 +303,7 @@ class SmallModelDatasetRunner:
         
         # 生成报告
         report = "# 小模型数据集处理报告\n\n"
+        report += f"模型型号: {self.config.model}\n\n"
         report += f"## 概述\n\n"
         report += f"- 数据集: {self.dataset_path}\n"
         report += f"- 问题总数: {len(self.results)}\n"
@@ -643,10 +643,15 @@ if __name__ == "__main__":
             if not os.path.exists(output_dir):
                 os.makedirs(output_dir)
             
+            # 保存报告到文件
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            output_file = os.path.join(output_dir, f"small_model_dataset_report_{timestamp}.md")
+            with open(output_file, "w", encoding="utf-8") as f:
+                f.write(report)
+            
             # 生成可视化
-            # dataset_runner.visualize_results(output_dir)
-            # print(f"数据集处理完成，报告和可视化已保存到 {output_dir} 目录")
-            print(f"数据集处理完成，报告已保存到 {output_dir} 目录")
+            dataset_runner.visualize_results(output_dir)
+            print(f"数据集处理完成，报告和可视化已保存到 {output_dir} 目录")
         except Exception as e:
             print(f"保存报告时出错: {e}")
     else:

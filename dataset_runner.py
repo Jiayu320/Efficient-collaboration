@@ -115,8 +115,8 @@ class DatasetRunner:
             # 创建性能统计跟踪器
             stats_tracker = PerformanceTracker()
             
-            if int(difficulty) < 2:
-                print(f"问题难度 {difficulty} 低于阈值 2，使用小模型处理")
+            if int(difficulty) < self.config.threshold:
+                print(f"问题难度 {difficulty} 低于阈值 {self.config.threshold}，使用小模型处理")
                 
                 # 直接调用小模型处理
                 model_solution = call_small_model_directly(problem, self.config, stats_tracker)

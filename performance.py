@@ -6,8 +6,12 @@ import time
 class PerformanceTracker:
     """性能跟踪器类，用于跟踪模型使用情况和成本"""
     
-    def __init__(self):
-        """初始化性能跟踪器"""
+    def __init__(self, model_config=None):
+        """初始化性能跟踪器
+        
+        参数:
+            model_config: 可选，模型配置对象，用于获取最新的价格费率
+        """
         self.start_time = time.time()
         self.end_time = None
         
@@ -15,6 +19,7 @@ class PerformanceTracker:
         self.ttft_metrics = {
             "small_model": [],
             "large_model": [],
+            "router_model": [],  # 添加路由模型的TTFT统计
             "total": []
         }
         
@@ -30,6 +35,11 @@ class PerformanceTracker:
                 "completion_tokens": 0,
                 "total_tokens": 0
             },
+            "router_model": {  # 添加路由模型的token统计
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0
+            },
             "total": {
                 "prompt_tokens": 0,
                 "completion_tokens": 0,
@@ -38,17 +48,28 @@ class PerformanceTracker:
         }
         
         # 成本估算 (美元/1K tokens)
-        self.cost_rates = {
-            "small_model": {
-                "prompt": 0.0,
-                "completion": 0.0
-            },  # 小模型免费
-            # $2.50/M input tokens $10/M output tokens
-            "large_model": {
-                "prompt": 0.0025,  # $2.50 per 1M input tokens
-                "completion": 0.0100  # $10 per 1M output tokens
+        if model_config and hasattr(model_config, 'get_model_cost_rates'):
+            # 如果提供了模型配置，使用其费率
+            self.cost_rates = model_config.get_model_cost_rates()
+        else:
+            # 默认费率
+            self.cost_rates = {
+                "small_model": {
+                    "prompt": 0.0,
+                    "completion": 0.0
+                },  # 小模型免费
+                # $2.50/M input tokens $10/M output tokens
+                "large_model": {
+                    "prompt": 0.0025,  # $2.50 per 1M input tokens
+                    "completion": 0.0100  # $10 per 1M output tokens
+                },
+                "router_model": {  # 添加路由模型的成本率
+                    "prompt": 0.0,  # 默认与小模型相同
+                    "completion": 0.0
+                }
             }
-        }
+        # print("使用费率: ", self.cost_rates)
+        
     
     def update_token_usage(self, model_type, prompt_tokens, completion_tokens):
         """更新token使用情况
@@ -101,10 +122,18 @@ class PerformanceTracker:
             (self.token_usage["large_model"]["completion_tokens"] / 1000) * self.cost_rates["large_model"]["completion"]
         )
         
+        router_model_cost = (
+            (self.token_usage["router_model"]["prompt_tokens"] / 1000) * self.cost_rates["router_model"]["prompt"] +
+            (self.token_usage["router_model"]["completion_tokens"] / 1000) * self.cost_rates["router_model"]["completion"]
+        )
+        
+        total_cost = small_model_cost + large_model_cost + router_model_cost
+        
         return {
             "small_model": small_model_cost,
             "large_model": large_model_cost,
-            "total": small_model_cost + large_model_cost
+            "router_model": router_model_cost,
+            "total": total_cost
         }
     
     def get_elapsed_time(self):
@@ -127,16 +156,19 @@ class PerformanceTracker:
             return {
                 "small_model": 0,
                 "large_model": 0,
+                "router_model": 0,  # 添加路由模型的每秒token
                 "total": 0
             }
         
         small_tps = self.token_usage["small_model"]["completion_tokens"] / elapsed_time
         large_tps = self.token_usage["large_model"]["completion_tokens"] / elapsed_time
+        router_tps = self.token_usage["router_model"]["completion_tokens"] / elapsed_time
         total_tps = self.token_usage["total"]["completion_tokens"] / elapsed_time
         
         return {
             "small_model": small_tps,
             "large_model": large_tps,
+            "router_model": router_tps,  # 添加路由模型的每秒token
             "total": total_tps
         }
     
@@ -207,6 +239,11 @@ class PerformanceTracker:
         report += f"- 输出 Tokens: {self.token_usage['large_model']['completion_tokens']}\n"
         report += f"- 总 Tokens: {self.token_usage['large_model']['total_tokens']}\n\n"
         
+        report += "### 路由模型\n"
+        report += f"- 输入 Tokens: {self.token_usage['router_model']['prompt_tokens']}\n"
+        report += f"- 输出 Tokens: {self.token_usage['router_model']['completion_tokens']}\n"
+        report += f"- 总 Tokens: {self.token_usage['router_model']['total_tokens']}\n\n"
+        
         report += "### 总计\n"
         report += f"- 输入 Tokens: {self.token_usage['total']['prompt_tokens']}\n"
         report += f"- 输出 Tokens: {self.token_usage['total']['completion_tokens']}\n"
@@ -215,11 +252,13 @@ class PerformanceTracker:
         report += "## 生成速度\n\n"
         report += f"- 小模型每秒生成token数: {tokens_per_second['small_model']:.2f} tokens/s\n"
         report += f"- 大模型每秒生成token数: {tokens_per_second['large_model']:.2f} tokens/s\n"
+        report += f"- 路由模型每秒生成token数: {tokens_per_second['router_model']:.2f} tokens/s\n"
         report += f"- 平均每秒生成token数: {tokens_per_second['total']:.2f} tokens/s\n\n"
         
         report += "## 成本估算\n\n"
         report += f"- 小模型成本: ${costs['small_model']:.4f}\n"
         report += f"- 大模型成本: ${costs['large_model']:.4f}\n"
+        report += f"- 路由模型成本: ${costs['router_model']:.4f}\n"
         report += f"- 总成本: ${costs['total']:.4f}\n"
         
         return report

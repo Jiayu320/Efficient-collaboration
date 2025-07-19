@@ -17,6 +17,11 @@ from openai import OpenAI
 from config import ModelConfig, load_config, parse_args
 from performance import PerformanceTracker, calculate_performance_metrics
 
+# 全局客户端对象，预先初始化
+small_model_client = None
+large_model_client = None
+router_model_client = None
+
 # 全局变量
 # 用于存储解析后的任务数据
 tasks = defaultdict(dict)
@@ -29,6 +34,76 @@ completed_steps = set()
 futures = {}
 # 映射future对象到step_id，用于回调
 future_to_id = {}
+
+def initialize_clients(model_config):
+    """预先初始化模型客户端"""
+    global small_model_client, large_model_client, router_model_client
+    
+    # 初始化小模型客户端
+    original_api_base = model_config.api_base
+    model_config.api_base = model_config.small_api_base
+    small_model_client = model_config.get_client()
+    model_config.api_base = original_api_base
+    
+    # 如果大模型和小模型使用不同的API，则分别初始化
+    if model_config.large_api_base != model_config.small_api_base:
+        # 临时修改API基础URL创建大模型客户端
+        model_config.api_base = model_config.large_api_base
+        large_model_client = model_config.get_client()
+        model_config.api_base = original_api_base
+    else:
+        large_model_client = small_model_client
+        
+    # 如果路由模型和小模型使用不同的API，则分别初始化
+    if model_config.router_api_base != model_config.small_api_base:
+        # 临时修改API基础URL创建路由模型客户端
+        model_config.api_base = model_config.router_api_base
+        router_model_client = model_config.get_client()
+        model_config.api_base = original_api_base
+    else:
+        router_model_client = small_model_client
+        
+    print("所有模型客户端已初始化")
+
+def warmup_models(model_config):
+    """预热模型以减少首次请求的TTFT"""
+    global small_model_client, large_model_client, router_model_client
+    
+    print("预热模型中...")
+    
+    # 简单的预热提示
+    warmup_prompt = "Hello, I'm warming up."
+    
+    try:
+        # 预热小模型
+        small_model_client.chat.completions.create(
+            model=model_config.small_model,
+            messages=[{"role": "user", "content": warmup_prompt}],
+            max_tokens=5
+        )
+        print("小模型预热完成")
+        
+        # 预热大模型
+        if large_model_client != small_model_client:
+            large_model_client.chat.completions.create(
+                model=model_config.large_model,
+                messages=[{"role": "user", "content": warmup_prompt}],
+                max_tokens=5
+            )
+            print("大模型预热完成")
+        
+        # 预热路由模型
+        if router_model_client != small_model_client and router_model_client != large_model_client:
+            router_model_client.chat.completions.create(
+                model=model_config.router_model,
+                messages=[{"role": "user", "content": warmup_prompt}],
+                max_tokens=5
+            )
+            print("路由模型预热完成")
+        
+        print("所有模型预热完成")
+    except Exception as e:
+        print(f"模型预热失败: {e}")
 
 def parse_step_attributes(attr_str):
     """解析属性字符串为字典"""
@@ -81,11 +156,16 @@ def generate_step_result(prompt, difficulty, model_config, stats_tracker=None):
         model_config: 模型配置对象
         stats_tracker: 性能统计跟踪器
     """
+    global small_model_client, large_model_client
+    
     # 根据难度选择模型
     model = model_config.select_model_by_difficulty(difficulty)
     
-    # 获取客户端
-    client = model_config.get_client()
+    # 根据模型选择对应的客户端
+    if model == model_config.small_model:
+        client = small_model_client
+    else:
+        client = large_model_client
     
     # 调用API
     try:
@@ -480,10 +560,16 @@ def run_parallel_execution(query, config, workers=4):
         config: 模型配置对象
         workers: 并行工作线程数
     """
-    global xml_buffer, tasks, completed_steps, futures
+    global xml_buffer, tasks, completed_steps, futures, router_model_client
     
     # 创建性能统计跟踪器
-    stats_tracker = PerformanceTracker()
+    stats_tracker = PerformanceTracker(config)
+    
+    # 初始化所有客户端
+    initialize_clients(config)
+    
+    # 预热模型，减少TTFT
+    warmup_models(config)
     
     # 重置全局状态
     xml_buffer = ""
@@ -499,57 +585,82 @@ def run_parallel_execution(query, config, workers=4):
     task_count = 0
     print("开始处理问题：", query)
     print("正在获取解决方案计划...")
+    system_prompt = '''You are an assistant whose job is to generate a solution plan. Given a math problem, generate a solution plan less than 10 steps in XML format with the following constraints:
+    1. Plan must contain EXACTLY 1-10 steps (never more than 10)
+    2. Each step must be distinct and non-redundant
+    3. Merge trivial steps into logical units
+    4. Focus on key insights and critical transitions
+    5. Avoid step-by-step computations, focus on conceptual transitions
+    6. Mark computational steps with Difficulty≥3
+    7. Ensure all Rely attributes reference valid step IDs
+    8. Format: 
+    <Plan>
+    <Step ID="1" Task="..." Difficulty="1-5" Token="Estimate the number of tokens required to complete a subtask" Rely="Output only relevant steps"/>
+    ...
+    </Plan>
+    Make sure the format with paired tags is correct and all steps are properly nested within the <Plan> tag.
+
+    Difficulty scale:
+    1=Basic 2=Simple 3=Moderate 4=Complex 5=Advanced
+
+    Output ONLY the XML plan with no additional text.'''
     
-    # 设置请求参数
-    url = f"{config.api_base}/chat/completions"
-    headers = config.get_headers()
-    # 使用router_model而不是默认的small_model
-    payload = config.get_payload(query, model_override=config.router_model)
-    
-    print(f"使用路由模型: {config.router_model} 生成解决方案计划")
-    
-    # 流式处理
+    # 使用预初始化的路由模型客户端
     try:
-        with requests.post(url, headers=headers, json=payload, stream=True) as r:
-            r.raise_for_status()  # 检查HTTP错误
-            for chunk in r.iter_content(chunk_size=1024, decode_unicode=True):
-                if not chunk:
-                    continue
+        # 记录路由模型开始生成计划的时间，用于计算首个令牌响应时间
+        router_start_time = time.time()
+        first_token_received = False
+        ttft = None
+        
+        response_stream = router_model_client.chat.completions.create(
+            model=config.router_model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": query}
+            ],
+            stream=True
+        )
+        
+        # 计算输入tokens (估计值，实际应该通过API返回)
+        prompt_tokens = len(system_prompt.split()) + len(query.split())
+        completion_tokens = 0
+        
+        for chunk in response_stream:
+            if hasattr(chunk.choices[0], 'delta') and hasattr(chunk.choices[0].delta, 'content'):
+                content = chunk.choices[0].delta.content
+                if content:
+                    # 记录首个token响应时间
+                    if not first_token_received:
+                        ttft = time.time() - router_start_time
+                        first_token_received = True
+                        if stats_tracker:
+                            stats_tracker.update_ttft("router_model", ttft)
                     
-                # 处理SSE格式
-                for line in chunk.splitlines():
-                    line = line.strip()
-                    if not line or line == "data: [DONE]":
-                        continue
+                    print(content, end="", flush=True)  # 实时输出
+                    
+                    # 更新完成tokens计数
+                    completion_tokens += len(content.split())
+                    
+                    # 添加到XML缓冲区
+                    xml_buffer += content
+                    
+                    # 尝试解析缓冲区中的完整标签
+                    parsed_count = 0
+                    while process_xml_buffer():
+                        parsed_count += 1
+                        task_count += 1
+                    
+                    # 只有在解析到新任务时才启动路由
+                    if parsed_count > 0:
+                        print(f"\n已解析 {task_count} 个任务，启动任务调度...")
+                        router(tasks, config, query, executor)
+        
+        # 更新router模型的token使用情况
+        if stats_tracker:
+            stats_tracker.update_token_usage("router_model", prompt_tokens, completion_tokens)
                         
-                    if line.startswith('data: '):
-                        try:
-                            data_obj = json.loads(line[6:])
-                            content = data_obj["choices"][0]["delta"].get("content", "")
-                            print(content, end="", flush=True)  # 实时输出
-                            
-                            # 添加到XML缓冲区
-                            xml_buffer += content
-                            
-                            # 尝试解析缓冲区中的完整标签
-                            parsed_count = 0
-                            while process_xml_buffer():
-                                parsed_count += 1
-                                task_count += 1
-                            
-                            # 只有在解析到新任务时才启动路由
-                            if parsed_count > 0:
-                                print(f"\n已解析 {task_count} 个任务，启动任务调度...")
-                                router(tasks, config, query, executor)
-    
-                        except json.JSONDecodeError:
-                            pass  # 忽略解析错误，继续处理
-                        except Exception as e:
-                            print(f"\n处理响应时出错: {e}")
-    except requests.RequestException as e:
-        print(f"\n请求错误: {e}")
     except Exception as e:
-        print(f"\n未知错误: {e}")
+        print(f"\n处理响应时出错: {e}")
     
     print(f"\n计划生成完成，共解析 {task_count} 个任务")
     
@@ -638,7 +749,7 @@ def LLM_judge(question, final_answer, model_config):
     
     try:
         response = client.chat.completions.create(
-            model=model_config.large_model,
+            model="openai/gpt-4o",
             messages=[
                 {"role": "user", "content": prompt}
             ],
@@ -755,3 +866,40 @@ def save_result_to_file(final_result, config, workers, correctness_report, perfo
     except Exception as e:
         print(f"保存结果时出错: {e}")
         return None
+
+def warmup_models(model_config):
+    """预热模型以减少首次请求的TTFT"""
+    global small_model_client, large_model_client, router_model_client
+    
+    print("预热模型中...")
+    
+    # 简单的预热提示
+    warmup_prompt = "Hello, I'm warming up."
+    
+    try:
+        # 预热小模型
+        small_model_client.chat.completions.create(
+            model=model_config.small_model,
+            messages=[{"role": "user", "content": warmup_prompt}],
+            max_tokens=5
+        )
+        
+        # 预热大模型
+        if large_model_client != small_model_client:
+            large_model_client.chat.completions.create(
+                model=model_config.large_model,
+                messages=[{"role": "user", "content": warmup_prompt}],
+                max_tokens=5
+            )
+        
+        # 预热路由模型
+        if router_model_client != small_model_client and router_model_client != large_model_client:
+            router_model_client.chat.completions.create(
+                model=model_config.router_model,
+                messages=[{"role": "user", "content": warmup_prompt}],
+                max_tokens=5
+            )
+        
+        print("模型预热完成")
+    except Exception as e:
+        print(f"模型预热失败: {e}")
