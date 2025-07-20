@@ -7,6 +7,7 @@ import time
 from tqdm import tqdm
 import pandas as pd
 import matplotlib.pyplot as plt
+
 from config import ModelConfig
 from performance import PerformanceTracker
 from execution import (
@@ -187,6 +188,12 @@ class DatasetRunner:
         
         # 生成报告
         report = "# 数据集处理报告\n\n"
+        report += f"## 模型配置\n\n"
+        report += f"- 小模型: {self.config.small_model}\n"
+        report += f"- 大模型: {self.config.large_model}\n"
+        report += f"- 路由模型: {self.config.router_model}\n"
+        report += f"- 难度阈值: {self.config.threshold}\n"
+        report += f"- 工作线程数: {self.workers}\n\n"
         report += f"## 概述\n\n"
         report += f"- 数据集: {self.dataset_path}\n"
         report += f"- 问题总数: {len(self.results)}\n"
@@ -195,12 +202,24 @@ class DatasetRunner:
         report += f"- 平均执行时间: {avg_time:.2f} 秒\n"
         report += f"- 平均成本: ${avg_cost:.4f}\n\n"
         
-        report += f"## 按难度分类统计\n\n"
-        report += "| 难度 | 问题数 | 正确数 | 准确率 |\n"
-        report += "| --- | --- | --- | --- |\n"
-        for diff, stats in sorted(difficulty_stats.items()):
-            diff_accuracy = stats["correct"] / stats["total"] if stats["total"] > 0 else 0
-            report += f"| {diff} | {stats['total']} | {stats['correct']} | {diff_accuracy:.2%} |\n"
+        # 生成详细结果表格
+        report += f"## 详细结果\n\n"
+        report += "| # | 问题 | 正确? | 执行时间(秒) | 成本($) |\n"
+        report += "| --- | --- | --- | --- | --- |\n"
+        
+        for i, result in enumerate(self.results):
+            is_correct = "✓" if result.get("is_correct", False) else "✗"
+            problem = result.get("problem", "")
+            # 截断问题以适合表格
+            if len(problem) > 50:
+                problem = problem[:47] + "..."
+            problem = problem.replace("\n", " ")
+            
+            exec_time = result.get("execution_time", 0)
+            cost_data = result.get("stats").calculate_cost() if result.get("stats") else {"total": 0}
+            total_cost = cost_data["total"] if isinstance(cost_data, dict) else 0
+            
+            report += f"| {i+1} | {problem} | {is_correct} | {exec_time:.2f} | {total_cost:.4f} |\n"
         
         return report
     

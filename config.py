@@ -49,7 +49,7 @@ class ModelConfig:
         self.api_base = small_api_base
         self.small_api_base = small_api_base
         self.large_api_base = large_api_base
-        self.router_api_base = router_api_base
+        self.router_api_base = router_api_base if router_api_base else api_base
         
         # 本地路由模型配置
         self.use_local_router = use_local_router
@@ -164,37 +164,38 @@ class ModelConfig:
             包含各模型价格费率的字典
         """
         # 基于模型名称设置费率
-        cost_rates = {
-            "small_model": {
-                "prompt": 0.0,  # 默认小模型免费
-                "completion": 0.0
-            },
-            "large_model": {
-                "prompt": 0.0025,  # $2.50 per 1M input tokens
-                "completion": 0.0100  # $10 per 1M output tokens
-            },
-            "router_model": {
-                "prompt": 0.003,  # $3.00 per 1M input tokens
-                "completion": 0.015
-            }
-        }
-        
-        # 根据模型名称调整费率
-        # 如果路由模型与大模型相同
-        if self.router_model == self.large_model:
-            cost_rates["router_model"] = cost_rates["large_model"]
-        # 如果路由模型与小模型相同
-        elif self.router_model == self.small_model:
-            cost_rates["router_model"] = cost_rates["small_model"]
-        # 其他情况，可以根据模型名称设置费率
-        else:
-            # 可以在这里添加更多的模型费率设置
-            if "gpt-4" in self.router_model or "claude-3" in self.router_model:
-                cost_rates["router_model"] = {
-                    "prompt": 0.0010,  # 示例值
-                    "completion": 0.0030  # 示例值
+        # 本地路由模型的价格
+        if self.use_local_router:
+            cost_rates = {
+                "small_model": {
+                    "prompt": 0.0,  # 默认小模型免费
+                    "completion": 0.0
+                },
+                "large_model": {
+                    "prompt": 0.0025,  # $2.50 per 1M input tokens
+                    "completion": 0.0100  # $10 per 1M output tokens
+                },
+                "router_model": {
+                    "prompt": 0.000,  # $3.00 per 1M input tokens
+                    "completion": 0.00
                 }
-            
+            }
+        else:
+            # claude 作为router的价格
+            cost_rates = {
+                "small_model": {
+                    "prompt": 0.0,  # 默认小模型免费
+                    "completion": 0.0
+                },
+                "large_model": {
+                    "prompt": 0.0025,  # $2.50 per 1M input tokens
+                    "completion": 0.0100  # $10 per 1M output tokens
+                },
+                "router_model": {
+                    "prompt": 0.003,  # $3.00 per 1M input tokens
+                    "completion": 0.015
+                }
+            }
         return cost_rates
 
 

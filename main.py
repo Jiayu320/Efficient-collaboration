@@ -25,7 +25,6 @@ def main():
     small_model = yaml_config["models"]["small_model"]
     large_model = yaml_config["models"]["large_model"]
     router_model = yaml_config["models"].get("router_model", small_model)  # 如果未设置，默认使用小模型
-    threshold = yaml_config["models"]["threshold"]
     # 获取本地路由模型配置
     use_local_router = yaml_config["models"].get("use_local_router", False)
     local_router_model = yaml_config["models"].get("local_router_model", "saves/Qwen3-1.7B-Instruct/full/sft")
@@ -46,8 +45,10 @@ def main():
 
     if use_local_router:
         prompt_path = "prompt/generate_prompt.txt"
+        threshold = yaml_config["models"]["local_threshold"]
     else:
         prompt_path = "prompt/generate_prompt_ori.txt"
+        threshold = yaml_config["models"]["threshold"]
 
     # 初始化模型配置
     config = ModelConfig(
@@ -120,8 +121,8 @@ def main():
         # 创建性能统计跟踪器（无论使用哪种方法都需要）
         stats_tracker = PerformanceTracker(config)
         
-        if int(difficulty) < 2:
-            print(f"问题难度 {difficulty} 低于阈值 2，使用小模型处理")
+        if int(difficulty) < config.threshold:
+            print(f"问题难度 {difficulty} 低于阈值 {config.threshold}，使用小模型处理")
 
             # 直接调用小模型处理，传入性能跟踪器
             model_result = call_small_model_directly(query, config, stats_tracker)
