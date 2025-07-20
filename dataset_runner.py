@@ -131,6 +131,15 @@ class DatasetRunner:
                 model_solution = wait_for_completion_and_get_final_result(tasks, problem, self.config, stats_tracker)
                 
                 result["model_solution"] = model_solution
+                
+                # 计算任务规划指标
+                from task_metrics import calculate_task_metrics
+                task_metrics = calculate_task_metrics(tasks)
+                
+                # 添加任务规划指标到结果中
+                result["total_tasks_num"] = task_metrics["total_tasks_num"]
+                result["compression_ratio"] = task_metrics["compression_ratio"]
+                result["avg_task_plan_tokens"] = task_metrics["avg_task_plan_tokens"]
             
             # 判断结果正确性（使用LLM进行判断）
             is_correct, judge_result = LLM_judge(problem, model_solution, self.config)
@@ -140,7 +149,7 @@ class DatasetRunner:
             # 记录性能统计
             stats_tracker.stop_tracking()
             result["stats"] = stats_tracker
-            
+
         except Exception as e:
             print(f"处理问题时出错: {e}")
             result["error"] = str(e)
@@ -212,6 +221,23 @@ class DatasetRunner:
                 for model_type in total_tokens_per_second.keys():
                     total_tokens_per_second[model_type] += tokens_per_second[model_type]
         
+        # 计算任务规划指标的平均值
+        total_tasks_count = 0
+        total_compression_ratio = 0.0
+        total_plan_tokens = 0.0
+        task_planning_results_count = 0
+        
+        for result in self.results:
+            if "total_tasks_num" in result and "compression_ratio" in result and "avg_task_plan_tokens" in result:
+                total_tasks_count += result["total_tasks_num"]
+                total_compression_ratio += result["compression_ratio"]
+                total_plan_tokens += result["avg_task_plan_tokens"]
+                task_planning_results_count += 1
+                
+        avg_tasks_num = total_tasks_count / task_planning_results_count if task_planning_results_count > 0 else 0
+        avg_compression_ratio = total_compression_ratio / task_planning_results_count if task_planning_results_count > 0 else 0
+        avg_plan_tokens = total_plan_tokens / task_planning_results_count if task_planning_results_count > 0 else 0
+        
         # 计算平均值
         avg_cost = total_cost / len(self.results) if self.results else 0
         avg_ttft = total_avg_ttft / len(self.results) if self.results else 0
@@ -237,6 +263,12 @@ class DatasetRunner:
         report += f"- 平均执行时间: {avg_time:.2f} 秒\n"
         report += f"- 平均成本: ${avg_cost:.4f}\n\n"
         
+        # 添加任务规划指标
+        report += f"## 任务规划指标\n\n"
+        report += f"- 平均任务步骤数: {avg_tasks_num:.2f}\n"
+        report += f"- 平均压缩比例: {avg_compression_ratio:.2%}\n"
+        report += f"- 平均每步骤Token限制: {avg_plan_tokens:.2f} tokens\n\n"
+        
         # 添加TTFT和生成速度统计
         report += f"## 性能指标\n\n"
         report += f"### 首个令牌响应时间 (TTFT)\n"
@@ -253,8 +285,8 @@ class DatasetRunner:
         
         # 生成详细结果表格
         report += f"## 详细结果\n\n"
-        report += "| # | 问题 | 正确? | 执行时间(秒) | 成本($) |\n"
-        report += "| --- | --- | --- | --- | --- |\n"
+        report += "| # | 问题 | 正确? | 执行时间(秒) | 成本($) | 步骤数 | 压缩比例 | 平均Token |\n"
+        report += "| --- | --- | --- | --- | --- | --- | --- | --- |\n"
         
         for i, result in enumerate(self.results):
             is_correct = "✓" if result.get("is_correct", False) else "✗"
@@ -268,7 +300,16 @@ class DatasetRunner:
             cost_data = result.get("stats").calculate_cost() if result.get("stats") else {"total": 0}
             total_cost = cost_data["total"] if isinstance(cost_data, dict) else 0
             
-            report += f"| {i+1} | {problem} | {is_correct} | {exec_time:.2f} | {total_cost:.4f} |\n"
+            # 获取任务规划指标
+            tasks_num = result.get("total_tasks_num", "-")
+            compression = result.get("compression_ratio", "-")
+            if compression != "-":
+                compression = f"{compression:.2%}"
+            plan_tokens = result.get("avg_task_plan_tokens", "-")
+            if plan_tokens != "-":
+                plan_tokens = f"{plan_tokens:.1f}"
+            
+            report += f"| {i+1} | {problem} | {is_correct} | {exec_time:.2f} | {total_cost:.4f} | {tasks_num} | {compression} | {plan_tokens} |\n"
         
         return report
     
