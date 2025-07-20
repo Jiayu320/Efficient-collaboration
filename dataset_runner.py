@@ -179,12 +179,47 @@ class DatasetRunner:
         
         # 统计平均成本
         total_cost = 0
+        
+        # TTFT 统计和生成速度统计
+        total_avg_ttft = 0
+        total_time_without_ttft = 0
+        total_tokens_per_second = {"small_model": 0, "large_model": 0, "router_model": 0, "total": 0}
+        
         for result in self.results:
             stats = result.get("stats")
             if stats:
                 costs = stats.calculate_cost()
                 total_cost += costs["total"]
+                
+                # 计算平均TTFT
+                def calc_avg_ttft(ttft_list):
+                    return sum(ttft_list) / len(ttft_list) if ttft_list else 0
+                
+                all_ttft = stats.ttft_metrics["total"]
+                if all_ttft:
+                    total_avg_ttft += calc_avg_ttft(all_ttft)
+                    
+                # 计算去除TTFT的时间
+                def calc_total_ttft(ttft_list):
+                    return sum(ttft_list) if ttft_list else 0
+                    
+                exec_time = result.get("execution_time", 0)
+                time_without_ttft = exec_time - calc_total_ttft(all_ttft)
+                total_time_without_ttft += time_without_ttft
+                
+                # 累加每秒生成token数
+                tokens_per_second = stats.calculate_tokens_per_second()
+                for model_type in total_tokens_per_second.keys():
+                    total_tokens_per_second[model_type] += tokens_per_second[model_type]
+        
+        # 计算平均值
         avg_cost = total_cost / len(self.results) if self.results else 0
+        avg_ttft = total_avg_ttft / len(self.results) if self.results else 0
+        avg_time_without_ttft = total_time_without_ttft / len(self.results) if self.results else 0
+        
+        # 计算平均每秒生成token数
+        avg_tokens_per_second = {model_type: val / len(self.results) if self.results else 0 
+                                for model_type, val in total_tokens_per_second.items()}
         
         # 生成报告
         report = "# 数据集处理报告\n\n"
@@ -201,6 +236,20 @@ class DatasetRunner:
         report += f"- 准确率: {accuracy:.2%}\n"
         report += f"- 平均执行时间: {avg_time:.2f} 秒\n"
         report += f"- 平均成本: ${avg_cost:.4f}\n\n"
+        
+        # 添加TTFT和生成速度统计
+        report += f"## 性能指标\n\n"
+        report += f"### 首个令牌响应时间 (TTFT)\n"
+        report += f"- 平均首个令牌响应时间: {avg_ttft:.3f} 秒\n\n"
+        
+        report += f"### 去除TTFT的执行时间\n"
+        report += f"- 平均去除TTFT的执行时间: {avg_time_without_ttft:.3f} 秒\n\n"
+        
+        report += f"### 生成速度\n"
+        report += f"- 小模型平均每秒生成token数: {avg_tokens_per_second['small_model']:.2f} tokens/s\n"
+        report += f"- 大模型平均每秒生成token数: {avg_tokens_per_second['large_model']:.2f} tokens/s\n"
+        report += f"- 路由模型平均每秒生成token数: {avg_tokens_per_second['router_model']:.2f} tokens/s\n"
+        report += f"- 总平均每秒生成token数: {avg_tokens_per_second['total']:.2f} tokens/s\n\n"
         
         # 生成详细结果表格
         report += f"## 详细结果\n\n"
