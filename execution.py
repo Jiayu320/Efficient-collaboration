@@ -53,9 +53,13 @@ def initialize_clients(model_config):
         model_config.api_base = original_api_base
     else:
         large_model_client = small_model_client
-        
-    # 如果路由模型和小模型使用不同的API，则分别初始化
-    if model_config.router_api_base != model_config.small_api_base:
+    
+    # 如果使用本地部署的路由模型
+    if model_config.use_local_router:
+        router_model_client = model_config.get_client(client_type="router")
+        print("使用本地部署的路由模型")
+    # 否则，如果路由模型和小模型使用不同的API，则分别初始化
+    elif model_config.router_api_base != model_config.small_api_base:
         # 临时修改API基础URL创建路由模型客户端
         model_config.api_base = model_config.router_api_base
         router_model_client = model_config.get_client()
@@ -94,11 +98,21 @@ def warmup_models(model_config):
         
         # 预热路由模型
         if router_model_client != small_model_client and router_model_client != large_model_client:
-            router_model_client.chat.completions.create(
-                model=model_config.router_model,
-                messages=[{"role": "user", "content": warmup_prompt}],
-                max_tokens=5
-            )
+            if model_config.use_local_router:
+                # 本地路由模型预热
+                router_model_client.chat.completions.create(
+                    model=model_config.local_router_model,
+                    messages=[{"role": "user", "content": warmup_prompt}],
+                    max_tokens=5,
+                    extra_body={"enable_thinking": False}
+                )
+            else:
+                # 远程路由模型预热
+                router_model_client.chat.completions.create(
+                    model=model_config.router_model,
+                    messages=[{"role": "user", "content": warmup_prompt}],
+                    max_tokens=5
+                )
             print("路由模型预热完成")
         
         print("所有模型预热完成")
@@ -585,25 +599,29 @@ def run_parallel_execution(query, config, workers=4):
     task_count = 0
     print("开始处理问题：", query)
     print("正在获取解决方案计划...")
-    system_prompt = '''You are an assistant whose job is to generate a solution plan. Given a math problem, generate a solution plan less than 10 steps in XML format with the following constraints:
-    1. Plan must contain EXACTLY 1-10 steps (never more than 10)
-    2. Each step must be distinct and non-redundant
-    3. Merge trivial steps into logical units
-    4. Focus on key insights and critical transitions
-    5. Avoid step-by-step computations, focus on conceptual transitions
-    6. Mark computational steps with Difficulty≥3
-    7. Ensure all Rely attributes reference valid step IDs
-    8. Format: 
-    <Plan>
-    <Step ID="1" Task="..." Difficulty="1-5" Token="Estimate the number of tokens required to complete a subtask" Rely="Output only relevant steps"/>
-    ...
-    </Plan>
-    Make sure the format with paired tags is correct and all steps are properly nested within the <Plan> tag.
 
-    Difficulty scale:
-    1=Basic 2=Simple 3=Moderate 4=Complex 5=Advanced
+    if config.use_local_router:
+        system_prompt = '''Generate a solution plan that breaks down the problem into logical steps, identifying dependencies, difficulty levels and token usage.'''
+    else:
+        system_prompt = '''You are an assistant whose job is to generate a solution plan. Given a math problem, generate a solution plan less than 10 steps in XML format with the following constraints:
+        1. Plan must contain EXACTLY 1-10 steps (never more than 10)
+        2. Each step must be distinct and non-redundant
+        3. Merge trivial steps into logical units
+        4. Focus on key insights and critical transitions
+        5. Avoid step-by-step computations, focus on conceptual transitions
+        6. Mark computational steps with Difficulty≥3
+        7. Ensure all Rely attributes reference valid step IDs
+        8. Format: 
+        <Plan>
+        <Step ID="1" Task="..." Difficulty="1-5" Token="Estimate the number of tokens required to complete a subtask" Rely="Output only relevant steps"/>
+        ...
+        </Plan>
+        Make sure the format with paired tags is correct and all steps are properly nested within the <Plan> tag.
 
-    Output ONLY the XML plan with no additional text.'''
+        Difficulty scale:
+        1=Basic 2=Simple 3=Moderate 4=Complex 5=Advanced
+
+        Output ONLY the XML plan with no additional text.'''
     
     # 使用预初始化的路由模型客户端
     try:
@@ -612,14 +630,29 @@ def run_parallel_execution(query, config, workers=4):
         first_token_received = False
         ttft = None
         
-        response_stream = router_model_client.chat.completions.create(
-            model=config.router_model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": query}
-            ],
-            stream=True
-        )
+        # 根据配置决定是使用本地路由模型还是远程路由模型
+        if config.use_local_router:
+            response_stream = router_model_client.chat.completions.create(
+                model=config.local_router_model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": query}
+                ],
+                stream=True,
+                temperature=0.5,
+                top_p=0.95,
+                max_tokens=8192,
+                extra_body={"enable_thinking": False}
+            )
+        else:
+            response_stream = router_model_client.chat.completions.create(
+                model=config.router_model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": query}
+                ],
+                stream=True
+            )
         
         # 计算输入tokens (估计值，实际应该通过API返回)
         prompt_tokens = len(system_prompt.split()) + len(query.split())
@@ -775,12 +808,20 @@ def judge_question_difficulty(question, model_config):
     返回:
         问题难度（字符串）
     """
-    prompt = f"""Please determine the difficulty of the following math problem. 
-    Difficulty scale:
-    1=Basic 2=Simple 3=Moderate 4=Complex 5=Advanced
-    Problem: {question}
-    Please output only the difficulty level as a number. No other explanations or details are needed.
-    """
+    if model_config.use_local_router:
+        prompt = f"""Please determine the difficulty of the following math problem. 
+        Difficulty scale:
+        1-10 (1=simplest, 10=hardest)
+        Problem: {question}
+        Please output only the difficulty level as a number. No other explanations or details are needed.
+        """
+    else:
+        prompt = f"""Please determine the difficulty of the following math problem. 
+        Difficulty scale:
+        1=Basic 2=Simple 3=Moderate 4=Complex 5=Advanced
+        Problem: {question}
+        Please output only the difficulty level as a number. No other explanations or details are needed.
+        """
     client = model_config.get_client()
     try:
         response = client.chat.completions.create(
@@ -792,7 +833,6 @@ def judge_question_difficulty(question, model_config):
         )
         
         difficulty = response.choices[0].message.content.strip()
-
         return difficulty
     except Exception as e:
         return f"错误: 判断问题难度时出错 - {str(e)}" 

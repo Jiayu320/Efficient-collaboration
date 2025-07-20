@@ -1,0 +1,1 @@
+https://huggingface.co/Jiayu320/Plan-Qwen-1.7B

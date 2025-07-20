@@ -19,7 +19,10 @@ class ModelConfig:
                  api_base="https://openrouter.ai/api/v1",
                  small_api_base=None,
                  large_api_base=None,
-                 router_api_base=None):
+                 router_api_base=None,
+                 use_local_router=False,
+                 local_router_base="http://127.0.0.1:8000/v1",
+                 local_router_model="saves/Qwen3-1.7B-Instruct/full/sft"):
         """
         初始化模型配置
         
@@ -34,16 +37,24 @@ class ModelConfig:
             small_api_base: 小模型API基础URL，如果为None则使用api_base
             large_api_base: 大模型API基础URL，如果为None则使用api_base
             router_api_base: 路由模型API基础URL，如果为None则使用api_base
+            use_local_router: 是否使用本地部署的路由模型
+            local_router_base: 本地路由模型API基础URL
+            local_router_model: 本地路由模型的路径或名称
         """
         self.small_model = small_model
         self.large_model = large_model
         self.router_model = router_model if router_model else small_model
         self.threshold = threshold
         self.api_key_path = api_key_path
-        self.api_base = api_base
-        self.small_api_base = small_api_base if small_api_base else api_base
-        self.large_api_base = large_api_base if large_api_base else api_base
-        self.router_api_base = router_api_base if router_api_base else api_base
+        self.api_base = small_api_base
+        self.small_api_base = small_api_base
+        self.large_api_base = large_api_base
+        self.router_api_base = router_api_base
+        
+        # 本地路由模型配置
+        self.use_local_router = use_local_router
+        self.local_router_base = local_router_base
+        self.local_router_model = local_router_model
         
         # 加载API密钥
         self.api_key = self._get_api_key(api_key_path)
@@ -71,25 +82,72 @@ class ModelConfig:
             "Content-Type": "application/json"
         }
     
-    def get_payload(self, query, model_override=None):
-        """获取API请求载荷"""
-        model = model_override if model_override else self.small_model
-        return {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": self.system_prompt},
-                {"role": "user", "content": query}
-            ],
-            "stream": True
-        }
+    def get_payload(self, query, model_override=None, client_type="default"):
+        """获取API请求载荷
+        
+        参数:
+            query: 请求查询
+            model_override: 覆盖默认模型
+            client_type: 客户端类型，"default"或"router"
+            
+        返回:
+            请求载荷字典
+        """
+        # 如果是路由模型且使用本地部署
+        if client_type == "router" and self.use_local_router:
+            return {
+                "model": self.local_router_model,
+                "messages": [
+                    {"role": "system", "content": self.system_prompt},
+                    {"role": "user", "content": query}
+                ],
+                "stream": True,
+                "temperature": 0.5,
+                "top_p": 0.95,
+                "max_tokens": 8192,
+                "extra_body": {
+                    "enable_thinking": False  # 关闭thinking模式
+                }
+            }
+        else:
+            model = model_override if model_override else self.small_model
+            return {
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": self.system_prompt},
+                    {"role": "user", "content": query}
+                ],
+                "stream": True
+            }
     
-    def get_client(self):
-        """获取OpenAI客户端"""
+    def get_client(self, client_type="default"):
+        """获取OpenAI客户端
+        
+        参数:
+            client_type: 客户端类型，可选值为"default"（默认客户端）、"router"（路由模型客户端）
+            
+        返回:
+            OpenAI客户端
+        """
         from openai import OpenAI
-        return OpenAI(
-            base_url=self.api_base,
-            api_key=self.api_key
-        )
+        
+        # 如果是路由模型客户端且使用本地部署
+        if client_type == "router" and self.use_local_router:
+            return OpenAI(
+                base_url=self.local_router_base,
+                api_key="0"  # 本地API不需要真实的API key
+            )
+        # 否则根据客户端类型选择API基础URL
+        elif client_type == "router":
+            return OpenAI(
+                base_url=self.router_api_base,
+                api_key=self.api_key
+            )
+        else:
+            return OpenAI(
+                base_url=self.api_base,
+                api_key=self.api_key
+            )
     
     def select_model_by_difficulty(self, difficulty):
         """根据难度选择模型"""

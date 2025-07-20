@@ -26,18 +26,28 @@ def main():
     large_model = yaml_config["models"]["large_model"]
     router_model = yaml_config["models"].get("router_model", small_model)  # 如果未设置，默认使用小模型
     threshold = yaml_config["models"]["threshold"]
+    # 获取本地路由模型配置
+    use_local_router = yaml_config["models"].get("use_local_router", False)
+    local_router_model = yaml_config["models"].get("local_router_model", "saves/Qwen3-1.7B-Instruct/full/sft")
+    
     api_key_path = yaml_config["api"]["key_path"]
     api_base = yaml_config["api"]["base_url"]
     # 获取各个模型的API基础URL（如果配置中有的话）
     small_api_base = yaml_config["api"].get("small_api_base_url", api_base)  # 注意配置中使用了 small_api_base_url
     large_api_base = yaml_config["api"].get("large_base_url", api_base)
     router_api_base = yaml_config["api"].get("router_base_url", api_base)
+    local_router_base = yaml_config["api"].get("local_router_base_url", "http://127.0.0.1:8000/v1")
     prompt_path = yaml_config["system"]["prompt_path"]
     workers = yaml_config["system"]["workers"]
 
     # 获取判断相关配置
     enable_judge = yaml_config["system"].get("enable_judge", False)
     gold_answer = yaml_config["system"].get("gold_answer", "")
+
+    if use_local_router:
+        prompt_path = "prompt/generate_prompt.txt"
+    else:
+        prompt_path = "prompt/generate_prompt_ori.txt"
 
     # 初始化模型配置
     config = ModelConfig(
@@ -50,9 +60,11 @@ def main():
         api_base=api_base,
         small_api_base=small_api_base,
         large_api_base=large_api_base,
-        router_api_base=router_api_base
+        router_api_base=router_api_base,
+        use_local_router=use_local_router,
+        local_router_base=local_router_base,
+        local_router_model=local_router_model
     )
-
     # 检查是否为数据集处理模式
     # 优先使用命令行参数，其次使用配置文件
     dataset_enabled = args.dataset or yaml_config.get("dataset", {}).get("enabled", False)
@@ -63,7 +75,10 @@ def main():
         print("===== 数据集处理模式 =====")
         print(f"使用小模型: {config.small_model}")
         print(f"使用大模型: {config.large_model}")
-        print(f"使用路由模型: {config.router_model}")
+        if config.use_local_router:
+            print(f"使用本地路由模型: {config.local_router_model}")
+        else:
+            print(f"使用远程路由模型: {config.router_model}")
         print(f"难度阈值: {config.threshold}")
         print(f"工作线程数: {workers}")
         print(f"数据集路径: {dataset_path}")
@@ -85,7 +100,10 @@ def main():
     query = yaml_config["query"]
     print(f"使用小模型: {config.small_model}")
     print(f"使用大模型: {config.large_model}")
-    print(f"使用路由模型: {config.router_model}")
+    if config.use_local_router:
+        print(f"使用本地路由模型: {config.local_router_model}")
+    else:
+        print(f"使用远程路由模型: {config.router_model}")
     print(f"难度阈值: {config.threshold}")
     print(f"工作线程数: {workers}")
     print(f"当前查询: {query}")
