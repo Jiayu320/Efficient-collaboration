@@ -252,7 +252,10 @@ class DatasetRunner:
         report += f"## 模型配置\n\n"
         report += f"- 小模型: {self.config.small_model}\n"
         report += f"- 大模型: {self.config.large_model}\n"
-        report += f"- 路由模型: {self.config.router_model}\n"
+        if self.config.use_local_router:
+            report += f"- 路由模型: {self.config.local_router_model}\n"
+        else:
+            report += f"- 路由模型: {self.config.router_model}\n"
         report += f"- 难度阈值: {self.config.threshold}\n"
         report += f"- 工作线程数: {self.workers}\n\n"
         report += f"## 概述\n\n"
