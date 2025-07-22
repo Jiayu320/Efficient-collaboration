@@ -412,24 +412,25 @@ class PerformanceTracker:
             "completion_tokens": 0,
             "total_tokens": 0
         }
-        '''
+        
         # 成本估算 (美元/1K tokens) - 使用大模型费率
         # GPT-4o 费率:
         self.cost_rates = {
             "prompt": 0.0025,  # $2.50 per 1M input tokens
             "completion": 0.0100  # $10 per 1M output tokens
         }
-        
+        '''
         self.cost_rates = {
             "prompt": 0.003,  # $3.00 per 1M input tokens
             "completion": 0.015
         }
-        '''
+        
         # $0.272/M input tokens $0.272/M output tokens
         self.cost_rates = {
             "prompt": 0.000272,  # $0.272 per 1M input tokens
             "completion": 0.000272  # $0.272 per 1M output tokens
         }
+        '''
 
     def update_token_usage(self, prompt_tokens, completion_tokens):
         """更新token使用情况

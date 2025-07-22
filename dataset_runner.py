@@ -132,6 +132,9 @@ class DatasetRunner:
                 
                 result["model_solution"] = model_solution
                 
+                # 保存任务计划和执行结果
+                result["tasks"] = tasks
+                
                 # 计算任务规划指标
                 from task_metrics import calculate_task_metrics
                 task_metrics = calculate_task_metrics(tasks)
@@ -343,7 +346,84 @@ class DatasetRunner:
         # 生成可视化图表
         # self.generate_visualizations(output_dir, timestamp)
         
+        # 保存JSON结果
+        json_file = self.save_results_json("dataset_results", timestamp)
+        print(f"JSON结果已保存至: {json_file}")
+        
         return report_file
+    
+    def save_results_json(self, output_dir="dataset_results", timestamp=None):
+        """将处理结果保存为JSON格式
+        
+        参数:
+            output_dir: 输出目录
+            timestamp: 时间戳，如果为None则自动生成
+            
+        返回:
+            JSON文件路径
+        """
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+            
+        if timestamp is None:
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            
+        json_file = os.path.join(output_dir, f"dataset_results_{timestamp}.json")
+        
+        # 准备JSON数据
+        json_results = []
+        
+        for result in self.results:
+            # 创建一个可序列化的结果对象
+            serializable_result = {
+                "problem": result.get("problem", ""),
+                "gold_solution": result.get("gold_solution", ""),
+                "model_solution": result.get("model_solution", ""),
+                "difficulty": result.get("difficulty", 0),
+                "is_correct": result.get("is_correct", False),
+                "judge_result": result.get("judge_result", ""),
+                "execution_time": result.get("execution_time", 0),
+                "total_tasks_num": result.get("total_tasks_num", 0),
+                "compression_ratio": result.get("compression_ratio", 0),
+                "avg_task_plan_tokens": result.get("avg_task_plan_tokens", 0)
+            }
+            
+            # 添加任务计划和步骤结果（如果存在）
+            if "tasks" in result:
+                # 将tasks字典转换为可序列化的对象
+                serializable_tasks = {}
+                for task_id, task_info in result["tasks"].items():
+                    serializable_task = {}
+                    for key, value in task_info.items():
+                        # 确保所有值都是可序列化的
+                        if key in ["Task", "Rely", "Token", "Difficulty", "Result"]:
+                            serializable_task[key] = value
+                    serializable_tasks[task_id] = serializable_task
+                
+                serializable_result["tasks"] = serializable_tasks
+            
+            # 添加性能统计数据
+            if result.get("stats"):
+                stats = result["stats"]
+                costs = stats.calculate_cost()
+                tokens_per_second = stats.calculate_tokens_per_second()
+                
+                serializable_result["stats"] = {
+                    "costs": costs,
+                    "tokens_per_second": tokens_per_second,
+                    "token_usage": stats.token_usage,
+                    "ttft_metrics": stats.ttft_metrics
+                }
+            
+            json_results.append(serializable_result)
+        
+        # 保存到JSON文件
+        with open(json_file, 'w', encoding='utf-8') as f:
+            json.dump(json_results, f, ensure_ascii=False, indent=2)
+        
+        print(f"JSON结果已保存至: {json_file}")
+        
+        return json_file
     
     def generate_visualizations(self, output_dir, timestamp):
         """生成可视化图表
@@ -437,7 +517,7 @@ def run_dataset_evaluation(config, dataset_path, limit=None, workers=4):
         workers: 并行工作线程数
         
     返回:
-        报告文件路径
+        元组: (报告文件路径, JSON结果文件路径)
     """
     print(f"开始数据集评估: {dataset_path}")
     
@@ -450,4 +530,8 @@ def run_dataset_evaluation(config, dataset_path, limit=None, workers=4):
     # 保存报告
     report_file = runner.save_report()
     
-    return report_file
+    # 获取JSON文件路径
+    timestamp = report_file.split("_")[-1].replace(".md", "")
+    json_file = os.path.join("dataset_results", f"dataset_results_{timestamp}.json")
+    
+    return report_file, json_file
