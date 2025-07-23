@@ -68,17 +68,27 @@ class DatasetRunner:
         
         print(f"开始处理数据集，共 {len(self.dataset)} 个问题...")
         
+        # 创建时间戳，用于整个处理过程
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        
         # 使用tqdm显示进度
         for i, problem_data in enumerate(tqdm(self.dataset, desc="处理数据集")):
             problem = problem_data.get("problem", "")
             solution = problem_data.get("solution", "")
             
-            # 每个问题的性能统计
-            result = self.process_single_problem(problem, solution)
-            self.results.append(result)
-            
-            # 打印当前进度
-            print(f"完成进度: {i+1}/{len(self.dataset)}")
+            try:
+                # 每个问题的性能统计
+                result = self.process_single_problem(problem, solution)
+                self.results.append(result)
+                
+                # 每处理完一个问题就保存一次结果
+                self.save_results_json("dataset_results", timestamp)
+                
+                # 打印当前进度
+                print(f"完成进度: {i+1}/{len(self.dataset)}")
+            except Exception as e:
+                print(f"处理问题时出错: {e}")
+                print(f"已跳过该问题，继续处理下一个问题")
             
         return self.results
     
@@ -319,11 +329,12 @@ class DatasetRunner:
         
         return report
     
-    def save_report(self, output_dir="dataset_reports"):
+    def save_report(self, output_dir="dataset_reports", timestamp=None):
         """保存处理报告到文件
         
         参数:
             output_dir: 输出目录
+            timestamp: 如果提供则使用该时间戳，否则生成新时间戳
             
         返回:
             报告文件路径
@@ -331,7 +342,9 @@ class DatasetRunner:
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
             
-        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        if timestamp is None:
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            
         report_file = os.path.join(output_dir, f"dataset_report_{timestamp}.md")
         
         # 生成报告
@@ -346,9 +359,9 @@ class DatasetRunner:
         # 生成可视化图表
         # self.generate_visualizations(output_dir, timestamp)
         
-        # 保存JSON结果
+        # 确保最终JSON结果是完整的
         json_file = self.save_results_json("dataset_results", timestamp)
-        print(f"JSON结果已保存至: {json_file}")
+        print(f"最终JSON结果已保存至: {json_file}")
         
         return report_file
     
@@ -370,10 +383,37 @@ class DatasetRunner:
             
         json_file = os.path.join(output_dir, f"dataset_results_{timestamp}.json")
         
+        # 如果文件不存在，创建一个空的JSON数组
+        if not os.path.exists(json_file):
+            with open(json_file, 'w', encoding='utf-8') as f:
+                json.dump([], f)
+                
         # 准备JSON数据
         json_results = []
         
+        # 读取现有的JSON数据(如果文件存在)
+        try:
+            with open(json_file, 'r', encoding='utf-8') as f:
+                json_results = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            # 文件不存在或为空，使用空列表
+            json_results = []
+            
+        # 将新结果添加到现有结果中
         for result in self.results:
+            # 检查该结果是否已经存在于json_results中
+            # 通过检查问题内容来判断是否为重复结果
+            problem = result.get("problem", "")
+            exists = False
+            for existing_result in json_results:
+                if existing_result.get("problem", "") == problem:
+                    exists = True
+                    break
+            
+            # 如果结果已存在，跳过添加
+            if exists:
+                continue
+                
             # 创建一个可序列化的结果对象
             serializable_result = {
                 "problem": result.get("problem", ""),
@@ -415,6 +455,7 @@ class DatasetRunner:
                     "ttft_metrics": stats.ttft_metrics
                 }
             
+            # 添加到结果列表中
             json_results.append(serializable_result)
         
         # 保存到JSON文件
@@ -521,17 +562,19 @@ def run_dataset_evaluation(config, dataset_path, limit=None, workers=4):
     """
     print(f"开始数据集评估: {dataset_path}")
     
+    # 创建统一的时间戳
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    
     # 创建数据集处理器
     runner = DatasetRunner(config, dataset_path, limit, workers)
     
-    # 处理数据集
+    # 处理数据集（会在内部使用时间戳保存每步的结果）
     runner.process_dataset()
     
-    # 保存报告
-    report_file = runner.save_report()
+    # 保存最终报告，使用相同的时间戳
+    report_file = runner.save_report(timestamp=timestamp)
     
-    # 获取JSON文件路径
-    timestamp = report_file.split("_")[-1].replace(".md", "")
+    # JSON文件路径
     json_file = os.path.join("dataset_results", f"dataset_results_{timestamp}.json")
     
     return report_file, json_file

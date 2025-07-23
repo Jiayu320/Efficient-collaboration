@@ -724,6 +724,8 @@ def judge_correct(question, gold_answer, final_answer, model_config):
     返回:
         是否正确的布尔值和判断结果文本
     """
+    global large_model_client
+    
     prompt = f"""Here is a math problem with a standard answer and a student's solution. Please help me determine if the student's solution is correct. If the numerical value are same, then it is correct.
                                
                 Problem: {question}
@@ -736,7 +738,8 @@ def judge_correct(question, gold_answer, final_answer, model_config):
                 No explanation is required.
     """
     
-    client = model_config.get_client(client_type="large")
+    # 使用全局预初始化的客户端，而不是每次创建新客户端
+    client = large_model_client
     
     try:
         response = client.chat.completions.create(
@@ -767,6 +770,8 @@ def LLM_judge(question, final_answer, model_config):
     返回:
         是否正确的布尔值和判断结果文本
     """
+    global large_model_client
+    
     prompt = f"""Here is a math problem and a student's solution. Please help me determine if the student's solution is correct. If the numerical value are same, then it is correct.
                                
                 Problem: {question}
@@ -777,7 +782,8 @@ def LLM_judge(question, final_answer, model_config):
                 No explanation is required.
     """
     
-    client = model_config.get_client(client_type="large")
+    # 使用全局预初始化的客户端，而不是每次创建新客户端
+    client = large_model_client
     
     try:
         response = client.chat.completions.create(
