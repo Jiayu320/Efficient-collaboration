@@ -14,7 +14,9 @@ class ModelConfig:
                  large_model="qwen/qwen3-235b-a22b", 
                  router_model=None,
                  threshold=2,
-                 api_key_path="usage/openrouter",
+                 small_key_path=None,
+                 large_key_path=None,
+                 router_key_path=None,
                  prompt_path="prompt/generate_prompt.txt",
                  api_base="https://openrouter.ai/api/v1",
                  small_api_base=None,
@@ -45,7 +47,9 @@ class ModelConfig:
         self.large_model = large_model
         self.router_model = router_model if router_model else small_model
         self.threshold = threshold
-        self.api_key_path = api_key_path
+        self.small_key_path = small_key_path
+        self.large_key_path = large_key_path
+        self.router_key_path = router_key_path
         self.api_base = small_api_base
         self.small_api_base = small_api_base
         self.large_api_base = large_api_base
@@ -57,8 +61,9 @@ class ModelConfig:
         self.local_router_model = local_router_model
         
         # 加载API密钥
-        self.api_key = self._get_api_key(api_key_path)
-        
+        self.small_api_key = self._get_api_key(small_key_path) if small_key_path else None
+        self.large_api_key = self._get_api_key(large_key_path) if large_key_path else None
+        self.router_api_key = self._get_api_key(router_key_path) if router_key_path else None
         # 加载提示词
         try:
             with open(prompt_path, 'r', encoding='utf-8') as f:
@@ -141,12 +146,17 @@ class ModelConfig:
         elif client_type == "router":
             return OpenAI(
                 base_url=self.router_api_base,
-                api_key=self.api_key
+                api_key=self.router_api_key
             )
-        else:
+        elif client_type == "small":
+            return OpenAI(
+                base_url=self.small_api_base,
+                api_key=self.small_api_key
+            )
+        elif client_type == "large":
             return OpenAI(
                 base_url=self.api_base,
-                api_key=self.api_key
+                api_key=self.large_api_key
             )
     
     def select_model_by_difficulty(self, difficulty):

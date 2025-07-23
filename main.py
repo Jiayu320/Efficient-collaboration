@@ -21,20 +21,22 @@ def main():
     # 加载配置文件
     yaml_config = load_config(args.config)
 
-    # 构建最终配置（命令行参数优先）
+    # 构建最终配置
     small_model = yaml_config["models"]["small_model"]
     large_model = yaml_config["models"]["large_model"]
     router_model = yaml_config["models"].get("router_model", small_model)  # 如果未设置，默认使用小模型
     # 获取本地路由模型配置
     use_local_router = yaml_config["models"].get("use_local_router", False)
     local_router_model = yaml_config["models"].get("local_router_model", "saves/Qwen3-1.7B-Instruct/full/sft")
-    
-    api_key_path = yaml_config["api"]["key_path"]
+
+    small_key_path = yaml_config["api"]["small_key_path"]
+    large_key_path = yaml_config["api"]["large_key_path"]
+    router_key_path = yaml_config["api"]["router_key_path"]
     api_base = yaml_config["api"]["base_url"]
     # 获取各个模型的API基础URL（如果配置中有的话）
     small_api_base = yaml_config["api"].get("small_api_base_url", api_base)  # 注意配置中使用了 small_api_base_url
-    large_api_base = yaml_config["api"].get("large_base_url", api_base)
-    router_api_base = yaml_config["api"].get("router_base_url", api_base)
+    large_api_base = yaml_config["api"].get("large_api_base_url", api_base)
+    router_api_base = yaml_config["api"].get("router_api_base_url", api_base)
     local_router_base = yaml_config["api"].get("local_router_base_url", "http://127.0.0.1:8000/v1")
     prompt_path = yaml_config["system"]["prompt_path"]
     workers = yaml_config["system"]["workers"]
@@ -56,7 +58,9 @@ def main():
         large_model=large_model,
         router_model=router_model,
         threshold=threshold,
-        api_key_path=api_key_path,
+        small_key_path=small_key_path,
+        large_key_path=large_key_path,
+        router_key_path=router_key_path,
         prompt_path=prompt_path,
         api_base=api_base,
         small_api_base=small_api_base,
