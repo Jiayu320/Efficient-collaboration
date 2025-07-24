@@ -809,7 +809,8 @@ def run_sequential_execution(query, config):
     global xml_buffer, tasks
     
     # 创建性能统计跟踪器
-    stats_tracker = PerformanceTracker()
+    # 使用小模型作为默认价格来源（因为顺序执行主要使用小模型）
+    stats_tracker = PerformanceTracker("qwen3-14b")
     
     # 重置全局状态
     xml_buffer = ""

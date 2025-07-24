@@ -18,7 +18,9 @@ class ModelConfig:
                  model="qwen/qwen3-14b:free", 
                  api_key_path="usage/openrouter",
                  prompt_path="prompt/direct_solve_prompt.txt",
-                 api_base="https://openrouter.ai/api/v1"):
+                 api_base="https://openrouter.ai/api/v1",
+                 judge_api_key_path="usage/bianxie",
+                 judge_api_base_url="https://api.bianxie.ai/v1"):
         """
         初始化模型配置
         
@@ -31,10 +33,11 @@ class ModelConfig:
         self.model = model
         self.api_key_path = api_key_path
         self.api_base = api_base
-        
+        self.judge_api_key_path = judge_api_key_path
+        self.judge_api_base_url = judge_api_base_url
         # 加载API密钥
         self.api_key = self._get_api_key(api_key_path)
-        
+        self.judge_api_key = self._get_api_key(judge_api_key_path)
         # 加载提示词
         try:
             with open(prompt_path, 'r', encoding='utf-8') as f:
@@ -69,8 +72,13 @@ class ModelConfig:
             "stream": True
         }
     
-    def get_client(self):
+    def get_client(self, agent_type=None):
         """获取OpenAI客户端"""
+        if agent_type == "judge":
+            return OpenAI(
+                base_url=self.judge_api_base_url,
+                api_key=self.judge_api_key
+            )
         return OpenAI(
             base_url=self.api_base,
             api_key=self.api_key
@@ -213,7 +221,7 @@ class SmallModelDatasetRunner:
         
         try:
             # 创建性能统计跟踪器
-            stats_tracker = PerformanceTracker()
+            stats_tracker = PerformanceTracker(self.config.model)
             
             # 使用小模型处理问题
             model_solution = solve_problem_with_small_model(problem, self.config, stats_tracker)
@@ -265,7 +273,8 @@ class SmallModelDatasetRunner:
         
         try:
             response = client.chat.completions.create(
-                model="openai/gpt-4o",
+                # model="openai/gpt-4o",
+                model="gpt-4o",  # 使用bianxie api
                 messages=[
                     {"role": "user", "content": prompt}
                 ],
@@ -399,10 +408,17 @@ class SmallModelDatasetRunner:
 class PerformanceTracker:
     """性能跟踪器类，用于跟踪模型使用情况和成本"""
     
-    def __init__(self):
-        """初始化性能跟踪器"""
+    def __init__(self, model_name="qwen3-14b"):
+        """初始化性能跟踪器
+        
+        参数:
+            model_name: 模型名称，用于获取价格费率
+        """
+        from api_pricing import get_model_pricing
+        
         self.start_time = time.time()
         self.end_time = None
+        self.model_name = model_name
         
         # 首个令牌响应时间统计
         self.ttft_metrics = []
@@ -414,11 +430,8 @@ class PerformanceTracker:
             "total_tokens": 0
         }
         
-        # 成本估算 (美元/1K tokens) - 小模型通常是免费的，但为了对比可以设置一个很小的值
-        self.cost_rates = {
-            "prompt": 0.0,  # 免费模型
-            "completion": 0.0  # 免费模型
-        }
+        # 成本估算 (美元/1M tokens) - 从API价格管理模块获取
+        self.cost_rates = get_model_pricing(model_name)
     
     def update_token_usage(self, prompt_tokens, completion_tokens):
         """更新token使用情况
@@ -450,9 +463,10 @@ class PerformanceTracker:
         返回:
             总成本（美元）
         """
+        # API价格通常以美元/百万tokens为单位，因此需要除以1,000,000
         return (
-            (self.token_usage["prompt_tokens"] / 1000) * self.cost_rates["prompt"] +
-            (self.token_usage["completion_tokens"] / 1000) * self.cost_rates["completion"]
+            (self.token_usage["prompt_tokens"] / 1000000) * self.cost_rates["prompt"] +
+            (self.token_usage["completion_tokens"] / 1000000) * self.cost_rates["completion"]
         )
     
     def get_elapsed_time(self):
@@ -501,9 +515,10 @@ class PerformanceTracker:
             report += f"- 最短响应时间: {min(self.ttft_metrics):.3f} 秒\n"
             report += f"- 最长响应时间: {max(self.ttft_metrics):.3f} 秒\n"
             report += f"- 响应次数: {len(self.ttft_metrics)}\n\n"
+            report += f"## 去除ttft的总执行时间\n{elapsed_time - calc_avg_ttft(self.ttft_metrics):.3f} 秒\n\n"
         else:
             report += "- 无数据\n\n"
-        
+
         report += "## Token 使用情况\n\n"
         report += f"- 输入 Tokens: {self.token_usage['prompt_tokens']}\n"
         report += f"- 输出 Tokens: {self.token_usage['completion_tokens']}\n"
@@ -610,9 +625,11 @@ if __name__ == "__main__":
     # 构建模型配置
     model_config = ModelConfig(
         model=yaml_config["models"]["small_model"],
-        api_key_path=yaml_config["api"]["key_path"],
+        api_key_path=yaml_config["api"]["small_key_path"],
         prompt_path="prompt/direct_solve_prompt.txt",
-        api_base=yaml_config["api"]["base_url"]
+        api_base=yaml_config["api"]["small_api_base_url"],
+        judge_api_key_path=yaml_config["api"]["large_key_path"],
+        judge_api_base_url=yaml_config["api"]["large_base_url"]
     )
     
     # 检查是否进行数据集处理
@@ -659,7 +676,7 @@ if __name__ == "__main__":
         query = args.query if args.query else yaml_config["query"]
         
         # 创建性能跟踪器
-        stats_tracker = PerformanceTracker()
+        stats_tracker = PerformanceTracker(model_config.model)
         
         print("启动小模型单独求解程序...")
         print(f"使用模型: {model_config.model}")

@@ -213,7 +213,7 @@ class LargeModelDatasetRunner:
         
         try:
             # 创建性能统计跟踪器
-            stats_tracker = PerformanceTracker()
+            stats_tracker = PerformanceTracker(self.config.model)
             
             # 使用大模型处理问题
             model_solution = solve_problem_with_large_model(problem, self.config, stats_tracker)
@@ -265,7 +265,8 @@ class LargeModelDatasetRunner:
         
         try:
             response = client.chat.completions.create(
-                model="openai/gpt-4o",
+                # model="openai/gpt-4o",
+                model="gpt-4o", # 使用bianxie api
                 messages=[
                     {"role": "user", "content": prompt}
                 ],
@@ -398,10 +399,17 @@ class LargeModelDatasetRunner:
 class PerformanceTracker:
     """性能跟踪器类，用于跟踪模型使用情况和成本"""
     
-    def __init__(self):
-        """初始化性能跟踪器"""
+    def __init__(self, model_name="gpt-4o"):
+        """初始化性能跟踪器
+        
+        参数:
+            model_name: 模型名称，用于获取价格费率
+        """
+        from api_pricing import get_model_pricing
+        
         self.start_time = time.time()
         self.end_time = None
+        self.model_name = model_name
         
         # 首个令牌响应时间统计
         self.ttft_metrics = []
@@ -413,24 +421,8 @@ class PerformanceTracker:
             "total_tokens": 0
         }
         
-        # 成本估算 (美元/1K tokens) - 使用大模型费率
-        # GPT-4o 费率:
-        self.cost_rates = {
-            "prompt": 0.0025,  # $2.50 per 1M input tokens
-            "completion": 0.0100  # $10 per 1M output tokens
-        }
-        '''
-        self.cost_rates = {
-            "prompt": 0.003,  # $3.00 per 1M input tokens
-            "completion": 0.015
-        }
-        
-        # $0.272/M input tokens $0.272/M output tokens
-        self.cost_rates = {
-            "prompt": 0.000272,  # $0.272 per 1M input tokens
-            "completion": 0.000272  # $0.272 per 1M output tokens
-        }
-        '''
+        # 成本估算 (美元/1M tokens) - 从API价格管理模块获取
+        self.cost_rates = get_model_pricing(model_name)
 
     def update_token_usage(self, prompt_tokens, completion_tokens):
         """更新token使用情况
@@ -462,9 +454,10 @@ class PerformanceTracker:
         返回:
             总成本（美元）
         """
+        # API价格通常以美元/百万tokens为单位，因此需要除以1,000,000
         return (
-            (self.token_usage["prompt_tokens"] / 1000) * self.cost_rates["prompt"] +
-            (self.token_usage["completion_tokens"] / 1000) * self.cost_rates["completion"]
+            (self.token_usage["prompt_tokens"] / 1000000) * self.cost_rates["prompt"] +
+            (self.token_usage["completion_tokens"] / 1000000) * self.cost_rates["completion"]
         )
     
     def get_elapsed_time(self):
@@ -513,8 +506,10 @@ class PerformanceTracker:
             report += f"- 最短响应时间: {min(self.ttft_metrics):.3f} 秒\n"
             report += f"- 最长响应时间: {max(self.ttft_metrics):.3f} 秒\n"
             report += f"- 响应次数: {len(self.ttft_metrics)}\n\n"
+            report += f"## 去除ttft的总执行时间\n{elapsed_time - calc_avg_ttft(self.ttft_metrics):.3f} 秒\n\n"
         else:
             report += "- 无数据\n\n"
+        
         
         report += "## Token 使用情况\n\n"
         report += f"- 输入 Tokens: {self.token_usage['prompt_tokens']}\n"
@@ -622,9 +617,9 @@ if __name__ == "__main__":
     # 构建模型配置
     model_config = ModelConfig(
         model=yaml_config["models"]["large_model"],
-        api_key_path=yaml_config["api"]["key_path"],
+        api_key_path=yaml_config["api"]["large_key_path"],
         prompt_path="prompt/direct_solve_prompt.txt",
-        api_base=yaml_config["api"]["base_url"]
+        api_base=yaml_config["api"]["large_base_url"]
     )
     
     # 检查是否进行数据集处理
@@ -673,7 +668,7 @@ if __name__ == "__main__":
         query = args.query if args.query else yaml_config["query"]
         
         # 创建性能跟踪器
-        stats_tracker = PerformanceTracker()
+        stats_tracker = PerformanceTracker(model_config.model)
         
         print("启动大模型单独求解程序...")
         print(f"使用模型: {model_config.model}")

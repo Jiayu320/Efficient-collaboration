@@ -2,6 +2,7 @@
 包含性能跟踪和统计相关的代码
 '''
 import time
+from api_pricing import get_model_pricing
 
 class PerformanceTracker:
     """性能跟踪器类，用于跟踪模型使用情况和成本"""
@@ -47,26 +48,16 @@ class PerformanceTracker:
             }
         }
         
-        # 成本估算 (美元/1K tokens)
+        # 成本估算 (美元/百万tokens)
         if model_config and hasattr(model_config, 'get_model_cost_rates'):
             # 如果提供了模型配置，使用其费率
             self.cost_rates = model_config.get_model_cost_rates()
         else:
-            # 默认费率
+            # 默认费率 - 使用新的API价格管理模块
             self.cost_rates = {
-                "small_model": {
-                    "prompt": 0.0,
-                    "completion": 0.0
-                },  # 小模型免费
-                # $2.50/M input tokens $10/M output tokens
-                "large_model": {
-                    "prompt": 0.0025,  # $2.50 per 1M input tokens
-                    "completion": 0.0100  # $10 per 1M output tokens
-                },
-                "router_model": {  # 添加路由模型的成本率
-                    "prompt": 0.0,  # 默认与小模型相同
-                    "completion": 0.0
-                }
+                "small_model": get_model_pricing("qwen3-14b"),
+                "large_model": get_model_pricing("gpt-4o"),
+                "router_model": get_model_pricing("qwen-2.5-7b-instruct")
             }
         # print("使用费率: ", self.cost_rates)
         
@@ -112,19 +103,20 @@ class PerformanceTracker:
         返回:
             总成本（美元）
         """
+        # API价格通常以美元/百万tokens为单位，因此需要除以1,000,000
         small_model_cost = (
-            (self.token_usage["small_model"]["prompt_tokens"] / 1000) * self.cost_rates["small_model"]["prompt"] +
-            (self.token_usage["small_model"]["completion_tokens"] / 1000) * self.cost_rates["small_model"]["completion"]
+            (self.token_usage["small_model"]["prompt_tokens"] / 1000000) * self.cost_rates["small_model"]["prompt"] +
+            (self.token_usage["small_model"]["completion_tokens"] / 1000000) * self.cost_rates["small_model"]["completion"]
         )
         
         large_model_cost = (
-            (self.token_usage["large_model"]["prompt_tokens"] / 1000) * self.cost_rates["large_model"]["prompt"] +
-            (self.token_usage["large_model"]["completion_tokens"] / 1000) * self.cost_rates["large_model"]["completion"]
+            (self.token_usage["large_model"]["prompt_tokens"] / 1000000) * self.cost_rates["large_model"]["prompt"] +
+            (self.token_usage["large_model"]["completion_tokens"] / 1000000) * self.cost_rates["large_model"]["completion"]
         )
         
         router_model_cost = (
-            (self.token_usage["router_model"]["prompt_tokens"] / 1000) * self.cost_rates["router_model"]["prompt"] +
-            (self.token_usage["router_model"]["completion_tokens"] / 1000) * self.cost_rates["router_model"]["completion"]
+            (self.token_usage["router_model"]["prompt_tokens"] / 1000000) * self.cost_rates["router_model"]["prompt"] +
+            (self.token_usage["router_model"]["completion_tokens"] / 1000000) * self.cost_rates["router_model"]["completion"]
         )
         
         total_cost = small_model_cost + large_model_cost + router_model_cost

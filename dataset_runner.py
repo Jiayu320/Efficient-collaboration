@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 
 from config import ModelConfig
 from performance import PerformanceTracker
-from execution import (
+from execution_new import (
     run_parallel_execution, wait_for_completion_and_get_final_result,
     judge_question_difficulty, call_small_model_directly, LLM_judge
 )
@@ -124,7 +124,10 @@ class DatasetRunner:
             result["difficulty"] = difficulty
             
             # 创建性能统计跟踪器
-            stats_tracker = PerformanceTracker()
+            small_model_name = self.config.small_model if hasattr(self.config, 'small_model') else "qwen3-14b"
+            large_model_name = self.config.large_model if hasattr(self.config, 'large_model') else "gpt-4o"
+            model_name = small_model_name if int(difficulty) < self.config.threshold else large_model_name
+            stats_tracker = PerformanceTracker(model_name)
             
             if int(difficulty) < self.config.threshold:
                 print(f"问题难度 {difficulty} 低于阈值 {self.config.threshold}，使用小模型处理")

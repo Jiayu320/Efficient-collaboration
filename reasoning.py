@@ -851,7 +851,9 @@ def run_parallel_execution(query, config):
     global xml_buffer, tasks, completed_steps, futures
     
     # 创建性能统计跟踪器
-    stats_tracker = PerformanceTracker()
+    # 使用配置信息获取模型名称
+    small_model_name = config.small_model if hasattr(config, 'small_model') else "qwen3-14b"
+    stats_tracker = PerformanceTracker(small_model_name)
     
     # 重置全局状态
     xml_buffer = ""
@@ -1082,7 +1084,10 @@ if __name__ == "__main__":
     try:
         difficulty = judge_question_difficulty(query, config)
         # 创建性能统计跟踪器（无论使用哪种方法都需要）
-        stats_tracker = PerformanceTracker()
+        small_model_name = config.small_model if hasattr(config, 'small_model') else "qwen3-14b"
+        large_model_name = config.large_model if hasattr(config, 'large_model') else "gpt-4o"
+        model_name = small_model_name if int(difficulty) < 2 else large_model_name
+        stats_tracker = PerformanceTracker(model_name)
         
         if int(difficulty) < 2:
             print(f"问题难度 {difficulty} 低于阈值 2，使用小模型处理")

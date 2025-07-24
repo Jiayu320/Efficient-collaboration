@@ -20,7 +20,7 @@ headers = {
 }
 
 payload = {
-  "model": "qwen/qwen3-14b:free",
+  "model": "meta-llama/llama-3-8b-instruct",
   "messages": [
      {"role": "system", "content": file_content},
      {"role": "user", "content": "What is the result of 1+1?"}

@@ -173,39 +173,24 @@ class ModelConfig:
         返回:
             包含各模型价格费率的字典
         """
-        # 基于模型名称设置费率
+        # 导入API价格管理模块
+        from api_pricing import get_model_pricing
+        
+        # 获取各模型的价格费率
+        small_model_pricing = get_model_pricing(self.small_model)
+        large_model_pricing = get_model_pricing(self.large_model)
+        
         # 本地路由模型的价格
         if self.use_local_router:
-            cost_rates = {
-                "small_model": {
-                    "prompt": 0.0,  # 默认小模型免费
-                    "completion": 0.0
-                },
-                "large_model": {
-                    "prompt": 0.0025,  # $2.50 per 1M input tokens
-                    "completion": 0.0100  # $10 per 1M output tokens
-                },
-                "router_model": {
-                    "prompt": 0.000,  # $3.00 per 1M input tokens
-                    "completion": 0.00
-                }
-            }
+            router_model_pricing = {"prompt": 0.0, "completion": 0.0}  # 本地模型无费用
         else:
-            # claude 作为router的价格
-            cost_rates = {
-                "small_model": {
-                    "prompt": 0.0,  # 默认小模型免费
-                    "completion": 0.0
-                },
-                "large_model": {
-                    "prompt": 0.0025,  # $2.50 per 1M input tokens
-                    "completion": 0.0100  # $10 per 1M output tokens
-                },
-                "router_model": {
-                    "prompt": 0.003,  # $3.00 per 1M input tokens
-                    "completion": 0.015
-                }
-            }
+            router_model_pricing = get_model_pricing(self.router_model)
+        
+        cost_rates = {
+            "small_model": small_model_pricing,
+            "large_model": large_model_pricing,
+            "router_model": router_model_pricing
+        }
         return cost_rates
 
 
