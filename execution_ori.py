@@ -603,26 +603,25 @@ def run_parallel_execution(query, config, workers=4):
     if config.use_local_router:
         system_prompt = '''Generate a solution plan that breaks down the problem into logical steps, identifying dependencies, difficulty levels and token usage.'''
     else:
-        system_prompt = '''Break down math problems into 1-10 distinct sub-questions in XML format:
-            <Plan>
-                <Step ID="n" Task="Sub-question" Difficulty="1-5" Token="Estimate" Rely="ID(s)"/>
-            </Plan>
+        system_prompt = '''You are an assistant whose job is to generate a solution plan. Given a math problem, generate a solution plan less than 10 steps in XML format with the following constraints:
+        1. Plan must contain EXACTLY 1-10 steps (never more than 10)
+        2. Each step must be distinct and non-redundant
+        3. Merge trivial steps into logical units
+        4. Focus on key insights and critical transitions
+        5. Avoid step-by-step computations, focus on conceptual transitions
+        6. Mark computational steps with Difficulty≥3
+        7. Ensure all Rely attributes reference valid step IDs
+        8. Format: 
+        <Plan>
+        <Step ID="1" Task="..." Difficulty="1-5" Token="Estimate the number of tokens required to complete a subtask" Rely="Output only relevant steps"/>
+        ...
+        </Plan>
+        Make sure the format with paired tags is correct and all steps are properly nested within the <Plan> tag.
 
-            Constraints:
-            1. 1-10 steps, distinct, merge trivial steps
-            2. Task = actual question (e.g., "What is...?")
-            3. Difficulty: 1=Basic 2=Simple 3=Moderate 4=Complex 5=Advanced
-            4. Computational steps: Difficulty≥3
-            5. Valid Rely references only
-            6. Output ONLY XML
+        Difficulty scale:
+        1=Basic 2=Simple 3=Moderate 4=Complex 5=Advanced
 
-            Example for "Kody's age" problem:
-            <Plan>
-                <Step ID="1" Task="How old is Mohamed now?" Difficulty="1" Token="15" Rely=""/>
-                <Step ID="2" Task="What was Mohamed's age 4 years ago?" Difficulty="1" Token="20" Rely="1"/>
-                <Step ID="3" Task="What was Kody's age 4 years ago?" Difficulty="2" Token="25" Rely="2"/>
-                <Step ID="4" Task="How old is Kody currently?" Difficulty="1" Token="15" Rely="3"/>
-            </Plan>
+        Output ONLY the XML plan with no additional text.
         '''
     
     # 使用预初始化的路由模型客户端

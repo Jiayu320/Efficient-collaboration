@@ -2,7 +2,7 @@ import os
 import time
 from config import ModelConfig, load_config, parse_args
 from performance import PerformanceTracker, calculate_performance_metrics
-from execution_new import (
+from execution import (
     run_parallel_execution, print_results, wait_for_completion_and_get_final_result,
     judge_question_difficulty, call_small_model_directly, generate_task_dependency_report,
     judge_correct, LLM_judge, save_result_to_file
@@ -115,7 +115,7 @@ def main():
 
     try:
         # 初始化模型客户端
-        from execution_new import initialize_clients, warmup_models
+        from execution import initialize_clients, warmup_models
         initialize_clients(config)
         warmup_models(config)
         

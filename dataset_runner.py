@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 
 from config import ModelConfig
 from performance import PerformanceTracker
-from execution_new import (
+from execution import (
     run_parallel_execution, wait_for_completion_and_get_final_result,
     judge_question_difficulty, call_small_model_directly, LLM_judge
 )

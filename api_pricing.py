@@ -48,9 +48,10 @@ def get_model_pricing(model_name: str) -> Dict[str, float]:
     # DeepSeek系列
     elif "deepseek-r1" in model_name_lower:
         return {"prompt": 0.272, "completion": 0.272}
-    elif "deepseek-coder" in model_name_lower:
-        return {"prompt": 0.2, "completion": 0.2}
-    
+    elif "deepseek-chat" in model_name_lower:
+        return {"prompt": 0.25, "completion": 0.85}
+    elif "deepseek-reasoner" in model_name_lower:
+        return {"prompt": 0.272, "completion": 0.272}
 
     elif "llama3-8b" in model_name_lower or "llama-3-8b" in model_name_lower:
         return {"prompt": 0.03, "completion": 0.06}
