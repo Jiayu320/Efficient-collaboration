@@ -44,7 +44,7 @@ def main():
     # 获取判断相关配置
     enable_judge = yaml_config["system"].get("enable_judge", False)
     gold_answer = yaml_config["system"].get("gold_answer", "")
-
+    enable_threshold = yaml_config["system"].get("enable_threshold", False)
     if use_local_router:
         prompt_path = "prompt/generate_prompt.txt"
         threshold = yaml_config["models"]["local_threshold"]
@@ -125,7 +125,7 @@ def main():
         # 创建性能统计跟踪器（无论使用哪种方法都需要）
         stats_tracker = PerformanceTracker(config)
         
-        if int(difficulty) < config.threshold:
+        if enable_threshold and int(difficulty) < config.threshold:
             print(f"问题难度 {difficulty} 低于阈值 {config.threshold}，使用小模型处理")
 
             # 直接调用小模型处理，传入性能跟踪器

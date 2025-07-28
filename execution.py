@@ -603,8 +603,39 @@ def run_parallel_execution(query, config, workers=4):
     if config.use_local_router:
         system_prompt = '''Generate a solution plan that breaks down the problem into logical steps, identifying dependencies, difficulty levels and token usage.'''
     else:
+        system_prompt = '''You are an assistant whose job is to break down the problem into 1-10 easy-to-solve sub-questions. Given a math problem, generate a solution plan less than 10 steps in XML format with the following constraints:
+            1. Plan must contain EXACTLY 1-10 steps (never more than 10)
+            2. Each step must be distinct and non-redundant
+            3. Mark computational steps with Difficulty≥3
+            4. Ensure all Rely attributes reference valid step IDs
+            5. Make sure the Task is a question ended with a question mark (?)
+            6. Format: 
+            <Plan>
+                <Step ID="1" Task="..." Difficulty="1-5" Token="Estimate the number of tokens required to complete a subtask" Rely="Output only relevant steps"/>
+                ...
+            </Plan>
+            Make sure the format with paired tags is correct and all steps are properly nested within the <Plan> tag.
+
+            Difficulty scale:
+            1-2: Basic computation
+            3-4: Standard operations 
+            5-6: Logical analysis 
+            7-10: Advanced synthesis
+
+            Example:
+            Question: Four years ago, Kody was only half as old as Mohamed. If Mohamed is currently twice 30 years old, how old is Kody?
+            Plan:
+            <Plan>
+                <Step ID="1" Task="How old is Mohamed now?" Difficulty="1" Token="15" Rely=""/>
+                <Step ID="2" Task="What was Mohamed's age 4 years ago?" Difficulty="1" Token="20" Rely="1"/>
+                <Step ID="3" Task="What was Kody's age 4 years ago?" Difficulty="2" Token="25" Rely="2"/>
+                <Step ID="4" Task="How old is Kody currently?" Difficulty="1" Token="15" Rely="3"/>
+            </Plan>
+            
+            Output ONLY the XML plan with no additional text.
+        '''
         '''准确率41%'''
-        system_prompt = '''Break down math problems into 1-10 distinct sub-questions in XML format:
+        system_prompt_prior_1 = '''Break down math problems into 1-10 distinct sub-questions in XML format:
             <Plan>
                 <Step ID="n" Task="Sub-question" Difficulty="1-5" Token="Estimate" Rely="ID(s)"/>
             </Plan>
@@ -630,7 +661,7 @@ def run_parallel_execution(query, config, workers=4):
             Now it is your turn. Do not explain, just follow the format exactly.
         '''
         '''准确率46%'''
-        system_prompt_prior = '''You are an assistant whose job is to generate a solution plan. Given a math problem, generate a solution plan less than 10 steps in XML format with the following constraints:
+        system_prompt_prior_0 = '''You are an assistant whose job is to generate a solution plan. Given a math problem, generate a solution plan less than 10 steps in XML format with the following constraints:
         1. Plan must contain EXACTLY 1-10 steps (never more than 10)
         2. Each step must be distinct and non-redundant
         3. Merge trivial steps into logical units
@@ -647,6 +678,29 @@ def run_parallel_execution(query, config, workers=4):
 
         Difficulty scale:
         1=Basic 2=Simple 3=Moderate 4=Complex 5=Advanced
+
+        Output ONLY the XML plan with no additional text.'''
+        '''准确率47%'''
+        system_prompt_prior_2 = '''You are an assistant whose job is to generate a solution plan. Given a math problem, generate a solution plan less than 10 steps in XML format with the following constraints:
+        1. Plan must contain EXACTLY 1-10 steps (never more than 10)
+        2. Each step must be distinct and non-redundant
+        3. Merge trivial steps into logical units
+        4. Focus on key insights and critical transitions
+        5. Avoid step-by-step computations, focus on conceptual transitions
+        6. Mark computational steps with Difficulty≥3
+        7. Ensure all Rely attributes reference valid step IDs
+        8. Format: 
+        <Plan>
+        <Step ID="1" Task="..." Difficulty="1-5" Token="Estimate the number of tokens required to complete a subtask" Rely="Output only relevant steps"/>
+        ...
+        </Plan>
+        Make sure the format with paired tags is correct and all steps are properly nested within the <Plan> tag.
+
+        Difficulty scale:
+        1-2: Basic computation
+        3-4: Standard operations 
+        5-6: Logical analysis 
+        7-10: Advanced synthesis
 
         Output ONLY the XML plan with no additional text.'''
 
@@ -849,6 +903,12 @@ def judge_question_difficulty(question, model_config):
         """
     else:
         prompt = f"""Please determine the difficulty of the following math problem. 
+        Difficulty scale:
+        1-10 (1=simplest, 10=hardest)
+        Problem: {question}
+        Please output only the difficulty level as a number. No other explanations or details are needed.
+        """
+        prompt_ori = f"""Please determine the difficulty of the following math problem. 
         Difficulty scale:
         1=Basic 2=Simple 3=Moderate 4=Complex 5=Advanced
         Problem: {question}
