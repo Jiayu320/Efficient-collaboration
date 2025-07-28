@@ -18,8 +18,14 @@ def convert_json_format(input_file, output_file):
         for item in data:
             # new_item = {"id": item['id'], "problem": item['problem'], "solution": item['solution'], "answer": item['answer']}
             new_item = {
-                "problem": item['question'],  # 确保有question字段
-                "answer": item.get('Answer', '')  # 确保有answer字段
+                "question": item['question'],  # 确保有question字段
+                "answer": item.get('solution', ''),  # 确保有answer字段
+                "cot_type": item.get('cot_type', ''),  # 确保有cot_type字段
+                "source_type": item.get('source_type', ''),  # 确保有source_type字段
+                "metadata": item.get('metadata', ''),  # 确保有metadata字段
+                "cot": item.get('cot', ''),  # 确保有cot字段
+                "solution": item.get('gemini_thinking_trajectory', ''),  # 确保有gemini_thinking_trajectory字段
+                "attempt": item.get('attempt', ''),  # 确保有attempt字段
             }
             new_data.append(new_item)
         
@@ -33,6 +39,6 @@ def convert_json_format(input_file, output_file):
         print(f"错误: {e}")
 
 if __name__ == "__main__":
-    input_file = "d:/JIAYU/Documents/GitHub/Efficient-collaboration/dataset/aime2025-I.jsonl"
-    output_file = "d:/JIAYU/Documents/GitHub/Efficient-collaboration/dataset/AIME24_0.json"
+    input_file = "d:/JIAYU/Documents/GitHub/Efficient-collaboration/dataset/s1k1_1.json"
+    output_file = "d:/JIAYU/Documents/GitHub/Efficient-collaboration/dataset/s1k1_1_reform.json"
     convert_json_format(input_file, output_file)

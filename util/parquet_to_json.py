@@ -38,8 +38,8 @@ def convert_parquet_to_json(input_file, output_file=None, orient='records', line
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='将parquet文件转换为JSON格式')
-    parser.add_argument('input_file', nargs='?', default="D:/JIAYU/Documents/GitHub/Efficient-collaboration/dataset/train-00000-of-00001.parquet", help='输入的parquet文件路径')
-    parser.add_argument('-o', '--output', default="D:/JIAYU/Documents/GitHub/Efficient-collaboration/dataset/AIME24_1.json", help='输出的JSON文件路径（可选）')
+    parser.add_argument('input_file', nargs='?', default="D:/JIAYU/Documents/GitHub/Efficient-collaboration/dataset/s1k1_1.parquet", help='输入的parquet文件路径')
+    parser.add_argument('-o', '--output', default="D:/JIAYU/Documents/GitHub/Efficient-collaboration/dataset/s1k1_1.json", help='输出的JSON文件路径（可选）')
     parser.add_argument('--orient', default='records',
                         help='JSON格式方向，可选值: split, records, index, columns, values（默认: records）')
     parser.add_argument('--lines', action='store_true', 

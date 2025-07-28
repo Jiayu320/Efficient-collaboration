@@ -21,8 +21,9 @@ def convert_json_format(input_file, output_file):
         for item in data:
             # new_item = {"id": item['id'], "problem": item['problem'], "solution": item['solution'], "answer": item['answer']}
             new_item = {
-                "problem": item['question'],  # 确保有question字段
-                "answer": item.get('answer', '')  # 确保有answer字段
+                "question": item['question'],  # 确保有question字段
+                "answer": item.get('answer', ''),  # 确保有answer字段
+                "solution": item.get('solution', '')  # 确保有solution字段
             }
             new_data.append(new_item)
         
@@ -36,6 +37,6 @@ def convert_json_format(input_file, output_file):
         print(f"错误: {e}")
 
 if __name__ == "__main__":
-    input_file = "d:/JIAYU/Documents/GitHub/Efficient-collaboration/dataset/aime2025-II.jsonl"
-    output_file = "d:/JIAYU/Documents/GitHub/Efficient-collaboration/dataset/AIME25_1.json"
+    input_file = "D:/JIAYU/Documents/GitHub/Efficient-collaboration/dataset/original_data/limo_v2.jsonl"
+    output_file = "d:/JIAYU/Documents/GitHub/Efficient-collaboration/dataset/limo_v2.json"
     convert_json_format(input_file, output_file)
