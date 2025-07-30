@@ -155,7 +155,7 @@ class ModelConfig:
             )
         elif client_type == "large":
             return OpenAI(
-                base_url=self.api_base,
+                base_url=self.large_api_base,
                 api_key=self.large_api_key
             )
     

@@ -603,13 +603,15 @@ def run_parallel_execution(query, config, workers=4):
     if config.use_local_router:
         system_prompt = '''Generate a solution plan that breaks down the problem into logical steps, identifying dependencies, difficulty levels and token usage.'''
     else:
-        system_prompt = '''You are an assistant whose job is to break down the problem into 1-10 easy-to-solve sub-questions. Given a math problem, generate a solution plan less than 10 steps in XML format with the following constraints:
+        '''准确率39.00%'''
+        system_prompt_0 = '''You are an assistant whose job is to break down the problem into 1-10 easy-to-solve sub-questions. Given a math problem, generate a solution plan less than 10 steps in XML format with the following constraints:
             1. Plan must contain EXACTLY 1-10 steps (never more than 10)
             2. Each step must be distinct and non-redundant
             3. Mark computational steps with Difficulty≥3
             4. Ensure all Rely attributes reference valid step IDs
             5. Make sure the Task is a question ended with a question mark (?)
-            6. Format: 
+            6. Make sure the sub-questions are easy to solve
+            7. Format: 
             <Plan>
                 <Step ID="1" Task="..." Difficulty="1-5" Token="Estimate the number of tokens required to complete a subtask" Rely="Output only relevant steps"/>
                 ...
@@ -702,8 +704,87 @@ def run_parallel_execution(query, config, workers=4):
         5-6: Logical analysis 
         7-10: Advanced synthesis
 
-        Output ONLY the XML plan with no additional text.'''
+        Output ONLY the XML plan with no additional text.
+        '''
+        '''前10 20% dataset_results_20250731_002512'''
+        system_prompt_test = '''You are an assistant whose job is to generate a solution plan. Given a math problem, generate a solution plan less than 10 steps in XML format with the following constraints:
+        1. Plan must contain EXACTLY 1-10 steps (never more than 10)
+        2. Each step must be distinct and non-redundant
+        3. Merge trivial steps into logical units
+        4. Focus on key insights and critical transitions
+        5. Avoid step-by-step computations, focus on conceptual transitions
+        6. Mark computational steps with Difficulty≥3
+        7. Ensure all Rely attributes reference valid step IDs
+        8. Format: 
+        <Plan>
+        <Step ID="1" Task="..." Difficulty="1-5" Token="Estimate the number of tokens required to complete a subtask" Rely="Output only relevant steps"/>
+        ...
+        </Plan>
+        Make sure the format with paired tags is correct and all steps are properly nested within the <Plan> tag.
 
+        Difficulty scale:
+        1-2: Basic computation
+        3-4: Standard operations 
+        5-6: Logical analysis 
+        7-10: Advanced synthesis
+
+        Output ONLY the XML plan with no additional text.
+        Example:
+        Question: Let's say a language  $L \\subseteq \\{0,1\\}^*$  is in  $\\textbf{P}_{angel}$  if there exists a polynomial  $p : \\mathbb{N} \\mapsto \\mathbb{N}$ , a sequence of strings  $\\{\\alpha_n\\}_{n \\in \\mathbb{N}}$  with  $\\alpha_n \\in \\{0,1\\}^{p(n)}$ , and a deterministic polynomial time Turing Machine  $M$  such that for every  $x \\in \\{0,1\\}^n$   $$ x \\in L \\Leftrightarrow M(x, \\alpha_n) = 1 $$  Let us call  $\\alpha_n$  to be the *angel string*for all  $x$  of the length  $n$ . Note that the *angel string* is  $\\textbf{not}$  similar to a *witness* or *certificate*as used in the definition of  $\\textbf{NP}$  For example, all unary languages, even  $UHALT$  which is undecidable, are in  $\\textbf{P}_{angel}$  because the \\textit{angel string} can simply be a single bit that tells us if the given unary string is in  $UHALT$  or not.\n\n\nA set  $S \\subseteq \\Sigma^*$  is said to be **sparse** if there exists a polynomial   $p : \\mathbb{N} \\mapsto \\mathbb{N}$  such that for each  $n \\in \\mathbb{N}$ , the number of strings of length  $n$  in  $S$  is bounded by  $p(n)$ . In other words,  $|S^{=n}| \\leq p(n)$ , where  $S^{=n} \\subseteq S$  contains all the strings in  $S$  that are of length  $n$ . \n\n[list=1]\n    [*] Given  $k \\in \\mathbb{N}$  sparse sets  $S_1, S_2 \\ldots S_k$ , show that there exists a sparse set  $S$  and a deterministic polynomial time TM  $M$  with oracle access to  $S$  such that given an input  $\\langle x,i \\rangle$  the TM  $M$  will accept it if and only if  $x \\in S_i$ .\n    Define the set  $S$  (note that it need not be computable), and give the description of  $M$  with oracle  $S$ .\n    Note that a TM  $M$  with oracle access to  $S$  can query whether  $s \\in S$  and get the correct answer in return in constant time. [/*]\n    \n    [*] Let us define a variant of  $\\textbf{P}_{angel}$  called  $\\textbf{P}_{bad-angel}$  with a constraint that there should exists a polynomial time algorithm that can **compute** the angel string for any length  $n \\in \\mathbb{N}$ . In other words, there is a poly-time algorithm  $A$  such that  $\\alpha_n = A(n)$ . \n    Is  $\\textbf{P} =\\textbf{P}_{bad-angel}$ ? Is  $\\textbf{NP}=\\textbf{P}_{bad-angel}$ ? Justify.\n    [/*]\n    \n    [*] Let the language  $L \\in$   $\\textbf{P}_{angel}$ . Show that there exists a sparse set  $S_L$  and a deterministic polynomial time TM  $M$  with oracle access to  $S_L$  that can decide the language  $L$ .  [/*]
+        Plan: <Plan><Step ID=\"1\" Task=\"What does a sparse set mean in this context?\" Difficulty=\"2\" Token=\"20\" Rely=\"\"/><Step ID=\"2\" Task=\"How can we construct a set S that encodes information about k sparse sets?\" Difficulty=\"3\" Token=\"30\" Rely=\"1\"/><Step ID=\"3\" Task=\"How can we design a polynomial time TM M with oracle access to S to decide membership in Si?\" Difficulty=\"4\" Token=\"40\" Rely=\"2\"/><Step ID=\"4\" Task=\"What is the key difference between P_angel and P_bad-angel?\" Difficulty=\"2\" Token=\"20\" Rely=\"\"/><Step ID=\"5\" Task=\"Is P equal to P_bad-angel? Why or why not?\" Difficulty=\"3\" Token=\"35\" Rely=\"4\"/><Step ID=\"6\" Task=\"Is NP equal to P_bad-angel? Why or why not?\" Difficulty=\"4\" Token=\"40\" Rely=\"4,5\"/><Step ID=\"7\" Task=\"For a language L in P_angel, how can we encode the angel strings into a sparse set S_L?\" Difficulty=\"4\" Token=\"35\" Rely=\"1,4\"/><Step ID=\"8\" Task=\"How can we design a TM with oracle access to S_L to decide L?\" Difficulty=\"4\" Token=\"35\" Rely=\"7\"/></Plan>
+        Question: Consider the following two person game. A number of pebbles are situated on the table. Two players make their moves alternately. A move consists of taking off the table  $x$  pebbles where  $x$  is the square of any positive integer. The player who is unable to make a move loses. Prove that there are infinitely many initial situations in which the second player can win no matter how his opponent plays.
+        Plan: <Plan><Step ID=\"1\" Task=\"What are the valid moves in this game?\" Difficulty=\"1\" Token=\"20\" Rely=\"\"/><Step ID=\"2\" Task=\"Which positions are winning for the first player?\" Difficulty=\"4\" Token=\"40\" Rely=\"1\"/><Step ID=\"3\" Task=\"Which positions are winning for the second player?\" Difficulty=\"4\" Token=\"40\" Rely=\"1,2\"/><Step ID=\"4\" Task=\"Can we identify a pattern for winning second player positions?\" Difficulty=\"5\" Token=\"50\" Rely=\"3\"/><Step ID=\"5\" Task=\"For which specific number(s) of pebbles can the second player force a win?\" Difficulty=\"4\" Token=\"50\" Rely=\"4\"/><Step ID=\"6\" Task=\"Can we prove there are infinitely many such winning positions?\" Difficulty=\"5\" Token=\"60\" Rely=\"5\"/><Step ID=\"7\" Task=\"Can we express these winning positions as a formula or pattern?\" Difficulty=\"4\" Token=\"40\" Rely=\"5,6\"/></Plan>
+        Question: An IPv4 packet contains the following data (in hexadecimal value) in the IP header: 4500 0034 B612 4000 4006 6F80 0A00 008B 5BC6 AEE0 . Does the header contains error?
+        Plan: <Plan><Step ID=\"1\" Task=\"What is the structure and format of an IPv4 header?\" Difficulty=\"2\" Token=\"30\" Rely=\"\"/><Step ID=\"2\" Task=\"What does each part of the given hexadecimal data represent in the IPv4 header?\" Difficulty=\"3\" Token=\"40\" Rely=\"1\"/><Step ID=\"3\" Task=\"What is the header length according to the data?\" Difficulty=\"2\" Token=\"20\" Rely=\"2\"/><Step ID=\"4\" Task=\"Calculate the header checksum from the given data?\" Difficulty=\"4\" Token=\"50\" Rely=\"2\"/><Step ID=\"5\" Task=\"What is the checksum value provided in the header?\" Difficulty=\"2\" Token=\"20\" Rely=\"2\"/><Step ID=\"6\" Task=\"Does the calculated checksum match the provided checksum?\" Difficulty=\"3\" Token=\"30\" Rely=\"4,5\"/><Step ID=\"7\" Task=\"Are there any other potential errors in the header fields?\" Difficulty=\"3\" Token=\"40\" Rely=\"2\"/><Step ID=\"8\" Task=\"Does the IPv4 header contain any errors based on all checks?\" Difficulty=\"2\" Token=\"25\" Rely=\"6,7\"/></Plan>
+        Question: A stationary source emits sound of frequency $f_{0}=492 \\mathrm{~Hz}$. The sound is reflected by a large car approaching the source with a speed of $2 \\mathrm{~ms}^{-1}$. The reflected signal is received by the source and superposed with the original. What will be the beat frequency of the resulting signal in Hz? (Given that the speed of sound in air is $330 \\mathrm{~ms}^{-1}$ and the car reflects the sound at the frequency it has received).
+        Plan: <Plan><Step ID=\"1\" Task=\"What is the frequency received by the approaching car?\" Difficulty=\"3\" Token=\"30\" Rely=\"\"/><Step ID=\"2\" Task=\"What is the frequency reflected by the car?\" Difficulty=\"2\" Token=\"20\" Rely=\"1\"/><Step ID=\"3\" Task=\"What is the frequency of the reflected sound received back at the source?\" Difficulty=\"3\" Token=\"30\" Rely=\"2\"/><Step ID=\"4\" Task=\"What is the beat frequency when the original signal and reflected signal superpose?\" Difficulty=\"2\" Token=\"25\" Rely=\"3\"/></Plan>
+        Question: 2.2 Find the numerical value of $\\frac{\\rho_{i} T_{i}}{\\rho_{a} T_{a}}-1$ using $\\gamma=0.0250 \\mathrm{Nm}^{-1}, R_{0}=1.00 \\mathrm{~cm}$, and $P_{a}=1.013 \\times 10^{5} \\mathrm{Nm}^{-2}$.
+        Plan: <Plan><Step ID=\"1\" Task=\"What is the relationship between pressure, density, and temperature for an ideal gas?\" Difficulty=\"2\" Token=\"30\" Rely=\"\"/><Step ID=\"2\" Task=\"How are the internal pressure (Pi) and external pressure (Pa) related using the Young-Laplace equation?\" Difficulty=\"3\" Token=\"35\" Rely=\"\"/><Step ID=\"3\" Task=\"Calculate the internal pressure (Pi) using γ, R0, and Pa?\" Difficulty=\"3\" Token=\"30\" Rely=\"2\"/><Step ID=\"4\" Task=\"How can we express the ratio of ρiTi/ρaTa in terms of pressures Pi and Pa?\" Difficulty=\"3\" Token=\"35\" Rely=\"1\"/><Step ID=\"5\" Task=\"Calculate the numerical value of Pi/Pa using the given values?\" Difficulty=\"3\" Token=\"25\" Rely=\"3\"/><Step ID=\"6\" Task=\"Calculate the numerical value of ρiTi/ρaTa using the pressure ratio?\" Difficulty=\"3\" Token=\"25\" Rely=\"4,5\"/><Step ID=\"7\" Task=\"Calculate the final value of ρiTi/ρaTa - 1?\" Difficulty=\"2\" Token=\"20\" Rely=\"6\"/></Plan>
+        Question: "Mrs. Walter gave an exam in a mathematics class of five students. She entered the scores in random order into a spreadsheet, which recalculated the class average after each score was entered. Mrs. Walter noticed that after each score was entered, the average was always an integer. The scores (listed in ascending order) were 71,76,80,82,and 91. What was the last score Mrs. Walter entered?"
+        Plan: <Plan><Step ID=\"1\" Task=\"What is the average of all five scores?\" Difficulty=\"2\" Token=\"25\" Rely=\"\"/><Step ID=\"2\" Task=\"What are the possible sums after entering 1, 2, 3, 4, and 5 scores?\" Difficulty=\"3\" Token=\"40\" Rely=\"\"/><Step ID=\"3\" Task=\"What are the possible averages after entering each score?\" Difficulty=\"3\" Token=\"40\" Rely=\"2\"/><Step ID=\"4\" Task=\"Which averages are integers?\" Difficulty=\"2\" Token=\"30\" Rely=\"3\"/><Step ID=\"5\" Task=\"What are the possible orders for entering the scores to get integer averages each time?\" Difficulty=\"4\" Token=\"60\" Rely=\"4\"/><Step ID=\"6\" Task=\"For each possible order, what is the last score entered?\" Difficulty=\"3\" Token=\"40\" Rely=\"5\"/><Step ID=\"7\" Task=\"Is there only one possible last score or multiple possibilities?\" Difficulty=\"2\" Token=\"30\" Rely=\"6\"/><Step ID=\"8\" Task=\"What was the last score Mrs. Walter entered?\" Difficulty=\"1\" Token=\"20\" Rely=\"7\"/></Plan>
+        '''
+        '''准确率45.00%'''
+        system_prompt = '''You are an assistant whose job is to generate a solution plan. Given a math problem, generate a solution plan less than 10 steps in XML format with the following constraints:
+        1. Plan must contain EXACTLY 1-10 steps (never more than 10)
+        2. Each step must be distinct and non-redundant
+        3. Merge trivial steps into logical units
+        4. Focus on key insights and critical transitions
+        5. Avoid step-by-step computations, focus on conceptual transitions
+        6. Mark computational steps with Difficulty≥3
+        7. Ensure all Rely attributes reference valid step IDs
+        8. Make sure the Task is ended with a question mark (?)
+        9. Format: 
+        <Plan>
+        <Step ID="1" Task="..." Difficulty="1-5" Token="Estimate the number of tokens required to complete a subtask" Rely="Output only relevant steps"/>
+        ...
+        </Plan>
+        Make sure the format with paired tags is correct and all steps are properly nested within the <Plan> tag.
+
+        Difficulty scale:
+        1-2: Basic computation
+        3-4: Standard operations 
+        5-6: Logical analysis 
+        7-10: Advanced synthesis
+
+        Output ONLY the XML plan with no additional text.
+        Example:
+        Question: Let's say a language  $L \\subseteq \\{0,1\\}^*$  is in  $\\textbf{P}_{angel}$  if there exists a polynomial  $p : \\mathbb{N} \\mapsto \\mathbb{N}$ , a sequence of strings  $\\{\\alpha_n\\}_{n \\in \\mathbb{N}}$  with  $\\alpha_n \\in \\{0,1\\}^{p(n)}$ , and a deterministic polynomial time Turing Machine  $M$  such that for every  $x \\in \\{0,1\\}^n$   $$ x \\in L \\Leftrightarrow M(x, \\alpha_n) = 1 $$  Let us call  $\\alpha_n$  to be the *angel string*for all  $x$  of the length  $n$ . Note that the *angel string* is  $\\textbf{not}$  similar to a *witness* or *certificate*as used in the definition of  $\\textbf{NP}$  For example, all unary languages, even  $UHALT$  which is undecidable, are in  $\\textbf{P}_{angel}$  because the \\textit{angel string} can simply be a single bit that tells us if the given unary string is in  $UHALT$  or not.\n\n\nA set  $S \\subseteq \\Sigma^*$  is said to be **sparse** if there exists a polynomial   $p : \\mathbb{N} \\mapsto \\mathbb{N}$  such that for each  $n \\in \\mathbb{N}$ , the number of strings of length  $n$  in  $S$  is bounded by  $p(n)$ . In other words,  $|S^{=n}| \\leq p(n)$ , where  $S^{=n} \\subseteq S$  contains all the strings in  $S$  that are of length  $n$ . \n\n[list=1]\n    [*] Given  $k \\in \\mathbb{N}$  sparse sets  $S_1, S_2 \\ldots S_k$ , show that there exists a sparse set  $S$  and a deterministic polynomial time TM  $M$  with oracle access to  $S$  such that given an input  $\\langle x,i \\rangle$  the TM  $M$  will accept it if and only if  $x \\in S_i$ .\n    Define the set  $S$  (note that it need not be computable), and give the description of  $M$  with oracle  $S$ .\n    Note that a TM  $M$  with oracle access to  $S$  can query whether  $s \\in S$  and get the correct answer in return in constant time. [/*]\n    \n    [*] Let us define a variant of  $\\textbf{P}_{angel}$  called  $\\textbf{P}_{bad-angel}$  with a constraint that there should exists a polynomial time algorithm that can **compute** the angel string for any length  $n \\in \\mathbb{N}$ . In other words, there is a poly-time algorithm  $A$  such that  $\\alpha_n = A(n)$ . \n    Is  $\\textbf{P} =\\textbf{P}_{bad-angel}$ ? Is  $\\textbf{NP}=\\textbf{P}_{bad-angel}$ ? Justify.\n    [/*]\n    \n    [*] Let the language  $L \\in$   $\\textbf{P}_{angel}$ . Show that there exists a sparse set  $S_L$  and a deterministic polynomial time TM  $M$  with oracle access to  $S_L$  that can decide the language  $L$ .  [/*]
+        Plan: <Plan><Step ID=\"1\" Task=\"What does a sparse set mean in this context?\" Difficulty=\"2\" Token=\"20\" Rely=\"\"/><Step ID=\"2\" Task=\"How can we construct a set S that encodes information about k sparse sets?\" Difficulty=\"3\" Token=\"30\" Rely=\"1\"/><Step ID=\"3\" Task=\"How can we design a polynomial time TM M with oracle access to S to decide membership in Si?\" Difficulty=\"4\" Token=\"40\" Rely=\"2\"/><Step ID=\"4\" Task=\"What is the key difference between P_angel and P_bad-angel?\" Difficulty=\"2\" Token=\"20\" Rely=\"\"/><Step ID=\"5\" Task=\"Is P equal to P_bad-angel? Why or why not?\" Difficulty=\"3\" Token=\"35\" Rely=\"4\"/><Step ID=\"6\" Task=\"Is NP equal to P_bad-angel? Why or why not?\" Difficulty=\"4\" Token=\"40\" Rely=\"4,5\"/><Step ID=\"7\" Task=\"For a language L in P_angel, how can we encode the angel strings into a sparse set S_L?\" Difficulty=\"4\" Token=\"35\" Rely=\"1,4\"/><Step ID=\"8\" Task=\"How can we design a TM with oracle access to S_L to decide L?\" Difficulty=\"4\" Token=\"35\" Rely=\"7\"/></Plan>
+        Question: Consider the following two person game. A number of pebbles are situated on the table. Two players make their moves alternately. A move consists of taking off the table  $x$  pebbles where  $x$  is the square of any positive integer. The player who is unable to make a move loses. Prove that there are infinitely many initial situations in which the second player can win no matter how his opponent plays.
+        Plan: <Plan><Step ID=\"1\" Task=\"What are the valid moves in this game?\" Difficulty=\"1\" Token=\"20\" Rely=\"\"/><Step ID=\"2\" Task=\"Which positions are winning for the first player?\" Difficulty=\"4\" Token=\"40\" Rely=\"1\"/><Step ID=\"3\" Task=\"Which positions are winning for the second player?\" Difficulty=\"4\" Token=\"40\" Rely=\"1,2\"/><Step ID=\"4\" Task=\"Can we identify a pattern for winning second player positions?\" Difficulty=\"5\" Token=\"50\" Rely=\"3\"/><Step ID=\"5\" Task=\"For which specific number(s) of pebbles can the second player force a win?\" Difficulty=\"4\" Token=\"50\" Rely=\"4\"/><Step ID=\"6\" Task=\"Can we prove there are infinitely many such winning positions?\" Difficulty=\"5\" Token=\"60\" Rely=\"5\"/><Step ID=\"7\" Task=\"Can we express these winning positions as a formula or pattern?\" Difficulty=\"4\" Token=\"40\" Rely=\"5,6\"/></Plan>
+        Question: An IPv4 packet contains the following data (in hexadecimal value) in the IP header: 4500 0034 B612 4000 4006 6F80 0A00 008B 5BC6 AEE0 . Does the header contains error?
+        Plan: <Plan><Step ID=\"1\" Task=\"What is the structure and format of an IPv4 header?\" Difficulty=\"2\" Token=\"30\" Rely=\"\"/><Step ID=\"2\" Task=\"What does each part of the given hexadecimal data represent in the IPv4 header?\" Difficulty=\"3\" Token=\"40\" Rely=\"1\"/><Step ID=\"3\" Task=\"What is the header length according to the data?\" Difficulty=\"2\" Token=\"20\" Rely=\"2\"/><Step ID=\"4\" Task=\"Calculate the header checksum from the given data?\" Difficulty=\"4\" Token=\"50\" Rely=\"2\"/><Step ID=\"5\" Task=\"What is the checksum value provided in the header?\" Difficulty=\"2\" Token=\"20\" Rely=\"2\"/><Step ID=\"6\" Task=\"Does the calculated checksum match the provided checksum?\" Difficulty=\"3\" Token=\"30\" Rely=\"4,5\"/><Step ID=\"7\" Task=\"Are there any other potential errors in the header fields?\" Difficulty=\"3\" Token=\"40\" Rely=\"2\"/><Step ID=\"8\" Task=\"Does the IPv4 header contain any errors based on all checks?\" Difficulty=\"2\" Token=\"25\" Rely=\"6,7\"/></Plan>
+        Question: A stationary source emits sound of frequency $f_{0}=492 \\mathrm{~Hz}$. The sound is reflected by a large car approaching the source with a speed of $2 \\mathrm{~ms}^{-1}$. The reflected signal is received by the source and superposed with the original. What will be the beat frequency of the resulting signal in Hz? (Given that the speed of sound in air is $330 \\mathrm{~ms}^{-1}$ and the car reflects the sound at the frequency it has received).
+        Plan: <Plan><Step ID=\"1\" Task=\"What is the frequency received by the approaching car?\" Difficulty=\"3\" Token=\"30\" Rely=\"\"/><Step ID=\"2\" Task=\"What is the frequency reflected by the car?\" Difficulty=\"2\" Token=\"20\" Rely=\"1\"/><Step ID=\"3\" Task=\"What is the frequency of the reflected sound received back at the source?\" Difficulty=\"3\" Token=\"30\" Rely=\"2\"/><Step ID=\"4\" Task=\"What is the beat frequency when the original signal and reflected signal superpose?\" Difficulty=\"2\" Token=\"25\" Rely=\"3\"/></Plan>
+        Question: 2.2 Find the numerical value of $\\frac{\\rho_{i} T_{i}}{\\rho_{a} T_{a}}-1$ using $\\gamma=0.0250 \\mathrm{Nm}^{-1}, R_{0}=1.00 \\mathrm{~cm}$, and $P_{a}=1.013 \\times 10^{5} \\mathrm{Nm}^{-2}$.
+        Plan: <Plan><Step ID=\"1\" Task=\"What is the relationship between pressure, density, and temperature for an ideal gas?\" Difficulty=\"2\" Token=\"30\" Rely=\"\"/><Step ID=\"2\" Task=\"How are the internal pressure (Pi) and external pressure (Pa) related using the Young-Laplace equation?\" Difficulty=\"3\" Token=\"35\" Rely=\"\"/><Step ID=\"3\" Task=\"Calculate the internal pressure (Pi) using γ, R0, and Pa?\" Difficulty=\"3\" Token=\"30\" Rely=\"2\"/><Step ID=\"4\" Task=\"How can we express the ratio of ρiTi/ρaTa in terms of pressures Pi and Pa?\" Difficulty=\"3\" Token=\"35\" Rely=\"1\"/><Step ID=\"5\" Task=\"Calculate the numerical value of Pi/Pa using the given values?\" Difficulty=\"3\" Token=\"25\" Rely=\"3\"/><Step ID=\"6\" Task=\"Calculate the numerical value of ρiTi/ρaTa using the pressure ratio?\" Difficulty=\"3\" Token=\"25\" Rely=\"4,5\"/><Step ID=\"7\" Task=\"Calculate the final value of ρiTi/ρaTa - 1?\" Difficulty=\"2\" Token=\"20\" Rely=\"6\"/></Plan>
+        Question: "Mrs. Walter gave an exam in a mathematics class of five students. She entered the scores in random order into a spreadsheet, which recalculated the class average after each score was entered. Mrs. Walter noticed that after each score was entered, the average was always an integer. The scores (listed in ascending order) were 71,76,80,82,and 91. What was the last score Mrs. Walter entered?"
+        Plan: <Plan><Step ID=\"1\" Task=\"What is the average of all five scores?\" Difficulty=\"2\" Token=\"25\" Rely=\"\"/><Step ID=\"2\" Task=\"What are the possible sums after entering 1, 2, 3, 4, and 5 scores?\" Difficulty=\"3\" Token=\"40\" Rely=\"\"/><Step ID=\"3\" Task=\"What are the possible averages after entering each score?\" Difficulty=\"3\" Token=\"40\" Rely=\"2\"/><Step ID=\"4\" Task=\"Which averages are integers?\" Difficulty=\"2\" Token=\"30\" Rely=\"3\"/><Step ID=\"5\" Task=\"What are the possible orders for entering the scores to get integer averages each time?\" Difficulty=\"4\" Token=\"60\" Rely=\"4\"/><Step ID=\"6\" Task=\"For each possible order, what is the last score entered?\" Difficulty=\"3\" Token=\"40\" Rely=\"5\"/><Step ID=\"7\" Task=\"Is there only one possible last score or multiple possibilities?\" Difficulty=\"2\" Token=\"30\" Rely=\"6\"/><Step ID=\"8\" Task=\"What was the last score Mrs. Walter entered?\" Difficulty=\"1\" Token=\"20\" Rely=\"7\"/></Plan>
+        '''
+    user_prompt = f'''
+    Question: {query}
+    Plan:
+    '''
     # 使用预初始化的路由模型客户端
     try:
         # 记录路由模型开始生成计划的时间，用于计算首个令牌响应时间
@@ -730,7 +811,171 @@ def run_parallel_execution(query, config, workers=4):
                 model=config.router_model,
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": query}
+                    {"role": "user", "content": user_prompt}
+                ],
+                stream=True,
+                temperature=0.3
+            )
+        
+        # 计算输入tokens (估计值，实际应该通过API返回)
+        prompt_tokens = len(system_prompt.split()) + len(query.split())
+        completion_tokens = 0
+        
+        for chunk in response_stream:
+            if hasattr(chunk.choices[0], 'delta') and hasattr(chunk.choices[0].delta, 'content'):
+                content = chunk.choices[0].delta.content
+                if content:
+                    # 记录首个token响应时间
+                    if not first_token_received:
+                        ttft = time.time() - router_start_time
+                        first_token_received = True
+                        if stats_tracker:
+                            stats_tracker.update_ttft("router_model", ttft)
+                    
+                    print(content, end="", flush=True)  # 实时输出
+                    
+                    # 更新完成tokens计数
+                    completion_tokens += len(content.split())
+                    
+                    # 添加到XML缓冲区
+                    xml_buffer += content
+                    
+                    # 尝试解析缓冲区中的完整标签
+                    parsed_count = 0
+                    while process_xml_buffer():
+                        parsed_count += 1
+                        task_count += 1
+                    
+                    # 只有在解析到新任务时才启动路由
+                    if parsed_count > 0:
+                        print(f"\n已解析 {task_count} 个任务，启动任务调度...")
+                        router(tasks, config, query, executor)
+        
+        # 更新router模型的token使用情况
+        if stats_tracker:
+            stats_tracker.update_token_usage("router_model", prompt_tokens, completion_tokens)
+                        
+    except Exception as e:
+        print(f"\n处理响应时出错: {e}")
+    
+    print(f"\n计划生成完成，共解析 {task_count} 个任务")
+    
+    # 继续处理可能的剩余XML标签
+    while process_xml_buffer():
+        pass
+    
+    # 处理所有剩余任务直到全部完成
+    print("\n\n开始执行所有任务...")
+    while tasks and any(step_id not in completed_steps for step_id in tasks):
+        if not router(tasks, config, query, executor, stats_tracker):
+            break
+    
+    # 关闭线程池
+    executor.shutdown()
+    
+    return tasks, stats_tracker
+
+def dataset_run_parallel_execution(query, solution, config, workers=4):
+    """运行并行执行流程
+    
+    参数:
+        query: 要解决的问题
+        config: 模型配置对象
+        workers: 并行工作线程数
+    """
+    global xml_buffer, tasks, completed_steps, futures, router_model_client
+    
+    # 创建性能统计跟踪器
+    stats_tracker = PerformanceTracker(config)
+    
+    # 初始化所有客户端
+    initialize_clients(config)
+    
+    # 预热模型，减少TTFT
+    warmup_models(config)
+    
+    # 重置全局状态
+    xml_buffer = ""
+    tasks = defaultdict(dict)
+    completed_steps = set()
+    futures = {}
+    future_to_id = {}
+    
+    # 创建线程池
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=workers)
+    
+    # 初始化变量跟踪解析进度
+    task_count = 0
+    print("开始处理问题：", query)
+    print("正在获取解决方案计划...")
+
+    if config.use_local_router:
+        system_prompt = '''Generate a solution plan that breaks down the problem into logical steps, identifying dependencies, difficulty levels and token usage.'''
+    else:
+        system_prompt = '''You are an assistant whose job is to break down the problem into 1-10 easy-to-solve sub-questions. Given a math problem, generate a solution plan less than 10 steps in XML format with the following constraints:
+            1. Plan must contain EXACTLY 1-10 steps (never more than 10)
+            2. Each step must be distinct and non-redundant
+            3. Mark computational steps with Difficulty≥3
+            4. Ensure all Rely attributes reference valid step IDs
+            5. Make sure the Task is a question ended with a question mark (?)
+            6. Make sure the sub-questions are easy to solve
+            7. Format: 
+            <Plan>
+                <Step ID="1" Task="..." Difficulty="1-5" Token="Estimate the number of tokens required to complete a subtask" Rely="Output only relevant steps"/>
+                ...
+            </Plan>
+            Make sure the format with paired tags is correct and all steps are properly nested within the <Plan> tag.
+
+            Difficulty scale:
+            1-2: Basic computation
+            3-4: Standard operations 
+            5-6: Logical analysis 
+            7-10: Advanced synthesis
+
+            Example:
+            Question: Four years ago, Kody was only half as old as Mohamed. If Mohamed is currently twice 30 years old, how old is Kody?
+            Plan:
+            <Plan>
+                <Step ID="1" Task="How old is Mohamed now?" Difficulty="1" Token="15" Rely=""/>
+                <Step ID="2" Task="What was Mohamed's age 4 years ago?" Difficulty="1" Token="20" Rely="1"/>
+                <Step ID="3" Task="What was Kody's age 4 years ago?" Difficulty="2" Token="25" Rely="2"/>
+                <Step ID="4" Task="How old is Kody currently?" Difficulty="1" Token="15" Rely="3"/>
+            </Plan>
+            
+            Output ONLY the XML plan with no additional text. 
+        '''
+        user_query = f'''
+            Question: {query}
+            Solution: {solution}
+            Please generate a solution plan for the question in XML format you can use the solution as a reference.
+        '''
+    # 使用预初始化的路由模型客户端
+    try:
+        # 记录路由模型开始生成计划的时间，用于计算首个令牌响应时间
+        router_start_time = time.time()
+        first_token_received = False
+        ttft = None
+        
+        # 根据配置决定是使用本地路由模型还是远程路由模型
+        if config.use_local_router:
+            response_stream = router_model_client.chat.completions.create(
+                model=config.local_router_model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_query}
+                ],
+                stream=True,
+                temperature=0.5,
+                top_p=0.95,
+                max_tokens=8192,
+                extra_body={"enable_thinking": False}
+            )
+        else:
+            response_stream = router_model_client.chat.completions.create(
+                model=config.router_model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_query}
                 ],
                 stream=True
             )
@@ -914,10 +1159,10 @@ def judge_question_difficulty(question, model_config):
         Problem: {question}
         Please output only the difficulty level as a number. No other explanations or details are needed.
         """
-    client = model_config.get_client(client_type="small")
+    client = model_config.get_client(client_type="large")
     try:
         response = client.chat.completions.create(
-            model=model_config.small_model,
+            model=model_config.large_model,
             messages=[
                 {"role": "user", "content": prompt}
             ],
