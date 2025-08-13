@@ -583,7 +583,7 @@ def run_parallel_execution(query, config, workers=4):
     initialize_clients(config)
     
     # 预热模型，减少TTFT
-    warmup_models(config)
+    # warmup_models(config)
     
     # 重置全局状态
     xml_buffer = ""
@@ -601,7 +601,30 @@ def run_parallel_execution(query, config, workers=4):
     print("正在获取解决方案计划...")
 
     if config.use_local_router:
-        system_prompt = '''Generate a solution plan that breaks down the problem into logical steps, identifying dependencies, difficulty levels and token usage.'''
+        system_prompt = '''
+        You are an assistant whose job is to generate a solution plan. Given a math problem, generate a solution plan less than 10 steps in XML format with the following constraints:
+        1. Plan must contain EXACTLY 1-10 steps (never more than 10)
+        2. Each step must be distinct and non-redundant
+        3. Merge trivial steps into logical units
+        4. Focus on key insights and critical transitions
+        5. Avoid step-by-step computations, focus on conceptual transitions
+        6. Mark computational steps with Difficulty≥3
+        7. Ensure all Rely attributes reference valid step IDs
+        8. Make sure the Task is ended with a question mark (?)
+        9. Format: 
+        <Plan>
+        <Step ID="1" Task="..." Difficulty="1-10" Token="the number of tokens required" Rely="Output only relevant steps"/>
+        ...
+        </Plan>
+        Make sure the format with paired tags is correct and all steps are properly nested within the <Plan> tag.
+
+        Difficulty scale:
+        1-2: Basic computation
+        3-4: Standard operations 
+        5-6: Logical analysis 
+        7-10: Advanced synthesis
+
+        Output ONLY the XML plan with no additional text.'''
     else:
         '''准确率39.00%'''
         system_prompt_0 = '''You are an assistant whose job is to break down the problem into 1-10 easy-to-solve sub-questions. Given a math problem, generate a solution plan less than 10 steps in XML format with the following constraints:
@@ -717,7 +740,7 @@ def run_parallel_execution(query, config, workers=4):
         7. Ensure all Rely attributes reference valid step IDs
         8. Format: 
         <Plan>
-        <Step ID="1" Task="..." Difficulty="1-5" Token="Estimate the number of tokens required to complete a subtask" Rely="Output only relevant steps"/>
+        <Step ID="1" Task="..." Difficulty="1-10" Token="Estimate the number of tokens required to complete a subtask" Rely="Output only relevant steps"/>
         ...
         </Plan>
         Make sure the format with paired tags is correct and all steps are properly nested within the <Plan> tag.
@@ -755,7 +778,7 @@ def run_parallel_execution(query, config, workers=4):
         8. Make sure the Task is ended with a question mark (?)
         9. Format: 
         <Plan>
-        <Step ID="1" Task="..." Difficulty="1-5" Token="Estimate the number of tokens required to complete a subtask" Rely="Output only relevant steps"/>
+        <Step ID="1" Task="..." Difficulty="1-10" Token="Estimate the number of tokens required to complete a subtask" Rely="Output only relevant steps"/>
         ...
         </Plan>
         Make sure the format with paired tags is correct and all steps are properly nested within the <Plan> tag.

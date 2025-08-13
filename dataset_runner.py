@@ -1,6 +1,3 @@
-"""
-处理数据集的模块，用于批量处理类似math200.json这样的数据集
-"""
 import os
 import json
 import time

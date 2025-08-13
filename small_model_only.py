@@ -629,7 +629,7 @@ if __name__ == "__main__":
         prompt_path="prompt/direct_solve_prompt.txt",
         api_base=yaml_config["api"]["small_api_base_url"],
         judge_api_key_path=yaml_config["api"]["large_key_path"],
-        judge_api_base_url=yaml_config["api"]["large_base_url"]
+        judge_api_base_url=yaml_config["api"]["large_api_base_url"]
     )
     
     # 检查是否进行数据集处理
@@ -667,7 +667,7 @@ if __name__ == "__main__":
                 f.write(report)
             
             # 生成可视化
-            dataset_runner.visualize_results(output_dir)
+            # dataset_runner.visualize_results(output_dir)
             print(f"数据集处理完成，报告和可视化已保存到 {output_dir} 目录")
         except Exception as e:
             print(f"保存报告时出错: {e}")

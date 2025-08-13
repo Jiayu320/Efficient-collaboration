@@ -107,6 +107,13 @@ def load_config(config_path="config.yaml") -> Dict[str, Any]:
             "query": "What is the result of 1+1?"
         }
 
+def get_api_key(file_path="together_ai"):
+    if os.path.exists(file_path):
+        with open(file_path, 'r') as f:
+            api_key = f.read().strip()
+    else:
+        raise FileNotFoundError(f"Credentials file '{file_path}' not found.")
+    return api_key
 
 def parse_args():
     """解析命令行参数"""
@@ -261,8 +268,10 @@ class LargeModelDatasetRunner:
         """
         
         # 使用客户端调用API
-        client = self.config.get_client()
-        
+        client = OpenAI(
+            base_url="https://api.bianxie.ai/v1",
+            api_key=get_api_key("usage/bianxie"),
+            )
         try:
             response = client.chat.completions.create(
                 # model="openai/gpt-4o",
@@ -619,7 +628,7 @@ if __name__ == "__main__":
         model=yaml_config["models"]["large_model"],
         api_key_path=yaml_config["api"]["large_key_path"],
         prompt_path="prompt/direct_solve_prompt.txt",
-        api_base=yaml_config["api"]["large_base_url"]
+        api_base=yaml_config["api"]["large_api_base_url"]
     )
     
     # 检查是否进行数据集处理

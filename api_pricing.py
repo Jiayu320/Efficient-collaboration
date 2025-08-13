@@ -1,7 +1,3 @@
-'''
-管理不同API模型的价格费率
-该文件提供集中化的API价格管理，方便价格调整
-'''
 from typing import Dict, Any
 
 def get_model_pricing(model_name: str) -> Dict[str, float]:
@@ -20,30 +16,10 @@ def get_model_pricing(model_name: str) -> Dict[str, float]:
     # Claude模型价格
     if "claude-3-5" in model_name_lower or "claude-3.5" in model_name_lower or "claude-3-5-sonnet" in model_name_lower:
         return {"prompt": 3.0, "completion": 15.0}
-    elif "claude-3" in model_name_lower or "claude3" in model_name_lower:
-        return {"prompt": 3.0, "completion": 15.0}
-    elif "claude-2" in model_name_lower or "claude2" in model_name_lower:
-        return {"prompt": 8.0, "completion": 24.0}
     
     # OpenAI模型价格
     elif "gpt-4o" in model_name_lower:
         return {"prompt": 2.5, "completion": 10.0}
-    elif "gpt-4" in model_name_lower:
-        return {"prompt": 30.0, "completion": 60.0}
-    elif "gpt-3.5" in model_name_lower:
-        return {"prompt": 0.5, "completion": 1.5}
-    
-    # 通义千问系列
-    elif "qwen-2.5-7b" in model_name_lower or "qwen2.5-7b" in model_name_lower or "qwen3-1.7b" in model_name_lower:
-        return {"prompt": 0.04, "completion": 0.10}
-    elif "qwen3-7b" in model_name_lower:
-        return {"prompt": 0.15, "completion": 0.15}
-    elif "qwen3-14b" in model_name_lower or "qwen-3-14b" in model_name_lower:
-        return {"prompt": 0.30, "completion": 0.30}
-    elif "qwen3-72b" in model_name_lower:
-        return {"prompt": 0.9, "completion": 0.9}
-    elif "qwen3-235b" in model_name_lower or "qwen-3-235b" in model_name_lower:
-        return {"prompt": 3.0, "completion": 3.0}
     
     # DeepSeek系列
     elif "deepseek-r1" in model_name_lower:

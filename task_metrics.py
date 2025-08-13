@@ -1,6 +1,3 @@
-'''
-计算任务规划指标的工具函数
-'''
 import networkx as nx
 from collections import defaultdict, deque
 

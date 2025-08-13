@@ -1,10 +1,3 @@
-"""
-生成训练数据集，基于现有的协作执行逻辑
-1. Router模型先生成任务计划
-2. 大小模型执行并判断正确性
-3. 收集各种指标生成数据集
-"""
-
 import os
 import json
 import time
@@ -190,8 +183,8 @@ def main():
     # 解析命令行参数
     parser = argparse.ArgumentParser(description="生成训练数据集")
     parser.add_argument("--config", type=str, default="config.yaml", help="配置文件路径")
-    parser.add_argument("--input", type=str, default="dataset/used_dataset/s1k1_1.json", help="输入数据集路径")
-    parser.add_argument("--output", type=str, default="dataset/generated_data/s1k1_1_training.json", help="输出数据集路径")
+    parser.add_argument("--input", type=str, default="dataset\\generated_data\\s1k1_1_false_results.json", help="输入数据集路径")
+    parser.add_argument("--output", type=str, default="dataset\\generated_data\\s1k1_1_training_0.json", help="输出数据集路径")
     parser.add_argument("--limit", type=int, default=None, help="处理的最大问题数量")
     parser.add_argument("--workers", type=int, default=4, help="并行工作线程数")
     

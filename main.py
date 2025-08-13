@@ -2,6 +2,7 @@ import os
 import time
 from config import ModelConfig, load_config, parse_args
 from performance import PerformanceTracker, calculate_performance_metrics
+from output_performance import generate_theoretical_performance_report
 from execution import (
     run_parallel_execution, print_results, wait_for_completion_and_get_final_result,
     judge_question_difficulty, call_small_model_directly, generate_task_dependency_report,
@@ -185,10 +186,15 @@ def main():
             
             correctness_report = f"## 答案正确性判断\n\n判断结果: 答案{correctness_status}\n\n模型反馈: {judge_result}\n\n"
         
-        # 计算并打印性能指标
+        # 计算并打印实际性能指标
         performance_report = calculate_performance_metrics(stats_tracker)
-        print("\n性能统计:")
+        print("\n实际性能统计:")
         print(performance_report)
+        
+        # 生成基于理论模型的性能报告
+        theoretical_report = generate_theoretical_performance_report(tasks, config)
+        print("\n理论性能模型分析:")
+        print(theoretical_report)
         
         # 生成任务依赖关系报告
         dependency_report = generate_task_dependency_report(tasks)
@@ -196,7 +202,7 @@ def main():
         print(dependency_report)
         
         # 将最终结果保存到文件
-        output_file = save_result_to_file(final_result, config, workers, correctness_report, performance_report, dependency_report)
+        output_file = save_result_to_file(final_result, config, workers, correctness_report, performance_report, dependency_report, theoretical_report)
         if output_file:
             print(f"结果已保存至: {output_file}")
             
