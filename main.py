@@ -48,7 +48,7 @@ def main():
     enable_threshold = yaml_config["system"].get("enable_threshold", False)
     if use_local_router:
         prompt_path = "prompt/generate_prompt.txt"
-        threshold = yaml_config["models"]["local_threshold"]
+        threshold = yaml_config["models"]["threshold"]
     else:
         prompt_path = "prompt/generate_prompt_ori.txt"
         threshold = yaml_config["models"]["threshold"]

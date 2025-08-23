@@ -322,18 +322,18 @@ class DatasetRunner:
                 
                 # 从理论报告中提取关键时间数据
                 try:
-                    # 提取总执行时间
-                    total_time_match = re.search(r"总执行时间\s*\|\s*([\d.]+)", report_text)
+                    # 提取并行总时间（实际的理论执行总时间）
+                    total_time_match = re.search(r"并行总时间\s*\|.*?\|\s*([\d.]+)\s*\|", report_text)
                     if total_time_match:
                         theoretical_results["total_execution_time"] += float(total_time_match.group(1))
                         
                     # 提取规划阶段时间
-                    planner_time_match = re.search(r"规划阶段.*?\|\s*([\d.]+)", report_text)
+                    planner_time_match = re.search(r"规划模型.*?\|\s*1\s*\|\s*([\d.]+)", report_text)
                     if planner_time_match:
                         theoretical_results["planner_time"] += float(planner_time_match.group(1))
                         
-                    # 提取任务执行阶段时间
-                    task_time_match = re.search(r"任务执行阶段\s*\|\s*([\d.]+)", report_text)
+                    # 提取任务总执行时间（累计）
+                    task_time_match = re.search(r"任务总执行时间\(累计\)\s*\|\s*([\d.]+)", report_text)
                     if task_time_match:
                         theoretical_results["task_execution_time"] += float(task_time_match.group(1))
                         
@@ -348,8 +348,9 @@ class DatasetRunner:
                         theoretical_results["parallel_speedup"] += float(speedup_match.group(1))
                         
                     # 计数有效理论报告数据
-                    if total_time_match or planner_time_match or task_time_match:
+                    if total_time_match and sequential_time_match:  # 这两个是必须的最小数据集
                         theoretical_results["count"] += 1
+                        print(f"成功提取理论性能数据: 总时间={total_time_match.group(1)}, 顺序时间={sequential_time_match.group(1)}")
                 except Exception as e:
                     print(f"提取理论报告数据出错: {e}")
                 
@@ -406,11 +407,16 @@ class DatasetRunner:
         if theoretical_results["count"] > 0:
             report += f"## 理论性能指标\n\n"
             report += f"- 平均理论执行时间: {avg_theoretical['total_execution_time']:.3f} 秒\n"
-            report += f"- 平均规划阶段时间: {avg_theoretical['planner_time']:.3f} 秒 ({(avg_theoretical['planner_time']/avg_theoretical['total_execution_time']*100):.1f}%)\n"
-            report += f"- 平均任务执行时间: {avg_theoretical['task_execution_time']:.3f} 秒 ({(avg_theoretical['task_execution_time']/avg_theoretical['total_execution_time']*100):.1f}%)\n"
+            
+            # 添加除零保护
+            planner_percentage = (avg_theoretical['planner_time']/avg_theoretical['total_execution_time']*100) if avg_theoretical['total_execution_time'] > 0.001 else 0
+            task_percentage = (avg_theoretical['task_execution_time']/avg_theoretical['total_execution_time']*100) if avg_theoretical['total_execution_time'] > 0.001 else 0
+            real_time_ratio = (avg_theoretical['total_execution_time']/avg_time) if avg_time > 0.001 else 0
+            
+            
             report += f"- 平均顺序执行时间: {avg_theoretical['sequential_time']:.3f} 秒\n"
             report += f"- 平均并行加速比: {avg_theoretical['parallel_speedup']:.2f}x\n"
-            report += f"- 理论与实际执行时间比例: {(avg_theoretical['total_execution_time']/avg_time):.2f}x\n\n"
+            report += f"- 理论与实际执行时间比例: {real_time_ratio:.2f}x\n\n"
         
         # 添加TTFT和生成速度统计
         report += f"## 性能指标\n\n"

@@ -165,7 +165,18 @@ def test_simulate_task_execution():
     planner_time = 4.0
     
     print("\n=== 测试 simulate_task_execution 函数 ===")
-    result = simulate_task_execution(sorted_tasks, dependency_graph, task_execution_times, max_workers, planner_time)
+    # 创建模拟配置对象
+    class MockConfig:
+        def __init__(self):
+            self.router_model = "claude-3-5-sonnet-latest"
+            self.small_model = "deepseek-chat"
+            self.large_model = "gpt-4o"
+            self.use_local_router = False
+            self.local_router_model = "llama3-8b"
+            self.threshold = 3
+            
+    mock_config = MockConfig()
+    result = simulate_task_execution(sorted_tasks, dependency_graph, task_execution_times, max_workers, planner_time, mock_config)
     
     print(f"总执行时间: {result['total_time']:.3f}秒")
     print("任务时间线:")

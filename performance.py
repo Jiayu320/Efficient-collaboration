@@ -62,7 +62,7 @@ class PerformanceTracker:
                 "large_model": get_model_pricing("gpt-4o"),
                 "router_model": get_model_pricing("claude-3-5-sonnet")
             }
-        print("DEBUG: 使用的模型费率:", self.cost_rates)
+        # print("DEBUG: 使用的模型费率:", self.cost_rates)
         
     
     def update_token_usage(self, model_type, prompt_tokens, completion_tokens):

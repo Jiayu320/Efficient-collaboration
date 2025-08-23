@@ -33,13 +33,13 @@ def get_model_performance(model_name: str) -> Dict[str, float]:
     elif "llama3-8b" in model_name_lower or "llama-3-8b" in model_name_lower:
         return {"latency": 0.44, "throughput": 3422}
     # 本地模型
-    elif "local" in model_name_lower:
-        return {"latency": 0.5, "throughput": 100.0}
+    elif "saves" in model_name_lower:
+        return {"latency": 0.5, "throughput": 71.2}
 
     # 默认性能（当无法识别模型时使用）
     else:
         print(f"警告: 未识别的模型 '{model_name}'，使用默认性能")
-        return {"latency": 0.5, "throughput": 100.0}
+        return {"latency": 0.5, "throughput": 71.2}
 
 def calculate_theoretical_time(model_name: str, tokens: int) -> Dict[str, float]:
     """
@@ -178,20 +178,22 @@ def generate_theoretical_performance_report(tasks, config, planner_output=None):
         task_execution_times[step_id] = time_data['total_time']
     
     # 计算任务的最早开始和完成时间，模拟真实调度过程
-    max_workers = 4  # 默认并行工作线程数，可以从config中获取
-    
+    max_workers = 10  # 默认并行工作线程数，可以从config中获取
+
     # 模拟任务执行过程
     simulation_result = simulate_task_execution(
         sorted_tasks, 
         dependency_graph, 
         task_execution_times, 
         max_workers, 
-        planner_total_time
+        planner_total_time,
+        config
     )
     
     total_execution_time = simulation_result['total_time']
     task_timelines = simulation_result['task_timelines']
     worker_allocation = simulation_result['worker_allocation']
+    task_planning_times = simulation_result['task_planning_times']
     
     # 计算各模型的理论时间总和（不考虑并行）
     small_model_theoretical_time = sum(
@@ -221,9 +223,43 @@ def generate_theoretical_performance_report(tasks, config, planner_output=None):
     report += "## 执行流程理论时间\n\n"
     report += "| 阶段 | 理论时间 (秒) | 百分比 |\n"
     report += "| --- | --- | --- |\n"
-    report += f"| 规划阶段 (Planner) | {planner_total_time:.3f} | {(planner_total_time/total_execution_time)*100:.1f}% |\n"
-    report += f"| 任务执行阶段 | {total_execution_time - planner_total_time:.3f} | {((total_execution_time - planner_total_time)/total_execution_time)*100:.1f}% |\n"
-    report += f"| 总执行时间 | {total_execution_time:.3f} | 100% |\n\n"
+    report += f"| 规划阶段总时间 (Planner) | {planner_total_time:.3f} | 100% |\n"
+    
+    # 计算有多少任务在规划阶段就开始执行
+    tasks_started_during_planning = sum(1 for task_id, timeline in task_timelines.items() if timeline['start_time'] < planner_total_time)
+    tasks_percentage = (tasks_started_during_planning / len(task_timelines)) * 100 if task_timelines else 0
+    
+    # 最后一个任务规划的时间
+    last_planning_time = max(task_planning_times.values()) if task_planning_times else 0
+    
+    # 最后一个任务完成的时间
+    last_task_completion_time = max(timeline['end_time'] for timeline in task_timelines.values()) if task_timelines else 0
+    
+    # 计算规划与执行的重叠时间（从第一个任务规划完成到最后一个任务规划完成这段时间内有多少任务在执行）
+    first_task_planning_time = min(task_planning_times.values()) if task_planning_times else 0
+    tasks_executing_during_planning = sum(1 for task_id, timeline in task_timelines.items() if timeline['start_time'] < last_planning_time)
+    
+    # 规划阶段执行的任务比例
+    planning_execution_ratio = (tasks_executing_during_planning / len(task_timelines)) * 100 if task_timelines else 0
+    
+    # 理论并行效率（任务总执行时间 / 实际总时间）
+    total_task_time = sum(task_execution_times.values())
+    parallel_efficiency = (total_task_time / last_task_completion_time) * 100 if last_task_completion_time > 0 else 0
+    
+    # 流水线效率（规划与执行重叠时的加速）
+    if planner_total_time + total_task_time > 0 and last_task_completion_time > 0:
+        pipeline_speedup = (planner_total_time + total_task_time) / last_task_completion_time
+    else:
+        pipeline_speedup = 1.0
+    
+    report += f"| 规划过程中启动的任务数 | {tasks_started_during_planning} / {len(task_timelines)} | {tasks_percentage:.1f}% |\n"
+    report += f"| 规划与执行重叠的任务数 | {tasks_executing_during_planning} / {len(task_timelines)} | {planning_execution_ratio:.1f}% |\n"
+    report += f"| 第一个任务规划完成时间 | {first_task_planning_time:.3f} | - |\n"
+    report += f"| 最后一个任务规划完成时间 | {last_planning_time:.3f} | - |\n"
+    report += f"| 最后一个任务执行完成时间 | {last_task_completion_time:.3f} | - |\n"
+    report += f"| 任务总执行时间(累计) | {total_task_time:.3f} | - |\n"
+    report += f"| 流水线加速比 | {pipeline_speedup:.2f}x | - |\n"
+    report += f"| 并行效率 | {parallel_efficiency:.1f}% | - |\n\n"
     
     # 添加任务类型理论时间
     report += "## 任务类型理论时间\n\n"
@@ -291,7 +327,7 @@ def generate_theoretical_performance_report(tasks, config, planner_output=None):
         
     return report
 
-def simulate_task_execution(sorted_tasks, dependency_graph, task_execution_times, max_workers, planner_time):
+def simulate_task_execution(sorted_tasks, dependency_graph, task_execution_times, max_workers, planner_time, config=None):
     """
     模拟并行任务执行，考虑依赖关系和工作线程数限制
     
@@ -300,19 +336,17 @@ def simulate_task_execution(sorted_tasks, dependency_graph, task_execution_times
         dependency_graph: 任务依赖关系图
         task_execution_times: 每个任务的执行时间
         max_workers: 最大并行工作线程数
-        planner_time: 规划阶段的时间
+        planner_time: 规划阶段的总时间（包含所有任务的规划）
+        config: 模型配置对象，用于获取路由模型名称
         
     返回:
         包含总执行时间和任务时间线的字典
     """
-    # 待处理任务队列
-    pending_tasks = set([step_id for step_id, _ in sorted_tasks])
-    
-    # 正在执行的任务
-    running_tasks = {}  # step_id -> (start_time, end_time)
-    
-    # 已完成任务
-    completed_tasks = set()
+    # 检查是否提供了配置对象
+    if config is None:
+        # 如果没有提供配置，导入默认配置
+        import config as config_module
+        config = config_module.Config()
     
     # 记录每个任务的开始时间和结束时间
     task_timelines = {}
@@ -320,101 +354,99 @@ def simulate_task_execution(sorted_tasks, dependency_graph, task_execution_times
     # 工作线程分配情况
     worker_allocation = {}  # step_id -> worker_id
     
-    # 当前时间（从规划结束时开始）
-    current_time = planner_time
+    # 已完成任务
+    completed_tasks = {}  # step_id -> 完成时间
     
-    # 工作线程状态，初始全部空闲
-    workers = [{"id": i+1, "busy_until": 0} for i in range(max_workers)]
+    # 获取路由模型名称和性能参数
+    router_model_name = config.router_model if hasattr(config, 'router_model') and not (hasattr(config, 'use_local_router') and config.use_local_router) else config.local_router_model if hasattr(config, 'local_router_model') else "claude-3-5-sonnet-latest"
+    router_performance = get_model_performance(router_model_name)
+    router_latency = router_performance["latency"]
+    router_throughput = router_performance["throughput"]
     
-    # 模拟执行过程
-    while pending_tasks or running_tasks:
-        # 1. 检查已完成的任务
-        newly_completed = []
-        for step_id, (start_time, end_time) in list(running_tasks.items()):
-            if end_time <= current_time:
-                completed_tasks.add(step_id)
-                newly_completed.append(step_id)
-                del running_tasks[step_id]
-        
-        # 2. 找出可以开始的任务
-        ready_tasks = []
-        for step_id in pending_tasks:
-            dependencies = dependency_graph.get(step_id, [])
-            if all(dep in completed_tasks for dep in dependencies if dep):
-                # 计算任务优先级（依赖数量越少优先级越高）
-                priority = (len(dependencies), int(step_id))
-                ready_tasks.append((priority, step_id))
-        
-        # 按优先级排序
-        ready_tasks.sort()
-        
-        # 3. 分配任务到空闲的工作线程
-        available_workers = [w for w in workers if w["busy_until"] <= current_time]
-        
-        tasks_to_start = min(len(ready_tasks), len(available_workers))
-        
-        if tasks_to_start > 0:
-            for i in range(tasks_to_start):
-                _, step_id = ready_tasks[i]
-                worker = available_workers[i]
-                
-                # 获取任务执行时间
-                execution_time = task_execution_times[step_id]
-                
-                # 更新工作线程状态
-                worker["busy_until"] = current_time + execution_time
-                
-                # 记录任务时间线
-                task_timelines[step_id] = {
-                    "start_time": current_time,
-                    "end_time": current_time + execution_time
-                }
-                
-                # 记录任务与工作线程的分配关系
-                worker_allocation[step_id] = worker["id"]
-                
-                # 将任务从待处理移到正在执行
-                pending_tasks.remove(step_id)
-                running_tasks[step_id] = (current_time, current_time + execution_time)
-        
-        # 4. 如果没有任务可以开始或没有空闲工作线程，向前推进时间
-        if not pending_tasks or not running_tasks:
-            # 所有任务已完成
-            if not running_tasks:
-                break
-                
-            # 向前推进到下一个任务完成的时间
-            next_completion_time = min(end_time for _, end_time in running_tasks.values())
-            current_time = next_completion_time
-        else:
-            # 有任务在运行，找出下一个可能的事件时间点
-            next_event_times = []
-            
-            # 下一个任务完成的时间
-            if running_tasks:
-                next_event_times.append(min(end_time for _, end_time in running_tasks.values()))
-                
-            # 下一个工作线程空闲的时间
-            if len(ready_tasks) > len(available_workers):  # 还有等待分配的任务
-                busy_workers = [w for w in workers if w["busy_until"] > current_time]
-                if busy_workers:
-                    next_event_times.append(min(w["busy_until"] for w in busy_workers))
-            
-            # 移动到下一个事件时间点
-            if next_event_times:
-                current_time = min(next_event_times)
-            else:
-                # 如果没有下一个事件点，说明所有任务都在等待依赖完成
-                # 这种情况通常表示存在循环依赖，但为了避免死锁，我们稍微推进时间
-                current_time += 0.001
+    # 第一个任务的规划时间需要加上初始延迟
+    cumulative_time = router_latency
     
-    # 总执行时间
+    # 存储每个任务的plan输出时间点
+    task_available_time = {}
+    
+    # 按照任务ID顺序重构每个步骤的XML内容并计算规划输出时间点
+    for i, (step_id, task_data) in enumerate(sorted_tasks):
+        # 重构每个任务的XML格式
+        task_content = task_data.get('Task', f'步骤 {step_id}')
+        difficulty = task_data.get('Difficulty', '1')
+        token_str = task_data.get('Token', '30')
+        rely = task_data.get('Rely', '')
+        
+        # 重构Step标签 - 格式如: <Step ID="1" Task="..." Difficulty="2" Token="25" Rely=""/>
+        step_xml = f'<Step ID="{step_id}" Task="{task_content}" Difficulty="{difficulty}" Token="{token_str}" Rely="{rely}"/>'
+        
+        # 估算该XML内容的token数量
+        # 根据XML字符长度估算token数 (大约4个字符/token)
+        step_tokens = len(step_xml) / 4
+        
+        # 计算该步骤规划所需的时间
+        step_planning_time = step_tokens / router_throughput
+        
+        # 累加规划时间（从延迟开始）
+        task_available_time[step_id] = cumulative_time
+        cumulative_time += step_planning_time
+    
+    # 确保总规划时间与预期相符
+    planning_scale_factor = planner_time / cumulative_time if cumulative_time > 0 else 1
+    # 重新调整每个任务的规划时间
+    for step_id in task_available_time:
+        task_available_time[step_id] *= planning_scale_factor
+    
+    # 按照新算法逻辑实现任务执行时间计算
+    # 核心思想：一旦任务被规划出来且其依赖任务完成，就可以立即开始执行
+    # 依次处理每个任务，计算其开始时间和结束时间
+    for step_id, task_data in sorted_tasks:
+        # 获取任务的依赖关系
+        dependencies = dependency_graph.get(step_id, [])
+        
+        # 计算任务最早可以开始的时间
+        # 1. 任务被规划出来的时间点 - 这是任务可执行的前提条件
+        plan_time = task_available_time[step_id]
+        
+        # 2. 所有依赖任务的完成时间 - 只有依赖任务都完成，才能开始执行当前任务
+        dependency_finish_time = 0
+        if dependencies and dependencies != ['']: 
+            dep_times = [completed_tasks.get(dep, 0) for dep in dependencies if dep]
+            if dep_times:  # 如果有实际依赖
+                dependency_finish_time = max(dep_times)
+        
+        # 任务开始时间 = max(任务计划完成时间, 所有依赖任务的完成时间)
+        # 这体现了"流式执行"的特点：一旦任务被规划出来且依赖满足，就可以立即开始执行
+        start_time = max(plan_time, dependency_finish_time)
+        
+        # 计算任务执行时间（基于token数和模型性能）
+        execution_time = task_execution_times[step_id]
+        
+        # 任务结束时间 = 开始时间 + 执行时间
+        end_time = start_time + execution_time
+        
+        # 记录任务时间线，包括开始和结束时间
+        task_timelines[step_id] = {
+            "start_time": start_time,
+            "end_time": end_time
+        }
+        
+        # 记录任务完成时间，供后续依赖于该任务的任务使用
+        completed_tasks[step_id] = end_time
+        
+        # 分配工作线程
+        # 注意：这里简化了工作线程分配逻辑，实际上可能需要考虑更复杂的调度策略
+        # 这里仅使用step_id的模值作为线程ID，实际系统中会有更智能的线程管理
+        worker_allocation[step_id] = int(step_id) % max_workers + 1
+    
+    # 总执行时间为所有任务中结束时间最晚的
     total_time = max(timeline["end_time"] for timeline in task_timelines.values()) if task_timelines else planner_time
     
     return {
         "total_time": total_time,
         "task_timelines": task_timelines,
-        "worker_allocation": worker_allocation
+        "worker_allocation": worker_allocation,
+        "task_planning_times": task_available_time  # 返回每个任务的规划完成时间
     }
 
 def generate_gantt_chart(task_timelines, max_workers, width=80):
