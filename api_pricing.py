@@ -13,6 +13,10 @@ def get_model_pricing(model_name: str) -> Dict[str, float]:
     # 标准化模型名称为小写以便匹配
     model_name_lower = model_name.lower()
     
+    # 移除可能存在的路径或平台前缀（如 meta-llama/、deepseek/、openai/ 等）
+    if "/" in model_name_lower:
+        model_name_lower = model_name_lower.split("/")[1]
+    
     # Claude模型价格
     if "claude-3-5" in model_name_lower or "claude-3.5" in model_name_lower or "claude-3-5-sonnet" in model_name_lower:
         return {"prompt": 3.0, "completion": 15.0}
@@ -28,14 +32,16 @@ def get_model_pricing(model_name: str) -> Dict[str, float]:
         return {"prompt": 0.25, "completion": 0.85}
     elif "deepseek-reasoner" in model_name_lower:
         return {"prompt": 0.272, "completion": 0.272}
-
-    elif "llama3-8b" in model_name_lower or "llama-3-8b" in model_name_lower:
+    
+    # Llama系列
+    elif "llama3-8b" in model_name_lower or "llama-3-8b" in model_name_lower or "llama3.1-8b" in model_name_lower or "llama-3.1-8b" in model_name_lower:
         return {"prompt": 0.03, "completion": 0.06}
+    
     # 本地模型
     elif "local" in model_name_lower:
         return {"prompt": 0.0, "completion": 0.0}
     
     # 默认价格（当无法识别模型时使用）
     else:
-        print(f"警告: 未识别的模型 '{model_name}'，使用默认价格")
+        print(f"警告: 未识别的模型 '{model_name}'，使用默认价格。请在 api_pricing.py 中添加此模型的价格信息。")
         return {"prompt": 0.5, "completion": 1.0}

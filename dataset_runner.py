@@ -1,6 +1,8 @@
 import os
 import json
 import time
+import re
+import pathlib
 from tqdm import tqdm
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -11,6 +13,57 @@ from execution import (
     run_parallel_execution, wait_for_completion_and_get_final_result,
     judge_question_difficulty, call_small_model_directly, LLM_judge
 )
+
+
+def build_report_path(base_dir="data_reports", is_dataset=True, dataset_name="", config=None, timestamp=None):
+    """构建层次化的报告路径
+    
+    参数:
+        base_dir: 基础目录，默认为data_reports
+        is_dataset: 是否为数据集报告(True)或单个问题报告(False)
+        dataset_name: 数据集名称，仅当is_dataset=True时有效
+        config: 模型配置对象
+        timestamp: 时间戳，如果为None则自动生成
+        
+    返回:
+        完整的目录路径
+    """
+    if timestamp is None:
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        
+    # 获取模型名称，避免路径中的非法字符
+    def clean_name(name):
+        if name is None:
+            return "unknown"
+        # 提取模型名称的核心部分
+        if "/" in name:
+            name = name.split("/")[-1]
+        # 移除可能导致路径问题的字符
+        return ''.join(c for c in name if c.isalnum() or c in '_-.')
+    
+    # 获取模型名称
+    router_name = "local_router" if config and config.use_local_router else clean_name(config.router_model if config else None)
+    large_model = clean_name(config.large_model if config else None)
+    small_model = clean_name(config.small_model if config else None)
+    
+    # 构建路径
+    path_parts = [base_dir]
+    
+    if is_dataset:
+        # 数据集路径结构: data_reports/dataset/数据集名称/router/large/small/时间戳
+        dataset_name = pathlib.Path(dataset_name).stem if dataset_name else "unknown_dataset"
+        path_parts.extend(["dataset", dataset_name, router_name, large_model, small_model, timestamp])
+    else:
+        # 单个问题路径结构: data_reports/single/router/large/small/时间戳
+        path_parts.extend(["single", router_name, large_model, small_model, timestamp])
+    
+    # 构建完整路径
+    full_path = os.path.join(*path_parts)
+    
+    # 确保目录存在
+    os.makedirs(full_path, exist_ok=True)
+    
+    return full_path
 
 
 class DatasetRunner:
@@ -145,6 +198,11 @@ class DatasetRunner:
                 # 保存任务计划和执行结果
                 result["tasks"] = tasks
                 
+                # 生成理论性能报告
+                from output_performance import generate_theoretical_performance_report
+                theoretical_report = generate_theoretical_performance_report(tasks, self.config, stats_tracker.planner_output)
+                result["theoretical_report"] = theoretical_report
+                
                 # 计算任务规划指标
                 from task_metrics import calculate_task_metrics
                 task_metrics = calculate_task_metrics(tasks)
@@ -240,16 +298,75 @@ class DatasetRunner:
         total_plan_tokens = 0.0
         task_planning_results_count = 0
         
+        # 理论性能指标统计
+        theoretical_results = {
+            "total_execution_time": 0.0,  # 总执行时间
+            "planner_time": 0.0,          # 规划时间
+            "task_execution_time": 0.0,   # 任务执行时间
+            "sequential_time": 0.0,       # 顺序执行总时间
+            "parallel_speedup": 0.0,      # 并行加速比
+            "count": 0                    # 有效数据计数
+        }
+        
         for result in self.results:
+            # 任务规划指标统计
             if "total_tasks_num" in result and "compression_ratio" in result and "avg_task_plan_tokens" in result:
                 total_tasks_count += result["total_tasks_num"]
                 total_compression_ratio += result["compression_ratio"]
                 total_plan_tokens += result["avg_task_plan_tokens"]
                 task_planning_results_count += 1
+            
+            # 提取理论性能报告中的关键指标
+            if "theoretical_report" in result and result["theoretical_report"]:
+                report_text = result["theoretical_report"]
                 
+                # 从理论报告中提取关键时间数据
+                try:
+                    # 提取总执行时间
+                    total_time_match = re.search(r"总执行时间\s*\|\s*([\d.]+)", report_text)
+                    if total_time_match:
+                        theoretical_results["total_execution_time"] += float(total_time_match.group(1))
+                        
+                    # 提取规划阶段时间
+                    planner_time_match = re.search(r"规划阶段.*?\|\s*([\d.]+)", report_text)
+                    if planner_time_match:
+                        theoretical_results["planner_time"] += float(planner_time_match.group(1))
+                        
+                    # 提取任务执行阶段时间
+                    task_time_match = re.search(r"任务执行阶段\s*\|\s*([\d.]+)", report_text)
+                    if task_time_match:
+                        theoretical_results["task_execution_time"] += float(task_time_match.group(1))
+                        
+                    # 提取顺序总时间
+                    sequential_time_match = re.search(r"顺序总时间\s*\|.*?\|\s*([\d.]+)", report_text)
+                    if sequential_time_match:
+                        theoretical_results["sequential_time"] += float(sequential_time_match.group(1))
+                        
+                    # 提取并行加速比
+                    speedup_match = re.search(r"并行总时间\s*\|.*?\|.*?\|\s*([\d.]+)x", report_text)
+                    if speedup_match:
+                        theoretical_results["parallel_speedup"] += float(speedup_match.group(1))
+                        
+                    # 计数有效理论报告数据
+                    if total_time_match or planner_time_match or task_time_match:
+                        theoretical_results["count"] += 1
+                except Exception as e:
+                    print(f"提取理论报告数据出错: {e}")
+                
+        # 计算平均值
         avg_tasks_num = total_tasks_count / task_planning_results_count if task_planning_results_count > 0 else 0
         avg_compression_ratio = total_compression_ratio / task_planning_results_count if task_planning_results_count > 0 else 0
         avg_plan_tokens = total_plan_tokens / task_planning_results_count if task_planning_results_count > 0 else 0
+        
+        # 计算理论性能平均值
+        theory_count = theoretical_results["count"]
+        avg_theoretical = {
+            "total_execution_time": theoretical_results["total_execution_time"] / theory_count if theory_count > 0 else 0,
+            "planner_time": theoretical_results["planner_time"] / theory_count if theory_count > 0 else 0,
+            "task_execution_time": theoretical_results["task_execution_time"] / theory_count if theory_count > 0 else 0,
+            "sequential_time": theoretical_results["sequential_time"] / theory_count if theory_count > 0 else 0,
+            "parallel_speedup": theoretical_results["parallel_speedup"] / theory_count if theory_count > 0 else 0,
+        }
         
         # 计算平均值
         avg_cost = total_cost / len(self.results) if self.results else 0
@@ -284,6 +401,16 @@ class DatasetRunner:
         report += f"- 平均任务步骤数: {avg_tasks_num:.2f}\n"
         report += f"- 平均压缩比例: {avg_compression_ratio:.2%}\n"
         report += f"- 平均每步骤Token限制: {avg_plan_tokens:.2f} tokens\n\n"
+        
+        # 添加理论性能指标（如果有）
+        if theoretical_results["count"] > 0:
+            report += f"## 理论性能指标\n\n"
+            report += f"- 平均理论执行时间: {avg_theoretical['total_execution_time']:.3f} 秒\n"
+            report += f"- 平均规划阶段时间: {avg_theoretical['planner_time']:.3f} 秒 ({(avg_theoretical['planner_time']/avg_theoretical['total_execution_time']*100):.1f}%)\n"
+            report += f"- 平均任务执行时间: {avg_theoretical['task_execution_time']:.3f} 秒 ({(avg_theoretical['task_execution_time']/avg_theoretical['total_execution_time']*100):.1f}%)\n"
+            report += f"- 平均顺序执行时间: {avg_theoretical['sequential_time']:.3f} 秒\n"
+            report += f"- 平均并行加速比: {avg_theoretical['parallel_speedup']:.2f}x\n"
+            report += f"- 理论与实际执行时间比例: {(avg_theoretical['total_execution_time']/avg_time):.2f}x\n\n"
         
         # 添加TTFT和生成速度统计
         report += f"## 性能指标\n\n"
@@ -329,23 +456,34 @@ class DatasetRunner:
         
         return report
     
-    def save_report(self, output_dir="dataset_reports", timestamp=None):
+    def save_report(self, output_dir=None, timestamp=None):
         """保存处理报告到文件
         
         参数:
-            output_dir: 输出目录
+            output_dir: 输出目录，如果为None，将使用层次化的目录结构
             timestamp: 如果提供则使用该时间戳，否则生成新时间戳
             
         返回:
             报告文件路径
         """
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-            
         if timestamp is None:
             timestamp = time.strftime("%Y%m%d_%H%M%S")
             
-        report_file = os.path.join(output_dir, f"dataset_report_{timestamp}.md")
+        # 使用层次化的目录结构
+        # 从数据集路径获取数据集名称
+        dataset_name = os.path.basename(self.dataset_path)
+        
+        # 构建层次化的路径结构
+        output_dir = build_report_path(
+            base_dir="data_reports", 
+            is_dataset=True,
+            dataset_name=dataset_name,
+            config=self.config,
+            timestamp=timestamp
+        )
+        
+        # 报告文件路径
+        report_file = os.path.join(output_dir, f"dataset_report.md")
         
         # 生成报告
         report = self.generate_report()
@@ -356,16 +494,35 @@ class DatasetRunner:
         
         print(f"报告已保存至: {report_file}")
         
-        # 生成可视化图表
-        # self.generate_visualizations(output_dir, timestamp)
+        # 创建理论性能报告目录
+        theory_dir = os.path.join(output_dir, "theoretical_reports")
+        if not os.path.exists(theory_dir):
+            os.makedirs(theory_dir)
+            
+        # 为每个问题保存单独的理论性能报告（如果有）
+        for i, result in enumerate(self.results):
+            if "theoretical_report" in result and result["theoretical_report"]:
+                problem_desc = result.get("problem", "")[:20].replace("/", "_").replace("\\", "_").strip()
+                problem_desc = ''.join(c for c in problem_desc if c.isalnum() or c in '_-')
+                if not problem_desc:
+                    problem_desc = f"problem_{i+1}"
+                
+                theory_report_file = os.path.join(theory_dir, f"theoretical_report_{i+1}_{problem_desc}.md")
+                with open(theory_report_file, 'w', encoding='utf-8') as f:
+                    f.write(f"# 问题 {i+1} 的理论性能分析报告\n\n")
+                    f.write(f"## 问题描述\n\n{result.get('problem', '')}\n\n")
+                    f.write(result["theoretical_report"])
+                print(f"问题 {i+1} 的理论性能报告已保存至: {theory_report_file}")
+                
+        print(f"所有理论性能报告已保存至目录: {theory_dir}")
         
         # 确保最终JSON结果是完整的
-        json_file = self.save_results_json("dataset_results", timestamp)
+        json_file = self.save_results_json(output_dir, timestamp)
         print(f"最终JSON结果已保存至: {json_file}")
         
         return report_file
     
-    def save_results_json(self, output_dir="dataset_results", timestamp=None):
+    def save_results_json(self, output_dir, timestamp=None):
         """将处理结果保存为JSON格式
         
         参数:
@@ -381,7 +538,7 @@ class DatasetRunner:
         if timestamp is None:
             timestamp = time.strftime("%Y%m%d_%H%M%S")
             
-        json_file = os.path.join(output_dir, f"dataset_results_{timestamp}.json")
+        json_file = os.path.join(output_dir, "dataset_results.json")
         
         # 如果文件不存在，创建一个空的JSON数组
         if not os.path.exists(json_file):
@@ -558,7 +715,7 @@ def run_dataset_evaluation(config, dataset_path, limit=None, workers=4):
         workers: 并行工作线程数
         
     返回:
-        元组: (报告文件路径, JSON结果文件路径)
+        报告文件路径
     """
     print(f"开始数据集评估: {dataset_path}")
     
@@ -568,13 +725,10 @@ def run_dataset_evaluation(config, dataset_path, limit=None, workers=4):
     # 创建数据集处理器
     runner = DatasetRunner(config, dataset_path, limit, workers)
     
-    # 处理数据集（会在内部使用时间戳保存每步的结果）
+    # 处理数据集
     runner.process_dataset()
     
-    # 保存最终报告，使用相同的时间戳
+    # 保存最终报告，使用层次化的目录结构
     report_file = runner.save_report(timestamp=timestamp)
     
-    # JSON文件路径
-    json_file = os.path.join("dataset_results", f"dataset_results_{timestamp}.json")
-    
-    return report_file, json_file
+    return report_file

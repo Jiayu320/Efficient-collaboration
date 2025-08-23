@@ -16,6 +16,9 @@ class PerformanceTracker:
         self.start_time = time.time()
         self.end_time = None
         
+        # 规划器(Planner)输出信息
+        self.planner_output = None
+        
         # 首个令牌响应时间统计
         self.ttft_metrics = {
             "small_model": [],
@@ -55,11 +58,11 @@ class PerformanceTracker:
         else:
             # 默认费率 - 使用新的API价格管理模块
             self.cost_rates = {
-                "small_model": get_model_pricing("qwen3-14b"),
+                "small_model": get_model_pricing("llama-3-8b-instruct"),
                 "large_model": get_model_pricing("gpt-4o"),
-                "router_model": get_model_pricing("qwen-2.5-7b-instruct")
+                "router_model": get_model_pricing("claude-3-5-sonnet")
             }
-        # print("使用费率: ", self.cost_rates)
+        print("DEBUG: 使用的模型费率:", self.cost_rates)
         
     
     def update_token_usage(self, model_type, prompt_tokens, completion_tokens):
@@ -92,6 +95,21 @@ class PerformanceTracker:
             self.ttft_metrics[model_type].append(ttft)
             # 更新总统计
             self.ttft_metrics["total"].append(ttft)
+    
+    def save_planner_output(self, prompt_tokens, completion_tokens, ttft):
+        """保存planner输出的性能信息
+        
+        参数:
+            prompt_tokens: 输入token数量
+            completion_tokens: 输出token数量
+            ttft: 首个令牌响应时间（秒）
+        """
+        self.planner_output = {
+            'prompt_tokens': prompt_tokens,
+            'completion_tokens': completion_tokens,
+            'ttft': ttft,
+            'total_tokens': prompt_tokens + completion_tokens
+        }
     
     def stop_tracking(self):
         """停止性能跟踪"""

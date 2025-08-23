@@ -98,6 +98,8 @@ def main():
             return
         except Exception as e:
             print(f"数据集处理过程中出错: {e}")
+            import traceback
+            traceback.print_exc()
             return
     
     # 单问题处理模式
@@ -192,7 +194,7 @@ def main():
         print(performance_report)
         
         # 生成基于理论模型的性能报告
-        theoretical_report = generate_theoretical_performance_report(tasks, config)
+        theoretical_report = generate_theoretical_performance_report(tasks, config, stats_tracker.planner_output)
         print("\n理论性能模型分析:")
         print(theoretical_report)
         

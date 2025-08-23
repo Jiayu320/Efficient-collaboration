@@ -10,6 +10,7 @@ import json
 import os
 import re
 import time
+import pathlib
 from collections import defaultdict
 import concurrent.futures
 from openai import OpenAI
@@ -573,6 +574,9 @@ def run_parallel_execution(query, config, workers=4):
         query: 要解决的问题
         config: 模型配置对象
         workers: 并行工作线程数
+        
+    返回:
+        (tasks, stats_tracker): 任务字典和性能统计跟踪器
     """
     global xml_buffer, tasks, completed_steps, futures, router_model_client
     
@@ -1236,7 +1240,57 @@ def call_large_model_directly(question, model_config, stats_tracker=None):
     """.format(question=question)
     return generate_step_result(prompt, "5", model_config, stats_tracker)
 
-def save_result_to_file(final_result, config, workers, correctness_report, performance_report, dependency_report):
+def build_report_path(base_dir="data_reports", is_dataset=False, dataset_name="", config=None, timestamp=None):
+    """构建层次化的报告路径
+    
+    参数:
+        base_dir: 基础目录，默认为data_reports
+        is_dataset: 是否为数据集报告(True)或单个问题报告(False)
+        dataset_name: 数据集名称，仅当is_dataset=True时有效
+        config: 模型配置对象
+        timestamp: 时间戳，如果为None则自动生成
+        
+    返回:
+        完整的目录路径
+    """
+    if timestamp is None:
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        
+    # 获取模型名称，避免路径中的非法字符
+    def clean_name(name):
+        if name is None:
+            return "unknown"
+        # 提取模型名称的核心部分
+        if "/" in name:
+            name = name.split("/")[-1]
+        # 移除可能导致路径问题的字符
+        return ''.join(c for c in name if c.isalnum() or c in '_-.')
+    
+    # 获取模型名称
+    router_name = "local_router" if config and config.use_local_router else clean_name(config.router_model if config else None)
+    large_model = clean_name(config.large_model if config else None)
+    small_model = clean_name(config.small_model if config else None)
+    
+    # 构建路径
+    path_parts = [base_dir]
+    
+    if is_dataset:
+        # 数据集路径结构: data_reports/dataset/数据集名称/router/large/small/时间戳
+        dataset_name = os.path.basename(dataset_name) if dataset_name else "unknown_dataset"
+        path_parts.extend(["dataset", dataset_name, router_name, large_model, small_model, timestamp])
+    else:
+        # 单个问题路径结构: data_reports/single/router/large/small/时间戳
+        path_parts.extend(["single", router_name, large_model, small_model, timestamp])
+    
+    # 构建完整路径
+    full_path = os.path.join(*path_parts)
+    
+    # 确保目录存在
+    os.makedirs(full_path, exist_ok=True)
+    
+    return full_path
+
+def save_result_to_file(final_result, config, workers, correctness_report, performance_report, dependency_report, theoretical_report=None):
     """将结果保存到文件
     
     参数:
@@ -1246,19 +1300,31 @@ def save_result_to_file(final_result, config, workers, correctness_report, perfo
         correctness_report: 正确性报告
         performance_report: 性能报告
         dependency_report: 依赖关系报告
+        theoretical_report: 理论性能报告（可选）
     """
     try:
-        output_dir = "results"
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
+        # 使用新的层次化目录结构
         timestamp = time.strftime("%Y%m%d_%H%M%S")
-        output_file = os.path.join(output_dir, f"result_{timestamp}.md")
+        output_dir = build_report_path(
+            base_dir="data_reports", 
+            is_dataset=False, 
+            config=config, 
+            timestamp=timestamp
+        )
+        
+        # 使用简化的文件名
+        output_file = os.path.join(output_dir, "result.md")
+        
         model_usage = f"使用小模型: {config.small_model}\n\n使用大模型: {config.large_model}\n\n使用路由模型: {config.router_model}\n\n"
         threshold_info = f"难度阈值: {config.threshold}\n\n工作线程数: {workers}\n\n"
         model_usage += threshold_info
         
-        # 将性能报告和依赖关系报告添加到最终结果中
+        # 将性能报告、依赖关系报告和理论性能报告添加到最终结果中
         final_result_with_stats = model_usage + "\n\n" + final_result + "\n\n" + correctness_report + performance_report + "\n\n" + dependency_report
+        
+        # 如果有理论性能报告，也添加进去
+        if theoretical_report:
+            final_result_with_stats += "\n\n" + theoretical_report
 
         with open(output_file, "w", encoding="utf-8") as f:
             f.write(final_result_with_stats)
