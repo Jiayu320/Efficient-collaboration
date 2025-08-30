@@ -1,5 +1,12 @@
+# Update 30/8/2025 from https://openrouter.ai/models
+
 from typing import Dict, Any, List, Tuple
 import heapq
+
+def calculate_average(values):
+    if not values:
+        return 0
+    return sum(values) / len(values)
 
 def get_model_performance(model_name: str) -> Dict[str, float]:
     """
@@ -16,22 +23,26 @@ def get_model_performance(model_name: str) -> Dict[str, float]:
     
     # Claude模型性能
     if "claude-3-5" in model_name_lower or "claude-3.5" in model_name_lower or "claude-3-5-sonnet" in model_name_lower:
-        return {"latency": 1.06, "throughput": 57.07}
-    
+        return {"latency": calculate_average([0.76, 1.41, 1.75, 1.54, 1.23]), "throughput": calculate_average([52.59, 49.44, 56.96, 45.58, 52.89])}
+
     # OpenAI模型性能
     elif "gpt-4o" in model_name_lower:
-        return {"latency": 0.61, "throughput": 58.71}
+        return {"latency": calculate_average([0.50, 0.97]), "throughput": calculate_average([110.5, 178.5])}
     
     # DeepSeek系列
     elif "deepseek-r1" in model_name_lower:
-        return {"latency": 1.01, "throughput": 55.17}
+        return {"latency": calculate_average([2.37, 1.18, 0.88, 0.97, 0.51]), 
+                "throughput": calculate_average([44.26, 48.32, 65.32, 35.83, 38.71])}
     elif "deepseek-chat" in model_name_lower:
-        return {"latency": 0.94, "throughput": 54.79}
+        return {"latency": calculate_average([1.89, 0.91, 3.13, 0.67, 1.40]), 
+                "throughput": calculate_average([36.14, 54.12, 20.80, 24.61, 24.18])}
     elif "deepseek-reasoner" in model_name_lower:
-        return {"latency": 1.01, "throughput": 55.17}
+        return {"latency": calculate_average([2.37, 1.18, 0.88, 0.97, 0.51]), 
+                "throughput": calculate_average([44.26, 48.32, 65.32, 35.83, 38.71])}
 
     elif "llama3-8b" in model_name_lower or "llama-3-8b" in model_name_lower:
-        return {"latency": 0.44, "throughput": 3422}
+        return {"latency": calculate_average([0.55, 0.69, 0.19, 0.86, 0.48]), 
+                "throughput": calculate_average([89.21, 94.59, 10000, 148.4, 15.58])}
     # 本地模型
     elif "saves" in model_name_lower:
         return {"latency": 0.5, "throughput": 71.2}
