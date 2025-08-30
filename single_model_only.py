@@ -12,7 +12,7 @@ from typing import Dict, Any, List, Union
 from openai import OpenAI
 
 # 导入理论性能计算模块
-from output_performance import get_model_performance, calculate_theoretical_time
+from output_performance import get_model_performance, calculate_theoretical_time, count_tokens
 
 
 class ModelConfig:
@@ -667,14 +667,9 @@ def solve_problem_with_model(query, config, stats_tracker):
         # 计算首个令牌响应时间
         ttft = first_token_time - start_time if first_token_time else None
         
-        # 估算token数量
-        prompt_words = len(query.split())
-        prompt_chinese_chars = sum(1 for c in query if '\u4e00' <= c <= '\u9fff')
-        content_words = len(collected_content.split())
-        content_chinese_chars = sum(1 for c in collected_content if '\u4e00' <= c <= '\u9fff')
-        
-        estimated_prompt_tokens = int((prompt_words * 1.3) + (prompt_chinese_chars * 1.5))
-        estimated_completion_tokens = int((content_words * 1.3) + (content_chinese_chars * 1.5))
+        # 使用DeepSeek tokenizer计算token数量
+        estimated_prompt_tokens = count_tokens(query)
+        estimated_completion_tokens = count_tokens(collected_content)
         
         if estimated_prompt_tokens < 1:
             estimated_prompt_tokens = 1

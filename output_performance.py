@@ -1,7 +1,38 @@
 # Update 30/8/2025 from https://openrouter.ai/models
 
 from typing import Dict, Any, List, Tuple
-import heapq
+import transformers
+import os
+import sys
+
+# 初始化tokenizer（全局变量）
+try:
+    tokenizer = transformers.AutoTokenizer.from_pretrained(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "deepseek_v3_tokenizer"),
+        trust_remote_code=True
+    )
+except Exception as e:
+    print(f"警告: 无法加载DeepSeek tokenizer: {e}")
+    tokenizer = None
+
+def count_tokens(text):
+    """使用DeepSeek tokenizer计算文本的token数量
+    
+    参数:
+        text: 需要计算token数量的文本
+    
+    返回:
+        token数量 (整数)
+    """
+    if tokenizer:
+        try:
+            tokens = tokenizer.encode(text)
+            return len(tokens)
+        except Exception as e:
+            print(f"警告: 使用DeepSeek tokenizer计算token失败: {e}")
+    
+    # 回退方法：使用简单的估计方法 (4个字符≈1个token)
+    return len(text) // 4
 
 def calculate_average(values):
     if not values:
@@ -147,12 +178,6 @@ def generate_theoretical_performance_report(tasks, config, planner_output=None):
     if planner_output and isinstance(planner_output, dict):
         # 如果提供了planner输出信息，使用实际的token计数
         plan_tokens = planner_output.get('completion_tokens', 0)
-        if 'ttft' in planner_output and planner_output['ttft'] is not None:
-            # 如果提供了实际的TTFT，直接使用
-            planner_latency = planner_output['ttft']
-            print(f"使用实际测量的planner延迟: {planner_latency:.3f}秒")
-        
-        print(f"使用实际的planner输出token数: {plan_tokens}")
     else:
         # 如果没有提供planner输出信息，基于任务数估算
         plan_tokens = len(tasks) * 100  # 每个任务约需100个token
@@ -314,27 +339,6 @@ def generate_theoretical_performance_report(tasks, config, planner_output=None):
     report += "```\n"
     report += generate_gantt_chart(task_timelines, max_workers)
     report += "```\n\n"
-    
-    # 添加关键路径分析
-    critical_path = find_critical_path(sorted_tasks, dependency_graph, task_execution_times)
-    
-    report += "## 关键路径分析\n\n"
-    report += "关键路径是决定总执行时间的最长任务链。以下是本次执行的关键路径：\n\n"
-    
-    if critical_path:
-        report += "| 步骤 | 任务描述 | 执行时间 (秒) |\n"
-        report += "| --- | --- | --- |\n"
-        
-        for step_id in critical_path:
-            for original_step_id, task in sorted_tasks:
-                if original_step_id == step_id:
-                    task_desc = task.get('Task', f'步骤 {step_id}')
-                    report += f"| {step_id} | {task_desc} | {task_execution_times[step_id]:.3f} |\n"
-                    break
-                    
-        report += f"\n关键路径总时间: {sum(task_execution_times[step_id] for step_id in critical_path):.3f} 秒\n"
-    else:
-        report += "无法确定关键路径。\n"
         
     return report
 
@@ -391,22 +395,16 @@ def simulate_task_execution(sorted_tasks, dependency_graph, task_execution_times
         # 重构Step标签 - 格式如: <Step ID="1" Task="..." Difficulty="2" Token="25" Rely=""/>
         step_xml = f'<Step ID="{step_id}" Task="{task_content}" Difficulty="{difficulty}" Token="{token_str}" Rely="{rely}"/>'
         
-        # 估算该XML内容的token数量
-        # 根据XML字符长度估算token数 (大约4个字符/token)
-        step_tokens = len(step_xml) / 4
+        # 使用DeepSeek tokenizer估算该XML内容的token数量
+        step_tokens = count_tokens(step_xml)
         
         # 计算该步骤规划所需的时间
         step_planning_time = step_tokens / router_throughput
         
         # 累加规划时间（从延迟开始）
-        task_available_time[step_id] = cumulative_time
         cumulative_time += step_planning_time
-    
-    # 确保总规划时间与预期相符
-    planning_scale_factor = planner_time / cumulative_time if cumulative_time > 0 else 1
-    # 重新调整每个任务的规划时间
-    for step_id in task_available_time:
-        task_available_time[step_id] *= planning_scale_factor
+        task_available_time[step_id] = cumulative_time
+        
     
     # 按照新算法逻辑实现任务执行时间计算
     # 核心思想：一旦任务被规划出来且其依赖任务完成，就可以立即开始执行
@@ -444,10 +442,7 @@ def simulate_task_execution(sorted_tasks, dependency_graph, task_execution_times
         
         # 记录任务完成时间，供后续依赖于该任务的任务使用
         completed_tasks[step_id] = end_time
-        
-        # 分配工作线程
-        # 注意：这里简化了工作线程分配逻辑，实际上可能需要考虑更复杂的调度策略
-        # 这里仅使用step_id的模值作为线程ID，实际系统中会有更智能的线程管理
+
         worker_allocation[step_id] = int(step_id) % max_workers + 1
     
     # 总执行时间为所有任务中结束时间最晚的
@@ -516,142 +511,5 @@ def generate_gantt_chart(task_timelines, max_workers, width=80):
     
     return gantt
 
-def find_critical_path(sorted_tasks, dependency_graph, task_execution_times):
-    """
-    找出任务依赖图中的关键路径
-    
-    参数:
-        sorted_tasks: 按ID排序的任务
-        dependency_graph: 任务依赖关系图
-        task_execution_times: 每个任务的执行时间
-        
-    返回:
-        关键路径上的任务ID列表
-    """
-    # 拓扑排序
-    topo_order = []
-    visited = set()
-    temp_visited = set()
-    
-    def dfs(node):
-        if node in temp_visited:
-            # 检测到循环依赖
-            return False
-        if node in visited:
-            return True
-        
-        temp_visited.add(node)
-        
-        # 访问所有依赖
-        dependencies = dependency_graph.get(node, [])
-        for dep in dependencies:
-            if dep and not dfs(dep):
-                return False
-                
-        temp_visited.remove(node)
-        visited.add(node)
-        topo_order.append(node)
-        return True
-    
-    # 对每个任务执行DFS
-    for step_id, _ in sorted_tasks:
-        if step_id not in visited:
-            if not dfs(step_id):
-                # 存在循环依赖，无法确定关键路径
-                return []
-    
-    # 反转拓扑序，从源节点开始
-    topo_order.reverse()
-    
-    # 计算每个节点的最早完成时间和前驱节点
-    earliest_finish = {}
-    predecessor = {}
-    
-    for node in topo_order:
-        # 获取所有前驱节点的最早完成时间
-        max_finish_time = 0
-        max_predecessor = None
-        
-        dependencies = dependency_graph.get(node, [])
-        for dep in dependencies:
-            if dep and dep in earliest_finish:
-                finish_time = earliest_finish[dep]
-                if finish_time > max_finish_time:
-                    max_finish_time = finish_time
-                    max_predecessor = dep
-        
-        # 计算当前节点的最早完成时间
-        earliest_finish[node] = max_finish_time + task_execution_times.get(node, 0)
-        predecessor[node] = max_predecessor
-    
-    # 找出最晚完成的节点
-    end_nodes = [node for node in topo_order if not any(node in dependency_graph.get(next_node, []) for next_node, _ in sorted_tasks)]
-    
-    if not end_nodes:
-        # 如果没有终止节点，取所有节点中完成时间最晚的
-        max_finish_node = max(earliest_finish.items(), key=lambda x: x[1])[0]
-    else:
-        # 在终止节点中找出完成时间最晚的
-        max_finish_node = max(end_nodes, key=lambda x: earliest_finish.get(x, 0))
-    
-    # 回溯构建关键路径
-    critical_path = []
-    current = max_finish_node
-    
-    while current:
-        critical_path.append(current)
-        current = predecessor.get(current)
-    
-    # 反转路径，从开始到结束
-    critical_path.reverse()
-    
-    return critical_path
 
-def calculate_critical_path_time(sorted_tasks, dependency_graph, small_model_name, large_model_name, config):
-    """
-    计算任务依赖图中的关键路径时间
-    
-    参数:
-        sorted_tasks: 按ID排序的任务
-        dependency_graph: 任务依赖关系图
-        small_model_name: 小模型名称
-        large_model_name: 大模型名称
-        config: 模型配置
-    
-    返回:
-        关键路径的理论时间
-    """
-    # 计算每个任务的最早完成时间
-    earliest_finish_time = {}
-    
-    # 按拓扑顺序遍历任务
-    for step_id, task in sorted_tasks:
-        # 提取token数量
-        token_str = task.get('Token', '1000')
-        try:
-            tokens = int(token_str)
-        except ValueError:
-            tokens = 1000
-            
-        # 判断使用哪个模型
-        difficulty = task.get('Difficulty', '0')
-        model_name = large_model_name if int(difficulty) >= config.threshold else small_model_name
-        
-        # 计算该任务的理论时间
-        time_data = calculate_theoretical_time(model_name, tokens)
-        task_time = time_data['total_time']
-        
-        # 计算该任务的最早开始时间（取决于其所有依赖任务的完成时间）
-        dependencies = dependency_graph[step_id]
-        earliest_start = 0
-        if dependencies and dependencies != ['']:
-            earliest_start = max([earliest_finish_time.get(dep, 0) for dep in dependencies if dep])
-        
-        # 该任务的最早完成时间 = 最早开始时间 + 任务时间
-        earliest_finish_time[step_id] = earliest_start + task_time
-    
-    # 关键路径时间是所有任务中的最晚完成时间
-    if earliest_finish_time:
-        return max(earliest_finish_time.values())
-    else:
-        return 0
+

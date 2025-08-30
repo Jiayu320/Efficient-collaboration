@@ -1,10 +1,3 @@
-'''
-包含主要的执行逻辑
-任务解析与XML处理函数
-模型调用与步骤处理函数
-任务路由与并行执行函数
-结果汇总与报告生成函数
-'''
 import requests
 import json
 import os
@@ -17,6 +10,7 @@ from openai import OpenAI
 
 from config import ModelConfig, load_config, parse_args
 from performance import PerformanceTracker, calculate_performance_metrics
+from output_performance import count_tokens
 
 # 全局客户端对象，预先初始化
 small_model_client = None
@@ -239,16 +233,11 @@ def generate_step_result(prompt, difficulty, model_config, stats_tracker=None):
                     })
                 })]
                 
-                # 估算token数量 - 使用更准确的方法
-                # 粗略估计英文token为单词数的1.3倍，中文为字符数的1.5倍
-                prompt_words = len(prompt.split())
-                prompt_chinese_chars = sum(1 for c in prompt if '\u4e00' <= c <= '\u9fff')
-                content_words = len(content.split())
-                content_chinese_chars = sum(1 for c in content if '\u4e00' <= c <= '\u9fff')
+                # 使用DeepSeek tokenizer计算token数量
+                estimated_prompt_tokens = count_tokens(prompt)
+                estimated_completion_tokens = count_tokens(content)
                 
-                estimated_prompt_tokens = int((prompt_words * 1.3) + (prompt_chinese_chars * 1.5))
-                estimated_completion_tokens = int((content_words * 1.3) + (content_chinese_chars * 1.5))
-                
+                # 确保token数量至少为1
                 if estimated_prompt_tokens < 1:
                     estimated_prompt_tokens = 1
                 if estimated_completion_tokens < 1:

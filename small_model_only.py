@@ -5,10 +5,11 @@ import time
 import argparse
 import yaml
 from tqdm import tqdm
-import pandas as pd
-import matplotlib.pyplot as plt
 from typing import Dict, Any, List, Union
 from openai import OpenAI
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from output_performance import count_tokens
 
 
 class ModelConfig:
@@ -340,69 +341,6 @@ class SmallModelDatasetRunner:
             report += f"| {i+1} | {problem} | {is_correct} | {exec_time:.2f} | {cost:.4f} |\n"
         
         return report
-    
-    def visualize_results(self, output_dir="dataset_reports"):
-        """可视化数据集处理结果
-        
-        参数:
-            output_dir: 输出目录
-        """
-        if not self.results:
-            print("没有处理结果，无法生成可视化")
-            return
-        
-        # 确保输出目录存在
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-        
-        timestamp = time.strftime("%Y%m%d_%H%M%S")
-        
-        # 准备数据
-        data = []
-        for result in self.results:
-            item = {
-                "问题": result.get("problem", "")[:50],
-                "正确": result.get("is_correct", False),
-                "执行时间": result.get("execution_time", 0),
-                "成本": result.get("stats").calculate_cost() if result.get("stats") else 0
-            }
-            data.append(item)
-        
-        df = pd.DataFrame(data)
-        
-        # 准确率
-        plt.figure(figsize=(10, 6))
-        correct_count = sum(1 for r in self.results if r.get("is_correct", False))
-        labels = ['正确', '错误']
-        sizes = [correct_count, len(self.results) - correct_count]
-        plt.pie(sizes, labels=labels, autopct='%1.1f%%', colors=['#4CAF50', '#F44336'])
-        plt.title('问题解答准确率')
-        plt.savefig(f"{output_dir}/small_model_accuracy_{timestamp}.png")
-        
-        # 执行时间分布
-        plt.figure(figsize=(10, 6))
-        plt.hist(df['执行时间'], bins=10, color='#2196F3')
-        plt.xlabel('执行时间 (秒)')
-        plt.ylabel('问题数量')
-        plt.title('执行时间分布')
-        plt.grid(True, alpha=0.3)
-        plt.savefig(f"{output_dir}/small_model_time_distribution_{timestamp}.png")
-        
-        # 成本分布
-        plt.figure(figsize=(10, 6))
-        plt.hist(df['成本'], bins=10, color='#FF9800')
-        plt.xlabel('成本 (美元)')
-        plt.ylabel('问题数量')
-        plt.title('成本分布')
-        plt.grid(True, alpha=0.3)
-        plt.savefig(f"{output_dir}/small_model_cost_distribution_{timestamp}.png")
-        
-        # 生成完整报告
-        report = self.generate_report()
-        with open(f"{output_dir}/small_model_dataset_report_{timestamp}.md", "w", encoding="utf-8") as f:
-            f.write(report)
-        
-        print(f"可视化和报告已保存到 {output_dir} 目录")
 
 
 class PerformanceTracker:
@@ -583,14 +521,9 @@ def solve_problem_with_small_model(query, config, stats_tracker):
         # 计算首个令牌响应时间
         ttft = first_token_time - start_time if first_token_time else None
         
-        # 估算token数量
-        prompt_words = len(query.split())
-        prompt_chinese_chars = sum(1 for c in query if '\u4e00' <= c <= '\u9fff')
-        content_words = len(collected_content.split())
-        content_chinese_chars = sum(1 for c in collected_content if '\u4e00' <= c <= '\u9fff')
-        
-        estimated_prompt_tokens = int((prompt_words * 1.3) + (prompt_chinese_chars * 1.5))
-        estimated_completion_tokens = int((content_words * 1.3) + (content_chinese_chars * 1.5))
+        # 使用DeepSeek tokenizer计算token数量
+        estimated_prompt_tokens = count_tokens(query)
+        estimated_completion_tokens = count_tokens(collected_content)
         
         if estimated_prompt_tokens < 1:
             estimated_prompt_tokens = 1
@@ -654,7 +587,7 @@ if __name__ == "__main__":
         print("\n数据集处理报告:")
         print(report)
         
-        # 保存报告和生成可视化
+        # 保存报告
         try:
             output_dir = "dataset_reports"
             if not os.path.exists(output_dir):
@@ -666,9 +599,7 @@ if __name__ == "__main__":
             with open(output_file, "w", encoding="utf-8") as f:
                 f.write(report)
             
-            # 生成可视化
-            # dataset_runner.visualize_results(output_dir)
-            print(f"数据集处理完成，报告和可视化已保存到 {output_dir} 目录")
+            print(f"数据集处理完成，报告已保存到 {output_dir} 目录")
         except Exception as e:
             print(f"保存报告时出错: {e}")
     else:

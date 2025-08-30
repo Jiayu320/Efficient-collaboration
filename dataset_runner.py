@@ -4,8 +4,6 @@ import time
 import re
 import pathlib
 from tqdm import tqdm
-import pandas as pd
-import matplotlib.pyplot as plt
 
 from config import ModelConfig
 from performance import PerformanceTracker
@@ -202,6 +200,39 @@ class DatasetRunner:
                 from output_performance import generate_theoretical_performance_report
                 theoretical_report = generate_theoretical_performance_report(tasks, self.config, stats_tracker.planner_output)
                 result["theoretical_report"] = theoretical_report
+                
+                # 提取理论性能指标
+                # 从理论性能报告中提取关键数据
+                try:
+                    # 从报告文本中解析关键指标
+                    import re
+                    
+                    # 提取理论执行时间相关指标
+                    total_time_match = re.search(r"并行总时间.*?(\d+\.\d+)", theoretical_report)
+                    planner_time_match = re.search(r"规划模型.*?(\d+\.\d+)", theoretical_report)
+                    sequential_time_match = re.search(r"顺序总时间.*?(\d+\.\d+)", theoretical_report)
+                    parallel_speedup_match = re.search(r"并行加速比.*?(\d+\.\d+)x", theoretical_report)
+                    
+                    # 提取小模型和大模型的任务执行时间
+                    small_model_time_match = re.search(r"小模型任务.*?(\d+\.\d+)", theoretical_report)
+                    large_model_time_match = re.search(r"大模型任务.*?(\d+\.\d+)", theoretical_report)
+                    
+                    # 构建理论性能指标字典
+                    theoretical_metrics = {
+                        "total_execution_time": float(total_time_match.group(1)) if total_time_match else 0,
+                        "planner_time": float(planner_time_match.group(1)) if planner_time_match else 0,
+                        "sequential_time": float(sequential_time_match.group(1)) if sequential_time_match else 0,
+                        "parallel_speedup": float(parallel_speedup_match.group(1)) if parallel_speedup_match else 0,
+                        "small_model_time": float(small_model_time_match.group(1)) if small_model_time_match else 0,
+                        "large_model_time": float(large_model_time_match.group(1)) if large_model_time_match else 0,
+                        "task_execution_time": (float(small_model_time_match.group(1)) if small_model_time_match else 0) + 
+                                              (float(large_model_time_match.group(1)) if large_model_time_match else 0)
+                    }
+                    
+                    # 保存理论性能指标
+                    result["theoretical_metrics_raw"] = theoretical_metrics
+                except Exception as e:
+                    print(f"提取理论性能指标时出错: {e}")
                 
                 # 计算任务规划指标
                 from task_metrics import calculate_task_metrics
@@ -591,6 +622,25 @@ class DatasetRunner:
                 "avg_task_plan_tokens": result.get("avg_task_plan_tokens", 0)
             }
             
+            # 添加理论性能数据（如果存在）
+            if "theoretical_metrics" in result:
+                serializable_result["theoretical_metrics"] = result["theoretical_metrics"]
+            elif "theoretical_report" in result:
+                # 从理论报告中提取关键指标
+                theoretical_data = {}
+                
+                # 尝试提取理论时间指标
+                if isinstance(result.get("theoretical_metrics_raw"), dict):
+                    metrics_raw = result.get("theoretical_metrics_raw", {})
+                    theoretical_data = {
+                        "total_execution_time": metrics_raw.get("total_execution_time", 0),
+                        "planner_time": metrics_raw.get("planner_time", 0),
+                        "task_execution_time": metrics_raw.get("task_execution_time", 0),
+                        "sequential_time": metrics_raw.get("sequential_time", 0),
+                        "parallel_speedup": metrics_raw.get("parallel_speedup", 0)
+                    }
+                serializable_result["theoretical_metrics"] = theoretical_data
+            
             # 添加任务计划和步骤结果（如果存在）
             if "tasks" in result:
                 # 将tasks字典转换为可序列化的对象
@@ -629,86 +679,7 @@ class DatasetRunner:
         
         return json_file
     
-    def generate_visualizations(self, output_dir, timestamp):
-        """生成可视化图表
-        
-        参数:
-            output_dir: 输出目录
-            timestamp: 时间戳
-        """
-        try:
-            # 收集数据
-            data = []
-            for result in self.results:
-                stats = result.get("stats")
-                if not stats:
-                    continue
-                
-                # 计算成本
-                costs = stats.calculate_cost()
-                
-                data.append({
-                    "difficulty": result.get("difficulty", 0),
-                    "is_correct": result.get("is_correct", False),
-                    "execution_time": result.get("execution_time", 0),
-                    "cost": costs["total"],
-                    "small_model_tokens": stats.token_usage["small_model"]["total_tokens"],
-                    "large_model_tokens": stats.token_usage["large_model"]["total_tokens"]
-                })
-            
-            if not data:
-                return
-            
-            # 创建数据框
-            df = pd.DataFrame(data)
-            
-            # Difficulty distribution
-            plt.figure(figsize=(10, 6))
-            difficulty_counts = df["difficulty"].value_counts().sort_index()
-            difficulty_counts.plot(kind='bar')
-            plt.title("Difficulty Distribution")
-            plt.xlabel("Difficulty")
-            plt.ylabel("Number of Problems")
-            plt.tight_layout()
-            plt.savefig(os.path.join(output_dir, f"difficulty_distribution_{timestamp}.png"))
-            plt.close()
-            
-            # Accuracy vs Difficulty
-            plt.figure(figsize=(10, 6))
-            accuracy_by_difficulty = df.groupby("difficulty")["is_correct"].mean()
-            accuracy_by_difficulty.plot(kind='bar')
-            plt.title("Accuracy by Difficulty")
-            plt.xlabel("Difficulty")
-            plt.ylabel("Accuracy")
-            plt.ylim(0, 1)
-            plt.tight_layout()
-            plt.savefig(os.path.join(output_dir, f"accuracy_by_difficulty_{timestamp}.png"))
-            plt.close()
-            
-            # Execution Time vs Difficulty
-            plt.figure(figsize=(10, 6))
-            time_by_difficulty = df.groupby("difficulty")["execution_time"].mean()
-            time_by_difficulty.plot(kind='bar')
-            plt.title("Average Execution Time by Difficulty")
-            plt.xlabel("Difficulty")
-            plt.ylabel("Execution Time (seconds)")
-            plt.tight_layout()
-            plt.savefig(os.path.join(output_dir, f"time_by_difficulty_{timestamp}.png"))
-            plt.close()
-            
-            # Cost vs Difficulty
-            plt.figure(figsize=(10, 6))
-            cost_by_difficulty = df.groupby("difficulty")["cost"].mean()
-            cost_by_difficulty.plot(kind='bar')
-            plt.title("Average Cost by Difficulty")
-            plt.xlabel("Difficulty")
-            plt.ylabel("Cost (USD)")
-            plt.tight_layout()
-            plt.savefig(os.path.join(output_dir, f"cost_by_difficulty_{timestamp}.png"))
-            plt.close()
-            
-        except Exception as e:
-            print(f"生成可视化图表时出错: {e}")
+    # 可视化相关功能已移除
 
 
 def run_dataset_evaluation(config, dataset_path, limit=None, workers=4):
