@@ -2,18 +2,52 @@ import requests
 import json
 import os
 import re
+import sys
 import time
 import pathlib
 from collections import defaultdict
 import concurrent.futures
 from openai import OpenAI
+import transformers
 
 from config import ModelConfig, load_config, parse_args
 from performance import PerformanceTracker, calculate_performance_metrics
 from output_performance import count_tokens
+from token_patch import get_deepseek_tokenizer, count_deepseek_tokens, append_output, get_collected_tokens, reset_collected_output
+
+# 正则表达式函数，用于去除ASY绘图代码
+def remove_asy_tags(text):
+    """
+    移除文本中的[asy]...[/asy]标签及其内容
+    
+    参数:
+        text: 包含可能的[asy]标签的文本
+        
+    返回:
+        清理后的文本
+    """
+    # 使用非贪婪模式匹配[asy]和[/asy]之间的所有内容（包括换行符）
+    return re.sub(r'\[asy\].*?\[/asy\]', '', text, flags=re.DOTALL)
 
 # 全局客户端对象，预先初始化
 small_model_client = None
+
+# 重写方法，用于替换计算tokens的方式
+original_split_method = str.split
+def monkey_patch_split():
+    """
+    使用猴子补丁替换所有split方法调用的计算方式
+    """
+    def deepseek_tokenize_split(self, *args, **kwargs):
+        """替换split方法为使用deepseek tokenizer"""
+        # 检查是否是在计算tokens的上下文中
+        frame = sys._getframe(1)
+        if 'completion_tokens' in frame.f_locals and frame.f_code.co_name in ['run_parallel_execution', 'run_sequential_execution']:
+            return [None] * count_deepseek_tokens(self)  # 返回一个列表，其长度等于token数量
+        return original_split_method(self, *args, **kwargs)
+    
+    # 应用猴子补丁
+    str.split = deepseek_tokenize_split
 large_model_client = None
 router_model_client = None
 
@@ -63,56 +97,6 @@ def initialize_clients(model_config):
         router_model_client = small_model_client
         
     print("所有模型客户端已初始化")
-
-def warmup_models(model_config):
-    """预热模型以减少首次请求的TTFT"""
-    global small_model_client, large_model_client, router_model_client
-    
-    print("预热模型中...")
-    
-    # 简单的预热提示
-    warmup_prompt = "Hello, I'm warming up."
-    
-    try:
-        # 预热小模型
-        small_model_client.chat.completions.create(
-            model=model_config.small_model,
-            messages=[{"role": "user", "content": warmup_prompt}],
-            max_tokens=5
-        )
-        print("小模型预热完成")
-        
-        # 预热大模型
-        if large_model_client != small_model_client:
-            large_model_client.chat.completions.create(
-                model=model_config.large_model,
-                messages=[{"role": "user", "content": warmup_prompt}],
-                max_tokens=5
-            )
-            print("大模型预热完成")
-        
-        # 预热路由模型
-        if router_model_client != small_model_client and router_model_client != large_model_client:
-            if model_config.use_local_router:
-                # 本地路由模型预热
-                router_model_client.chat.completions.create(
-                    model=model_config.local_router_model,
-                    messages=[{"role": "user", "content": warmup_prompt}],
-                    max_tokens=5,
-                    extra_body={"enable_thinking": False}
-                )
-            else:
-                # 远程路由模型预热
-                router_model_client.chat.completions.create(
-                    model=model_config.router_model,
-                    messages=[{"role": "user", "content": warmup_prompt}],
-                    max_tokens=5
-                )
-            print("路由模型预热完成")
-        
-        print("所有模型预热完成")
-    except Exception as e:
-        print(f"模型预热失败: {e}")
 
 def parse_step_attributes(attr_str):
     """解析属性字符串为字典"""
@@ -472,8 +456,9 @@ def wait_for_completion_and_get_final_result(tasks, query, config, stats_tracker
     # 构建最终结果
     final_result = "# 问题求解最终结果\n\n"
     
-    # 添加原始问题
-    final_result += f"## 原始问题\n{query}\n\n"
+    # 添加原始问题（移除ASY绘图代码）
+    cleaned_query = remove_asy_tags(query)
+    final_result += f"## 原始问题\n{cleaned_query}\n\n"
     
     # 添加解决方案步骤
     final_result += "## 解决步骤\n\n"
@@ -564,6 +549,8 @@ def run_parallel_execution(query, config, workers=4):
         config: 模型配置对象
         workers: 并行工作线程数
         
+    # 重置收集的输出内容
+    reset_collected_output()
     返回:
         (tasks, stats_tracker): 任务字典和性能统计跟踪器
     """
@@ -574,9 +561,6 @@ def run_parallel_execution(query, config, workers=4):
     
     # 初始化所有客户端
     initialize_clients(config)
-    
-    # 预热模型，减少TTFT
-    # warmup_models(config)
     
     # 重置全局状态
     xml_buffer = ""
@@ -833,9 +817,10 @@ def run_parallel_execution(query, config, workers=4):
                 temperature=0.3
             )
         
-        # 计算输入tokens (估计值，实际应该通过API返回)
-        prompt_tokens = len(system_prompt.split()) + len(query.split())
+        # 使用deepseek_v3_tokenizer计算tokens
+        prompt_tokens = count_deepseek_tokens(system_prompt) + count_deepseek_tokens(query)
         completion_tokens = 0
+        full_completion = ""  # 用于收集所有输出内容
         
         for chunk in response_stream:
             if hasattr(chunk.choices[0], 'delta') and hasattr(chunk.choices[0].delta, 'content'):
@@ -850,8 +835,8 @@ def run_parallel_execution(query, config, workers=4):
                     
                     print(content, end="", flush=True)  # 实时输出
                     
-                    # 更新完成tokens计数
-                    completion_tokens += len(content.split())
+                    # 使用deepseek_v3_tokenizer更新完成tokens计数
+                    completion_tokens += count_deepseek_tokens(content)
                     
                     # 添加到XML缓冲区
                     xml_buffer += content
@@ -906,9 +891,6 @@ def dataset_run_parallel_execution(query, solution, config, workers=4):
     
     # 初始化所有客户端
     initialize_clients(config)
-    
-    # 预热模型，减少TTFT
-    warmup_models(config)
     
     # 重置全局状态
     xml_buffer = ""
@@ -1013,8 +995,8 @@ def dataset_run_parallel_execution(query, solution, config, workers=4):
                     
                     print(content, end="", flush=True)  # 实时输出
                     
-                    # 更新完成tokens计数
-                    completion_tokens += len(content.split())
+                    # 使用deepseek_v3_tokenizer更新完成tokens计数
+                    completion_tokens += count_deepseek_tokens(content)
                     
                     # 添加到XML缓冲区
                     xml_buffer += content

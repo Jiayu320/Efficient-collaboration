@@ -1,5 +1,6 @@
 import os
 import time
+import json
 from config import ModelConfig, load_config, parse_args
 from performance import PerformanceTracker, calculate_performance_metrics
 from output_performance import generate_theoretical_performance_report
@@ -94,6 +95,75 @@ def main():
         try:
             # 运行数据集评估
             report_file = run_dataset_evaluation(config, dataset_path, dataset_limit, workers)
+            
+            # 添加任务分配统计
+            print("正在生成任务分配统计...")
+            # 获取对应的 dataset_results.json 文件路径
+            results_dir = os.path.dirname(report_file)
+            results_file = os.path.join(results_dir, "dataset_results.json")
+            
+            if os.path.exists(results_file):
+                try:
+                    # 读取 JSON 文件
+                    with open(results_file, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    
+                    # 初始化计数器
+                    total_tasks = 0
+                    small_model_tasks = 0
+                    large_model_tasks = 0
+                    
+                    # 遍历所有问题
+                    for problem in data:
+                        tasks = problem.get('tasks', {})
+                        
+                        # 遍历每个问题的任务
+                        for task_id, task_info in tasks.items():
+                            total_tasks += 1
+                            
+                            # 获取任务难度（如果不存在，假设为0）
+                            difficulty = int(task_info.get('Difficulty', 0))
+                            
+                            # 根据难度阈值判断使用哪个模型
+                            if difficulty < config.threshold:
+                                small_model_tasks += 1
+                            else:
+                                large_model_tasks += 1
+                    
+                    # 计算百分比
+                    small_model_percentage = (small_model_tasks / total_tasks * 100) if total_tasks > 0 else 0
+                    large_model_percentage = (large_model_tasks / total_tasks * 100) if total_tasks > 0 else 0
+                    
+                    # 生成统计文本
+                    stats_text = "\n## 任务分配统计\n\n"
+                    stats_text += f"- 总任务数: {total_tasks}\n"
+                    stats_text += f"- 小模型执行任务数: {small_model_tasks}\n"
+                    stats_text += f"- 大模型执行任务数: {large_model_tasks}\n"
+                    stats_text += f"- 小模型任务占比: {small_model_percentage:.2f}%\n"
+                    stats_text += f"- 大模型任务占比: {large_model_percentage:.2f}%\n"
+                    
+                    # 将统计信息添加到报告文件中
+                    with open(report_file, 'r', encoding='utf-8') as f:
+                        report_content = f.read()
+                    
+                    # 在"性能指标"部分之前插入任务分配统计
+                    performance_section_index = report_content.find("## 性能指标")
+                    if performance_section_index != -1:
+                        new_report_content = report_content[:performance_section_index] + stats_text + "\n" + report_content[performance_section_index:]
+                    else:
+                        # 如果找不到性能指标部分，则添加到文件末尾
+                        new_report_content = report_content + stats_text
+                    
+                    # 写回报告文件
+                    with open(report_file, 'w', encoding='utf-8') as f:
+                        f.write(new_report_content)
+                    
+                    print("任务分配统计已添加到报告中")
+                except Exception as e:
+                    print(f"生成任务分配统计时出错: {e}")
+            else:
+                print(f"未找到对应的结果文件: {results_file}")
+            
             print(f"数据集评估完成，报告已保存至: {report_file}")
             return
         except Exception as e:

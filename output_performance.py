@@ -217,7 +217,7 @@ def generate_theoretical_performance_report(tasks, config, planner_output=None):
     max_workers = 10  # 默认并行工作线程数，可以从config中获取
 
     # 模拟任务执行过程
-    simulation_result = simulate_task_execution(
+    simulation_result, planner_time = simulate_task_execution(
         sorted_tasks, 
         dependency_graph, 
         task_execution_times, 
@@ -259,10 +259,10 @@ def generate_theoretical_performance_report(tasks, config, planner_output=None):
     report += "## 执行流程理论时间\n\n"
     report += "| 阶段 | 理论时间 (秒) | 百分比 |\n"
     report += "| --- | --- | --- |\n"
-    report += f"| 规划阶段总时间 (Planner) | {planner_total_time:.3f} | 100% |\n"
+    report += f"| 规划阶段总时间 (Planner) | {planner_time:.3f} | 100% |\n"
     
     # 计算有多少任务在规划阶段就开始执行
-    tasks_started_during_planning = sum(1 for task_id, timeline in task_timelines.items() if timeline['start_time'] < planner_total_time)
+    tasks_started_during_planning = sum(1 for task_id, timeline in task_timelines.items() if timeline['start_time'] < planner_time)
     tasks_percentage = (tasks_started_during_planning / len(task_timelines)) * 100 if task_timelines else 0
     
     # 最后一个任务规划的时间
@@ -380,7 +380,9 @@ def simulate_task_execution(sorted_tasks, dependency_graph, task_execution_times
     
     # 第一个任务的规划时间需要加上初始延迟
     cumulative_time = router_latency
-    
+    step_xml = '<Plan>'
+    step_tokens = count_tokens(step_xml)
+    cumulative_time += step_tokens / router_throughput
     # 存储每个任务的plan输出时间点
     task_available_time = {}
     
@@ -394,7 +396,6 @@ def simulate_task_execution(sorted_tasks, dependency_graph, task_execution_times
         
         # 重构Step标签 - 格式如: <Step ID="1" Task="..." Difficulty="2" Token="25" Rely=""/>
         step_xml = f'<Step ID="{step_id}" Task="{task_content}" Difficulty="{difficulty}" Token="{token_str}" Rely="{rely}"/>'
-        
         # 使用DeepSeek tokenizer估算该XML内容的token数量
         step_tokens = count_tokens(step_xml)
         
@@ -404,8 +405,10 @@ def simulate_task_execution(sorted_tasks, dependency_graph, task_execution_times
         # 累加规划时间（从延迟开始）
         cumulative_time += step_planning_time
         task_available_time[step_id] = cumulative_time
-        
-    
+    step_xml = '</Plan>'
+    step_tokens = count_tokens(step_xml)
+    cumulative_time += step_tokens / router_throughput
+    planner_time = cumulative_time
     # 按照新算法逻辑实现任务执行时间计算
     # 核心思想：一旦任务被规划出来且其依赖任务完成，就可以立即开始执行
     # 依次处理每个任务，计算其开始时间和结束时间
@@ -453,7 +456,7 @@ def simulate_task_execution(sorted_tasks, dependency_graph, task_execution_times
         "task_timelines": task_timelines,
         "worker_allocation": worker_allocation,
         "task_planning_times": task_available_time  # 返回每个任务的规划完成时间
-    }
+    }, planner_time
 
 def generate_gantt_chart(task_timelines, max_workers, width=80):
     """
