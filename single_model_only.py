@@ -315,13 +315,13 @@ class SingleModelDatasetRunner:
         
         # 使用客户端调用API
         client = OpenAI(
-            base_url="https://api.bianxie.ai/v1",
-            api_key=get_api_key("usage/bianxie"),
+            base_url="https://openrouter.ai/api/v1",
+            api_key=get_api_key("usage/openrouter1"),
             )
         try:
             response = client.chat.completions.create(
-                # model="openai/gpt-4o",
-                model="gpt-4o", # 使用bianxie api
+                model="openai/gpt-4o",
+                # model="gpt-4o", # 使用bianxie api
                 messages=[
                     {"role": "user", "content": prompt}
                 ],

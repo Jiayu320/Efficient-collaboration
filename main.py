@@ -1,16 +1,20 @@
+"""
+Efficient LLM Collaboration Inference
+主程序入口点
+"""
 import os
 import time
 import json
-from config import ModelConfig, load_config, parse_args
-from performance import PerformanceTracker, calculate_performance_metrics
-from output_performance import generate_theoretical_performance_report
-from execution import (
+from config.model_config import ModelConfig, load_config, parse_args
+from metrics.performance import PerformanceTracker, calculate_performance_metrics
+from metrics.output import generate_theoretical_performance_report
+from core.executor import (
     run_parallel_execution, print_results, wait_for_completion_and_get_final_result,
     judge_question_difficulty, call_small_model_directly, generate_task_dependency_report,
-    judge_correct, LLM_judge, save_result_to_file
+    judge_correct, LLM_judge, save_result_to_file, initialize_clients, warmup_models
 )
 # 导入数据集处理模块
-from dataset_runner import run_dataset_evaluation
+from core.dataset import run_dataset_evaluation
 
 def main():
     """主程序入口"""
@@ -18,6 +22,11 @@ def main():
     
     # 解析命令行参数
     args = parse_args()
+    
+    # 设置默认配置文件路径
+    if args.config == 'config.yaml':
+        args.config = 'config/config.yaml'
+    
     print(f"配置文件: {args.config}")
     
     # 加载配置文件
@@ -188,7 +197,6 @@ def main():
 
     try:
         # 初始化模型客户端
-        from execution import initialize_clients, warmup_models
         initialize_clients(config)
         warmup_models(config)
         

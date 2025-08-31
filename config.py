@@ -33,9 +33,11 @@ class ModelConfig:
             large_model: 大模型的名称
             router_model: 路由模型的名称，用于生成任务计划，如果为None则使用small_model
             threshold: 使用大模型的难度阈值
-            api_key_path: API密钥文件路径
+            small_key_path: 小模型API密钥文件路径
+            large_key_path: 大模型API密钥文件路径
+            router_key_path: 路由模型API密钥文件路径
             prompt_path: 提示词文件路径
-            api_base: API基础URL，默认API URL
+            api_base: API基础URL
             small_api_base: 小模型API基础URL，如果为None则使用api_base
             large_api_base: 大模型API基础URL，如果为None则使用api_base
             router_api_base: 路由模型API基础URL，如果为None则使用api_base
@@ -50,7 +52,7 @@ class ModelConfig:
         self.small_key_path = small_key_path
         self.large_key_path = large_key_path
         self.router_key_path = router_key_path
-        self.api_base = small_api_base
+        self.api_base = api_base
         self.small_api_base = small_api_base
         self.large_api_base = large_api_base
         self.router_api_base = router_api_base if router_api_base else api_base
@@ -79,51 +81,6 @@ class ModelConfig:
                 return f.read().strip()
         else:
             raise FileNotFoundError(f"API密钥文件 '{file_path}' 未找到")
-    
-    def get_headers(self):
-        """获取API请求头"""
-        return {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
-    
-    def get_payload(self, query, model_override=None, client_type="default"):
-        """获取API请求载荷
-        
-        参数:
-            query: 请求查询
-            model_override: 覆盖默认模型
-            client_type: 客户端类型，"default"或"router"
-            
-        返回:
-            请求载荷字典
-        """
-        # 如果是路由模型且使用本地部署
-        if client_type == "router" and self.use_local_router:
-            return {
-                "model": self.local_router_model,
-                "messages": [
-                    {"role": "system", "content": self.system_prompt},
-                    {"role": "user", "content": query}
-                ],
-                "stream": True,
-                "temperature": 0.5,
-                "top_p": 0.95,
-                "max_tokens": 8192,
-                "extra_body": {
-                    "enable_thinking": False  # 关闭thinking模式
-                }
-            }
-        else:
-            model = model_override if model_override else self.small_model
-            return {
-                "model": model,
-                "messages": [
-                    {"role": "system", "content": self.system_prompt},
-                    {"role": "user", "content": query}
-                ],
-                "stream": True
-            }
     
     def get_client(self, client_type="default"):
         """获取OpenAI客户端
@@ -212,26 +169,34 @@ def load_config(config_path="config.yaml") -> Dict[str, Any]:
         # 返回默认配置
         return {
             "models": {
-                "small_model": "qwen/qwen3-14b:free",
-                "large_model": "qwen/qwen3-235b-a22b",
-                "router_model": "qwen/qwen-2.5-7b-instruct",
-                "threshold": 2
+                "small_model": "meta-llama/llama-3-8b-instruct",
+                "large_model": "openai/gpt-4o",
+                "router_model": "anthropic/claude-3.5-sonnet",
+                "threshold": 2,
+                "use_local_router": False,
+                "local_router_model": "saves/Qwen3-1.7B-Instruct/full/sft"
             },
             "api": {
-                "key_path": "usage/openrouter",
-                "base_url": "https://openrouter.ai/api/v1"
+                "small_key_path": "usage/openrouter1",
+                "large_key_path": "usage/openrouter1",
+                "router_key_path": "usage/openrouter1",
+                "base_url": "https://openrouter.ai/api/v1",
+                "small_api_base_url": "https://openrouter.ai/api/v1",
+                "large_api_base_url": "https://openrouter.ai/api/v1",
+                "router_api_base_url": "https://openrouter.ai/api/v1",
+                "local_router_base_url": "http://127.0.0.1:8000/v1"
             },
             "system": {
                 "prompt_path": "prompt/generate_prompt.txt",
-                "workers": 4,
-                "enable_judge": False,
+                "workers": 10,
+                "enable_judge": True,
                 "gold_answer": ""
             },
             "query": "What is the result of 1+1?",
             "dataset": {
                 "enabled": False,
                 "path": "dataset/original_data/math200.json",
-                "limit": 10
+                "limit": 20
             }
         }
 
