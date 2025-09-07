@@ -674,7 +674,7 @@ def run_parallel_execution(query, config, workers=4):
                     {"role": "user", "content": user_prompt}
                 ],
                 stream=True,
-                temperature=0.3
+                temperature=0.5
             )
         
         # 使用deepseek_v3_tokenizer计算tokens

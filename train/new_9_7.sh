@@ -1,35 +1,31 @@
 llamafactory-cli train \
     --stage sft \
     --do_train True \
-    --model_name_or_path Qwen/Qwen3-1.7B-Base \
+    --model_name_or_path Qwen/Qwen3-1.7B \
     --preprocessing_num_workers 16 \
     --finetuning_type full \
     --template qwen3 \
     --flash_attn auto \
     --dataset_dir data \
-    --dataset plan_generate \
+    --dataset my_training_data_all \
     --cutoff_len 16384 \
     --learning_rate 5e-06 \
-    --num_train_epochs 15.0 \
+    --num_train_epochs 5.0 \
     --max_samples 100000 \
     --per_device_train_batch_size 2 \
     --gradient_accumulation_steps 8 \
     --lr_scheduler_type cosine \
     --max_grad_norm 1.0 \
     --logging_steps 5 \
-    --save_steps 100 \
-    --warmup_steps 5 \
+    --save_steps 5000 \
+    --warmup_steps 0 \
     --packing False \
-    --enable_thinking True \
+    --enable_thinking False \
     --report_to none \
-    --output_dir saves/Qwen3-1.7B-Base/full/train_2025-07-16-01-05-16 \
+    --output_dir saves/Qwen3-1.7B-Thinking/full/train_2025-09-07-16-30-46 \
     --bf16 True \
     --plot_loss True \
     --trust_remote_code True \
     --ddp_timeout 180000000 \
     --include_num_input_tokens_seen True \
-    --optim adamw_torch \
-    --val_size 0.1 \
-    --eval_strategy steps \
-    --eval_steps 100 \
-    --per_device_eval_batch_size 2
+    --optim adamw_torch
