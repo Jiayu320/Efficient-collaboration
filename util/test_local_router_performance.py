@@ -35,13 +35,15 @@ def test_router_performance(config, test_queries, num_tests=5):
     token_counts = []
     
     # 定义测试提示
+    difficulty_prompt_template = """{question}"""
+    '''
     difficulty_prompt_template = """Please determine the difficulty of the following math problem. 
     Difficulty scale:
     1-10 (1=simplest, 10=hardest)
     Problem: {question}
     Please output only the difficulty level as a number. No other explanations or details are needed.
     """
-    
+    '''
     for test_num in range(1, num_tests + 1):
         print(f"\n执行测试 {test_num}/{num_tests}...")
         
@@ -72,7 +74,7 @@ def test_router_performance(config, test_queries, num_tests=5):
                         messages=[{"role": "user", "content": prompt}],
                         stream=False
                     )
-                
+                print(f"    响应: {response.choices[0].message.content.strip()}")
                 # 结束时间
                 end_time = time.time()
                 
@@ -94,7 +96,6 @@ def test_router_performance(config, test_queries, num_tests=5):
                 test_latencies.append(latency)
                 test_throughputs.append(throughput)
                 
-                print(f"    难度评估: {difficulty}")
                 print(f"    延迟: {latency:.4f}s, 吞吐量: {throughput:.2f} tokens/s")
                 print(f"    Token使用: 提示={prompt_tokens}, 完成={completion_tokens}, 总计={total_tokens}")
                 

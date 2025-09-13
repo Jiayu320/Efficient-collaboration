@@ -17,8 +17,6 @@ class ModelConfig:
                  small_key_path=None,
                  large_key_path=None,
                  router_key_path=None,
-                 prompt_path="prompt/generate_prompt.txt",
-                 api_base="https://openrouter.ai/api/v1",
                  small_api_base=None,
                  large_api_base=None,
                  router_api_base=None,
@@ -36,8 +34,6 @@ class ModelConfig:
             small_key_path: 小模型API密钥文件路径
             large_key_path: 大模型API密钥文件路径
             router_key_path: 路由模型API密钥文件路径
-            prompt_path: 提示词文件路径
-            api_base: API基础URL
             small_api_base: 小模型API基础URL，如果为None则使用api_base
             large_api_base: 大模型API基础URL，如果为None则使用api_base
             router_api_base: 路由模型API基础URL，如果为None则使用api_base
@@ -52,10 +48,9 @@ class ModelConfig:
         self.small_key_path = small_key_path
         self.large_key_path = large_key_path
         self.router_key_path = router_key_path
-        self.api_base = api_base
         self.small_api_base = small_api_base
         self.large_api_base = large_api_base
-        self.router_api_base = router_api_base if router_api_base else api_base
+        self.router_api_base = router_api_base
         
         # 本地路由模型配置
         self.use_local_router = use_local_router
@@ -66,13 +61,6 @@ class ModelConfig:
         self.small_api_key = self._get_api_key(small_key_path) if small_key_path else None
         self.large_api_key = self._get_api_key(large_key_path) if large_key_path else None
         self.router_api_key = self._get_api_key(router_key_path) if router_key_path else None
-        # 加载提示词
-        try:
-            with open(prompt_path, 'r', encoding='utf-8') as f:
-                self.system_prompt = f.read()
-        except Exception as e:
-            print(f"无法加载提示词文件: {e}")
-            self.system_prompt = ""
     
     def _get_api_key(self, file_path):
         """从文件中获取API密钥"""
@@ -136,12 +124,7 @@ class ModelConfig:
         # 获取各模型的价格费率
         small_model_pricing = get_model_pricing(self.small_model)
         large_model_pricing = get_model_pricing(self.large_model)
-        
-        # 本地路由模型的价格
-        if self.use_local_router:
-            router_model_pricing = {"prompt": 0.0, "completion": 0.0}  # 本地模型无费用
-        else:
-            router_model_pricing = get_model_pricing(self.router_model)
+        router_model_pricing = get_model_pricing(self.router_model)
         
         cost_rates = {
             "small_model": small_model_pricing,
@@ -165,40 +148,7 @@ def load_config(config_path="config.yaml") -> Dict[str, Any]:
             config = yaml.safe_load(f)
         return config
     except Exception as e:
-        print(f"无法加载配置文件 {config_path}: {e}")
-        # 返回默认配置
-        return {
-            "models": {
-                "small_model": "meta-llama/llama-3-8b-instruct",
-                "large_model": "openai/gpt-4o",
-                "router_model": "anthropic/claude-3.5-sonnet",
-                "threshold": 2,
-                "use_local_router": False,
-                "local_router_model": "saves/Qwen3-1.7B-Instruct/full/sft"
-            },
-            "api": {
-                "small_key_path": "usage/openrouter1",
-                "large_key_path": "usage/openrouter1",
-                "router_key_path": "usage/openrouter1",
-                "base_url": "https://openrouter.ai/api/v1",
-                "small_api_base_url": "https://openrouter.ai/api/v1",
-                "large_api_base_url": "https://openrouter.ai/api/v1",
-                "router_api_base_url": "https://openrouter.ai/api/v1",
-                "local_router_base_url": "http://127.0.0.1:8000/v1"
-            },
-            "system": {
-                "prompt_path": "prompt/generate_prompt.txt",
-                "workers": 10,
-                "enable_judge": True,
-                "gold_answer": ""
-            },
-            "query": "What is the result of 1+1?",
-            "dataset": {
-                "enabled": False,
-                "path": "dataset/original_data/math200.json",
-                "limit": 20
-            }
-        }
+        raise ValueError(f"无法加载配置文件 {config_path}: {e}")
 
 def parse_args():
     """解析命令行参数，可覆盖配置文件中的设置"""

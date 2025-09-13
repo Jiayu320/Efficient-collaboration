@@ -81,7 +81,8 @@ def get_model_performance(model_name: str) -> Dict[str, float]:
     # Qwen系列
     elif "qwen3-4b" in model_name_lower or "qwen-4b" in model_name_lower:
         return {"latency": 0.69, "throughput": 184.1}
-
+    elif "Qwen2.5-3B" in model_name_lower or "qwen2.5-3b" in model_name_lower:
+        return {"latency": 0.69, "throughput": 64.53}
     # 本地模型
     elif "saves" in model_name_lower:
         return {"latency": 0.5, "throughput": 71.2}

@@ -34,13 +34,11 @@ def main():
     small_key_path = yaml_config["api"]["small_key_path"]
     large_key_path = yaml_config["api"]["large_key_path"]
     router_key_path = yaml_config["api"]["router_key_path"]
-    api_base = yaml_config["api"]["base_url"]
     # 获取各个模型的API基础URL（如果配置中有的话）
-    small_api_base = yaml_config["api"].get("small_api_base_url", api_base)  # 注意配置中使用了 small_api_base_url
-    large_api_base = yaml_config["api"].get("large_api_base_url", api_base)
-    router_api_base = yaml_config["api"].get("router_api_base_url", api_base)
+    small_api_base = yaml_config["api"].get("small_api_base_url")
+    large_api_base = yaml_config["api"].get("large_api_base_url")
+    router_api_base = yaml_config["api"].get("router_api_base_url")
     local_router_base = yaml_config["api"].get("local_router_base_url", "http://127.0.0.1:8000/v1")
-    prompt_path = yaml_config["system"]["prompt_path"]
     workers = yaml_config["system"]["workers"]
 
     # 获取判断相关配置
@@ -48,10 +46,8 @@ def main():
     gold_answer = yaml_config["system"].get("gold_answer", "")
     enable_threshold = yaml_config["system"].get("enable_threshold", False)
     if use_local_router:
-        prompt_path = "prompt/generate_prompt.txt"
         threshold = yaml_config["models"]["threshold"]
     else:
-        prompt_path = "prompt/generate_prompt_ori.txt"
         threshold = yaml_config["models"]["threshold"]
 
     # 初始化模型配置
@@ -63,8 +59,6 @@ def main():
         small_key_path=small_key_path,
         large_key_path=large_key_path,
         router_key_path=router_key_path,
-        prompt_path=prompt_path,
-        api_base=api_base,
         small_api_base=small_api_base,
         large_api_base=large_api_base,
         router_api_base=router_api_base,
@@ -188,9 +182,8 @@ def main():
 
     try:
         # 初始化模型客户端
-        from execution import initialize_clients, warmup_models
+        from execution import initialize_clients
         initialize_clients(config)
-        warmup_models(config)
         
         # 判断问题难度
         difficulty = judge_question_difficulty(query, config)

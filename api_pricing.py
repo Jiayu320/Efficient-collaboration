@@ -42,6 +42,8 @@ def get_model_pricing(model_name: str) -> Dict[str, float]:
     # Qwen系列
     elif "qwen3-4b" in model_name_lower or "qwen-4b" in model_name_lower:
         return {"prompt": 0.00, "completion": 0.00}
+    elif "Qwen2.5-3B" in model_name_lower or "qwen2.5-3b" in model_name_lower:
+        return {"prompt": 0.00, "completion": 0.00}
 
     # 本地模型
     elif "local" in model_name_lower:

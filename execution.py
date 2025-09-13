@@ -67,35 +67,9 @@ future_to_id = {}
 def initialize_clients(model_config):
     """预先初始化模型客户端"""
     global small_model_client, large_model_client, router_model_client
-    
-    # 初始化小模型客户端
-    original_api_base = model_config.api_base
-    model_config.api_base = model_config.small_api_base
     small_model_client = model_config.get_client(client_type="small")
-    model_config.api_base = original_api_base
-    
-    # 如果大模型和小模型使用不同的API，则分别初始化
-    if model_config.large_api_base != model_config.small_api_base:
-        # 临时修改API基础URL创建大模型客户端
-        model_config.api_base = model_config.large_api_base
-        large_model_client = model_config.get_client(client_type="large")
-        model_config.api_base = original_api_base
-    else:
-        large_model_client = small_model_client
-    
-    # 如果使用本地部署的路由模型
-    if model_config.use_local_router:
-        router_model_client = model_config.get_client(client_type="router")
-        print("使用本地部署的路由模型")
-    # 否则，如果路由模型和小模型使用不同的API，则分别初始化
-    elif model_config.router_api_base != model_config.small_api_base:
-        # 临时修改API基础URL创建路由模型客户端
-        model_config.api_base = model_config.router_api_base
-        router_model_client = model_config.get_client(client_type="router")
-        model_config.api_base = original_api_base
-    else:
-        router_model_client = small_model_client
-        
+    large_model_client = model_config.get_client(client_type="large")
+    router_model_client = model_config.get_client(client_type="router")       
     print("所有模型客户端已初始化")
 
 def parse_step_attributes(attr_str):
@@ -578,8 +552,7 @@ def run_parallel_execution(query, config, workers=4):
     print("正在获取解决方案计划...")
 
     if config.use_local_router:
-        system_prompt = '''
-        You are an assistant whose job is to generate a solution plan. Given a math problem, generate a solution plan less than 10 steps in XML format with the following constraints:
+        system_prompt = '''You are an assistant whose job is to generate a solution plan. Given a math problem, generate a solution plan less than 10 steps in XML format with the following constraints:
         1. Plan must contain EXACTLY 1-10 steps (never more than 10)
         2. Each step must be distinct and non-redundant
         3. Merge trivial steps into logical units
@@ -603,7 +576,6 @@ def run_parallel_execution(query, config, workers=4):
 
         Output ONLY the XML plan with no additional text.'''
     else:
-        '''准确率45.00%'''
         system_prompt = '''You are an assistant whose job is to generate a solution plan. Given a math problem, generate a solution plan less than 10 steps in XML format with the following constraints:
         1. Plan must contain EXACTLY 1-10 steps (never more than 10)
         2. Each step must be distinct and non-redundant
@@ -681,166 +653,6 @@ def run_parallel_execution(query, config, workers=4):
         prompt_tokens = count_deepseek_tokens(system_prompt) + count_deepseek_tokens(query)
         completion_tokens = 0
         full_completion = ""  # 用于收集所有输出内容
-        
-        for chunk in response_stream:
-            if hasattr(chunk.choices[0], 'delta') and hasattr(chunk.choices[0].delta, 'content'):
-                content = chunk.choices[0].delta.content
-                if content:
-                    # 记录首个token响应时间
-                    if not first_token_received:
-                        ttft = time.time() - router_start_time
-                        first_token_received = True
-                        if stats_tracker:
-                            stats_tracker.update_ttft("router_model", ttft)
-                    
-                    print(content, end="", flush=True)  # 实时输出
-                    
-                    # 使用deepseek_v3_tokenizer更新完成tokens计数
-                    completion_tokens += count_deepseek_tokens(content)
-                    
-                    # 添加到XML缓冲区
-                    xml_buffer += content
-                    
-                    # 尝试解析缓冲区中的完整标签
-                    parsed_count = 0
-                    while process_xml_buffer():
-                        parsed_count += 1
-                        task_count += 1
-                    
-                    # 只有在解析到新任务时才启动路由
-                    if parsed_count > 0:
-                        print(f"\n已解析 {task_count} 个任务，启动任务调度...")
-                        router(tasks, config, query, executor)
-        
-        # 更新router模型的token使用情况
-        if stats_tracker:
-            stats_tracker.update_token_usage("router_model", prompt_tokens, completion_tokens)
-                        
-    except Exception as e:
-        print(f"\n处理响应时出错: {e}")
-    
-    print(f"\n计划生成完成，共解析 {task_count} 个任务")
-    
-    # 继续处理可能的剩余XML标签
-    while process_xml_buffer():
-        pass
-    
-    # 处理所有剩余任务直到全部完成
-    print("\n\n开始执行所有任务...")
-    while tasks and any(step_id not in completed_steps for step_id in tasks):
-        if not router(tasks, config, query, executor, stats_tracker):
-            break
-    
-    # 关闭线程池
-    executor.shutdown()
-    
-    return tasks, stats_tracker
-
-def dataset_run_parallel_execution(query, solution, config, workers=4):
-    """运行并行执行流程
-    
-    参数:
-        query: 要解决的问题
-        config: 模型配置对象
-        workers: 并行工作线程数
-    """
-    global xml_buffer, tasks, completed_steps, futures, router_model_client
-    
-    # 创建性能统计跟踪器
-    stats_tracker = PerformanceTracker(config)
-    
-    # 初始化所有客户端
-    initialize_clients(config)
-    
-    # 重置全局状态
-    xml_buffer = ""
-    tasks = defaultdict(dict)
-    completed_steps = set()
-    futures = {}
-    future_to_id = {}
-    
-    # 创建线程池
-    executor = concurrent.futures.ThreadPoolExecutor(max_workers=workers)
-    
-    # 初始化变量跟踪解析进度
-    task_count = 0
-    print("开始处理问题：", query)
-    print("正在获取解决方案计划...")
-
-    if config.use_local_router:
-        system_prompt = '''Generate a solution plan that breaks down the problem into logical steps, identifying dependencies, difficulty levels and token usage.'''
-    else:
-        system_prompt = '''You are an assistant whose job is to break down the problem into 1-10 easy-to-solve sub-questions. Given a math problem, generate a solution plan less than 10 steps in XML format with the following constraints:
-            1. Plan must contain EXACTLY 1-10 steps (never more than 10)
-            2. Each step must be distinct and non-redundant
-            3. Mark computational steps with Difficulty≥3
-            4. Ensure all Rely attributes reference valid step IDs
-            5. Make sure the Task is a question ended with a question mark (?)
-            6. Make sure the sub-questions are easy to solve
-            7. Format: 
-            <Plan>
-                <Step ID="1" Task="..." Difficulty="1-5" Token="Estimate the number of tokens required to complete a subtask" Rely="Output only relevant steps"/>
-                ...
-            </Plan>
-            Make sure the format with paired tags is correct and all steps are properly nested within the <Plan> tag.
-
-            Difficulty scale:
-            1-2: Basic computation
-            3-4: Standard operations 
-            5-6: Logical analysis 
-            7-10: Advanced synthesis
-
-            Example:
-            Question: Four years ago, Kody was only half as old as Mohamed. If Mohamed is currently twice 30 years old, how old is Kody?
-            Plan:
-            <Plan>
-                <Step ID="1" Task="How old is Mohamed now?" Difficulty="1" Token="15" Rely=""/>
-                <Step ID="2" Task="What was Mohamed's age 4 years ago?" Difficulty="1" Token="20" Rely="1"/>
-                <Step ID="3" Task="What was Kody's age 4 years ago?" Difficulty="2" Token="25" Rely="2"/>
-                <Step ID="4" Task="How old is Kody currently?" Difficulty="1" Token="15" Rely="3"/>
-            </Plan>
-            
-            Output ONLY the XML plan with no additional text. 
-        '''
-        user_query = f'''
-            Question: {query}
-            Solution: {solution}
-            Please generate a solution plan for the question in XML format you can use the solution as a reference.
-        '''
-    # 使用预初始化的路由模型客户端
-    try:
-        # 记录路由模型开始生成计划的时间，用于计算首个令牌响应时间
-        router_start_time = time.time()
-        first_token_received = False
-        ttft = None
-        
-        # 根据配置决定是使用本地路由模型还是远程路由模型
-        if config.use_local_router:
-            response_stream = router_model_client.chat.completions.create(
-                model=config.local_router_model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_query}
-                ],
-                stream=True,
-                temperature=0.5,
-                top_p=0.95,
-                max_tokens=8192,
-                extra_body={"enable_thinking": False}
-            )
-        else:
-            response_stream = router_model_client.chat.completions.create(
-                model=config.router_model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_query}
-                ],
-                stream=True
-            )
-        
-        # 计算输入tokens (估计值，实际应该通过API返回)
-        prompt_tokens = len(system_prompt.split()) + len(query.split())
-        completion_tokens = 0
         
         for chunk in response_stream:
             if hasattr(chunk.choices[0], 'delta') and hasattr(chunk.choices[0].delta, 'content'):
@@ -1011,12 +823,7 @@ def judge_question_difficulty(question, model_config):
         Problem: {question}
         Please output only the difficulty level as a number. No other explanations or details are needed.
         """
-        prompt_ori = f"""Please determine the difficulty of the following math problem. 
-        Difficulty scale:
-        1=Basic 2=Simple 3=Moderate 4=Complex 5=Advanced
-        Problem: {question}
-        Please output only the difficulty level as a number. No other explanations or details are needed.
-        """
+
     client = model_config.get_client(client_type="large")
     try:
         response = client.chat.completions.create(
@@ -1164,40 +971,3 @@ def save_result_to_file(final_result, config, workers, correctness_report, perfo
     except Exception as e:
         print(f"保存结果时出错: {e}")
         return None
-
-def warmup_models(model_config):
-    """预热模型以减少首次请求的TTFT"""
-    global small_model_client, large_model_client, router_model_client
-    
-    print("预热模型中...")
-    
-    # 简单的预热提示
-    warmup_prompt = "Hello, I'm warming up."
-    
-    try:
-        # 预热小模型
-        small_model_client.chat.completions.create(
-            model=model_config.small_model,
-            messages=[{"role": "user", "content": warmup_prompt}],
-            max_tokens=5
-        )
-        
-        # 预热大模型
-        if large_model_client != small_model_client:
-            large_model_client.chat.completions.create(
-                model=model_config.large_model,
-                messages=[{"role": "user", "content": warmup_prompt}],
-                max_tokens=5
-            )
-        
-        # 预热路由模型
-        if router_model_client != small_model_client and router_model_client != large_model_client:
-            router_model_client.chat.completions.create(
-                model=model_config.router_model,
-                messages=[{"role": "user", "content": warmup_prompt}],
-                max_tokens=5
-            )
-        
-        print("模型预热完成")
-    except Exception as e:
-        print(f"模型预热失败: {e}")
