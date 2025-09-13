@@ -71,17 +71,24 @@ def get_model_performance(model_name: str) -> Dict[str, float]:
         return {"latency": calculate_average([2.37, 1.18, 0.88, 0.97, 0.51]), 
                 "throughput": calculate_average([44.26, 48.32, 65.32, 35.83, 38.71])}
 
+    # Llama系列
     elif "llama3-8b" in model_name_lower or "llama-3-8b" in model_name_lower:
         return {"latency": calculate_average([0.55, 0.69, 0.19, 0.86, 0.48]), 
                 "throughput": calculate_average([89.21, 94.59, 10000, 148.4, 15.58])}
+    elif "llama-3.2-3b" in model_name_lower or "llama3.2-3b" in model_name_lower:
+        return {"latency": 0.71, "throughput": 165.0}
+    
+    # Qwen系列
+    elif "qwen3-4b" in model_name_lower or "qwen-4b" in model_name_lower:
+        return {"latency": 0.69, "throughput": 184.1}
+
     # 本地模型
     elif "saves" in model_name_lower:
         return {"latency": 0.5, "throughput": 71.2}
 
-    # 默认性能（当无法识别模型时使用）
     else:
         print(f"警告: 未识别的模型 '{model_name}'，使用默认性能")
-        return {"latency": 0.5, "throughput": 71.2}
+        return False, f"错误: {str(e)}"
 
 def calculate_theoretical_time(model_name: str, tokens: int) -> Dict[str, float]:
     """

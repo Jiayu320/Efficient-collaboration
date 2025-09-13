@@ -70,7 +70,8 @@ class ModelConfig:
                 {"role": "system", "content": self.system_prompt},
                 {"role": "user", "content": query}
             ],
-            "stream": True
+            "stream": True,
+            "extra_body": {"enable_thinking": False}
         }
     
     def get_client(self):
@@ -96,20 +97,7 @@ def load_config(config_path="config.yaml") -> Dict[str, Any]:
         return config
     except Exception as e:
         print(f"无法加载配置文件 {config_path}: {e}")
-        # 返回默认配置
-        return {
-            "models": {
-                "large_model": "qwen/qwen3-235b-a22b"
-            },
-            "api": {
-                "key_path": "usage/openrouter",
-                "base_url": "https://openrouter.ai/api/v1"
-            },
-            "system": {
-                "prompt_path": "prompt/direct_solve_prompt.txt"
-            },
-            "query": "What is the result of 1+1?"
-        }
+        return False, f"错误: {str(e)}"
 
 
 def get_api_key(file_path="together_ai"):
@@ -646,7 +634,8 @@ def solve_problem_with_model(query, config, stats_tracker):
                 {"role": "system", "content": config.system_prompt},
                 {"role": "user", "content": query}
             ],
-            stream=True
+            stream=True,
+            extra_body={"enable_thinking": False}
         )
         
         # 收集完整响应
@@ -817,7 +806,7 @@ if __name__ == "__main__":
 单个问题：
 python single_model_only.py --query "你的问题" --model "gpt-4o"
 数据集处理：
-python single_model_only.py --dataset "dataset/your_dataset.json" --limit 5 --model "claude-3-5-sonnet"
+python single_model_only.py --dataset "dataset/your_dataset.json" --limit 5 --model "qwen/qwen3-4b:free"
 从配置文件处理：
 python single_model_only.py --config "config.yaml"
 '''

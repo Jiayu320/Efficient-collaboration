@@ -10,7 +10,7 @@ def get_api_key(file_path="together_ai"):
         raise FileNotFoundError(f"Credentials file '{file_path}' not found.")
     return api_key
 
-with open("prompt/generate_prompt.txt", 'r', encoding='utf-8') as f:
+with open("prompt/generate_prompt_ori.txt", 'r', encoding='utf-8') as f:
     file_content = f.read()
 
 url = "https://openrouter.ai/api/v1/chat/completions"
@@ -20,12 +20,15 @@ headers = {
 }
 
 payload = {
-  "model": "meta-llama/llama-3-8b-instruct",
+  "model": "qwen/qwen3-4b:free",
   "messages": [
      {"role": "system", "content": file_content},
      {"role": "user", "content": "What is the result of 1+1?"}
      ],
-  "stream": True
+  "stream": True,
+  "extra_body": {
+    "enable_thinking": False
+  }
 }
 
 buffer = ""

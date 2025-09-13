@@ -36,11 +36,17 @@ def get_model_pricing(model_name: str) -> Dict[str, float]:
     # Llama系列
     elif "llama3-8b" in model_name_lower or "llama-3-8b" in model_name_lower or "llama3.1-8b" in model_name_lower or "llama-3.1-8b" in model_name_lower:
         return {"prompt": 0.03, "completion": 0.06}
-    
+    elif "llama-3.2-3b" in model_name_lower or "llama3.2-3b" in model_name_lower:
+        return {"prompt": 0.00, "completion": 0.00}
+
+    # Qwen系列
+    elif "qwen3-4b" in model_name_lower or "qwen-4b" in model_name_lower:
+        return {"prompt": 0.00, "completion": 0.00}
+
     # 本地模型
     elif "local" in model_name_lower:
         return {"prompt": 0.0, "completion": 0.0}
-    
+
     # 默认价格（当无法识别模型时使用）
     else:
         print(f"警告: 未识别的模型 '{model_name}'，使用默认价格。请在 api_pricing.py 中添加此模型的价格信息。")
