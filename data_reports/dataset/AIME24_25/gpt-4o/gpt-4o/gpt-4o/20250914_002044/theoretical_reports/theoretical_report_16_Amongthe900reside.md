@@ -1,0 +1,63 @@
+# 问题 16 的理论性能分析报告
+
+## 问题描述
+
+Among the 900 residents of Aimeville, there are 195 who own a diamond ring, 367 who own a set of golf clubs, and 562 who own a garden spade. In addition, each of the 900 residents owns a bag of candy hearts. There are 437 residents who own exactly two of these things, and 234 residents who own exactly three of these things. Find the number of residents of Aimeville who own all four of these things.
+
+# 理论性能模型分析
+
+## 模型性能参数
+
+| 模型 | 延迟 (秒) | 吞吐量 (tokens/s) |
+| --- | --- | --- |
+| 小模型 (gpt-4o) | 0.735 | 144.50 |
+| 大模型 (gpt-4o) | 0.735 | 144.50 |
+| 路由模型 (gpt-4o) | 0.735 | 144.50 |
+
+## 执行流程理论时间
+
+| 阶段 | 理论时间 (秒) | 百分比 |
+| --- | --- | --- |
+| 规划阶段总时间 (Planner) | 2.098 | 100% |
+| 规划过程中启动的任务数 | 2 / 5 | 40.0% |
+| 规划与执行重叠的任务数 | 2 / 5 | 40.0% |
+| 第一个任务规划完成时间 | 1.026 | - |
+| 最后一个任务规划完成时间 | 2.078 | - |
+| 最后一个任务执行完成时间 | 5.981 | - |
+| 任务总执行时间(累计) | 4.955 | - |
+| 流水线加速比 | 1.53x | - |
+| 并行效率 | 82.9% | - |
+
+## 任务类型理论时间
+
+| 模型类型 | 任务数 | 顺序执行时间 (秒) | 并行加速比 |
+| --- | --- | --- | --- |
+| 小模型任务 | 1 | 0.908 | - |
+| 大模型任务 | 4 | 4.047 | - |
+| 规划模型 | 1 | 4.195 | - |
+| 顺序总时间 | - | 9.150 | - |
+| 并行总时间 | - | 5.981 | 1.53x |
+
+## 任务执行明细
+
+| 步骤ID | 任务描述 | 使用模型 | 理论开始时间 (秒) | 理论结束时间 (秒) | 理论执行时间 (秒) | 工作线程 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | Define the sets for residents owning a diamond ring, golf clubs, and a garden spade. | 小模型 | 1.026 | 1.934 | 0.908 | 2 |
+| 2 | Use the principle of inclusion-exclusion to find the number of residents owning at least one of the three items. | 大模型 | 1.934 | 2.945 | 1.012 | 3 |
+| 3 | Determine the number of residents owning exactly two items using given data. | 大模型 | 2.945 | 3.923 | 0.977 | 4 |
+| 4 | Calculate the number of residents owning exactly three items using given data. | 大模型 | 3.923 | 4.900 | 0.977 | 5 |
+| 5 | Use the total number of residents and previous calculations to find the number of residents owning all four items. | 大模型 | 4.900 | 5.981 | 1.081 | 6 |
+
+## 理论执行甘特图
+
+```
+时间轴:
+0                                                            4.96s
++------------------------------------------------------------+
+步骤 1 |##########                                                  | 1.03s - 1.93s
+步骤 2 |          #############                                     | 1.93s - 2.95s
+步骤 3 |                       ############                         | 2.95s - 3.92s
+步骤 4 |                                   ###########              | 3.92s - 4.90s
+步骤 5 |                                              ############# | 4.90s - 5.98s
+```
+

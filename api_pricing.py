@@ -42,14 +42,15 @@ def get_model_pricing(model_name: str) -> Dict[str, float]:
     # Qwen系列
     elif "qwen3-4b" in model_name_lower or "qwen-4b" in model_name_lower:
         return {"prompt": 0.00, "completion": 0.00}
-    elif "Qwen2.5-3B" in model_name_lower or "qwen2.5-3b" in model_name_lower:
+    elif "qwen2.5-3b" in model_name_lower:
         return {"prompt": 0.00, "completion": 0.00}
-
+    elif "qwen3-1.7b" in model_name_lower:
+        return {"prompt": 0.00, "completion": 0.00}
     # 本地模型
-    elif "local" in model_name_lower:
+    elif "saves" in model_name_lower or "sft" in model_name_lower:
         return {"prompt": 0.0, "completion": 0.0}
 
     # 默认价格（当无法识别模型时使用）
     else:
         print(f"警告: 未识别的模型 '{model_name}'，使用默认价格。请在 api_pricing.py 中添加此模型的价格信息。")
-        return {"prompt": 0.5, "completion": 1.0}
+        return {"prompt": 0.0, "completion": 0.0}

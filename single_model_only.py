@@ -122,6 +122,8 @@ def parse_args():
                       help='处理数据集的最大问题数')
     parser.add_argument('--model', type=str,
                       help='指定要使用的模型名称')
+    parser.add_argument('--timeout', type=int, default=300,
+                      help='模型请求超时时间(秒)')
     return parser.parse_args()
 
 
@@ -129,7 +131,7 @@ def build_output_path(model_name):
     """构建输出路径
     
     参数:
-        model_name: 模型名称
+        model_name: 模型名称 
     
     返回:
         输出目录路径
@@ -195,8 +197,11 @@ class SingleModelDatasetRunner:
             print(f"加载数据集时出错: {e}")
             return []
     
-    def process_dataset(self):
+    def process_dataset(self, timeout=120):
         """处理整个数据集
+        
+        参数:
+            timeout: 每个问题的请求超时时间(秒)，默认120秒
         
         返回:
             处理结果列表
@@ -206,27 +211,30 @@ class SingleModelDatasetRunner:
             return []
         
         print(f"开始使用模型 {self.config.model} 处理数据集，共 {len(self.dataset)} 个问题...")
+        print(f"设置请求超时时间: {timeout} 秒")
         
         # 使用tqdm显示进度
         for i, problem_data in enumerate(tqdm(self.dataset, desc="处理数据集")):
             problem = problem_data.get("problem", "")
             solution = problem_data.get("solution", "")
             
-            # 每个问题的性能统计
-            result = self.process_single_problem(problem, solution)
+            # 每个问题的性能统计，添加超时参数
+            result = self.process_single_problem(problem, solution, timeout=timeout)
             self.results.append(result)
             
-            # 打印当前进度
-            print(f"完成进度: {i+1}/{len(self.dataset)}")
+            # 打印当前进度和超时状态
+            timeout_status = " (超时)" if result.get("timed_out", False) else ""
+            print(f"完成进度: {i+1}/{len(self.dataset)}{timeout_status}")
             
         return self.results
     
-    def process_single_problem(self, problem, solution):
+    def process_single_problem(self, problem, solution, timeout=120):
         """处理单个问题
         
         参数:
             problem: 问题文本
             solution: 标准答案
+            timeout: 请求超时时间(秒)，默认120秒
             
         返回:
             处理结果字典
@@ -242,7 +250,8 @@ class SingleModelDatasetRunner:
             "judge_result": "",
             "stats": None,
             "execution_time": 0,
-            "theoretical_time": None  # 添加理论时间字段
+            "theoretical_time": None,  # 添加理论时间字段
+            "timed_out": False  # 添加超时标志
         }
         
         start_time = time.time()
@@ -251,14 +260,20 @@ class SingleModelDatasetRunner:
             # 创建性能统计跟踪器
             stats_tracker = PerformanceTracker(self.config.model)
             
-            # 使用模型处理问题
-            model_solution = solve_problem_with_model(problem, self.config, stats_tracker)
+            # 使用模型处理问题，添加超时参数
+            model_solution = solve_problem_with_model(problem, self.config, stats_tracker, timeout=timeout)
             result["model_solution"] = model_solution
             
-            # 判断结果正确性（使用LLM进行判断）
-            is_correct, judge_result = self._judge_answer(problem, solution, model_solution)
-            result["is_correct"] = is_correct
-            result["judge_result"] = judge_result
+            # 检查是否超时
+            if model_solution.startswith("TIMEOUT:"):
+                result["timed_out"] = True
+                print(f"问题处理超时，跳过判断阶段")
+                result["judge_result"] = "TIMEOUT"
+            else:
+                # 判断结果正确性（使用LLM进行判断）
+                is_correct, judge_result = self._judge_answer(problem, solution, model_solution)
+                result["is_correct"] = is_correct
+                result["judge_result"] = judge_result
             
             # 记录性能统计
             stats_tracker.stop_tracking()
@@ -303,13 +318,12 @@ class SingleModelDatasetRunner:
         
         # 使用客户端调用API
         client = OpenAI(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=get_api_key("usage/openrouter1"),
+            base_url="https://api.bianxie.ai/v1",
+            api_key=get_api_key("usage/bianxie1"),
             )
         try:
             response = client.chat.completions.create(
-                model="openai/gpt-4o",
-                # model="gpt-4o", # 使用bianxie api
+                model="gpt-4o",
                 messages=[
                     {"role": "user", "content": prompt}
                 ],
@@ -336,20 +350,25 @@ class SingleModelDatasetRunner:
         # 获取模型性能指标
         model_performance = get_model_performance(self.config.model)
         
-        # 统计正确率
-        correct_count = sum(1 for r in self.results if r.get("is_correct", False))
-        accuracy = correct_count / len(self.results) if self.results else 0
+        # 统计超时问题
+        timeout_count = sum(1 for r in self.results if r.get("timed_out", False))
+        timeout_rate = timeout_count / len(self.results) if self.results else 0
         
-        # 统计平均执行时间
-        avg_time = sum(r.get("execution_time", 0) for r in self.results) / len(self.results) if self.results else 0
+        # 统计正确率 (不包括超时的问题)
+        valid_results = [r for r in self.results if not r.get("timed_out", False)]
+        correct_count = sum(1 for r in valid_results if r.get("is_correct", False))
+        accuracy = correct_count / len(valid_results) if valid_results else 0
         
-        # 统计平均理论时间
-        theoretical_times = [r.get("theoretical_time", {}).get("total_time", 0) for r in self.results if r.get("theoretical_time")]
+        # 统计平均执行时间 (不包括超时的问题)
+        avg_time = sum(r.get("execution_time", 0) for r in valid_results) / len(valid_results) if valid_results else 0
+        
+        # 统计平均理论时间 (不包括超时的问题)
+        theoretical_times = [r.get("theoretical_time", {}).get("total_time", 0) for r in valid_results if r.get("theoretical_time")]
         avg_theoretical_time = sum(theoretical_times) / len(theoretical_times) if theoretical_times else 0
         
-        # 统计平均成本
-        total_cost = sum(r.get("stats").calculate_cost() if r.get("stats") else 0 for r in self.results)
-        avg_cost = total_cost / len(self.results) if self.results else 0
+        # 统计平均成本 (不包括超时的问题)
+        total_cost = sum(r.get("stats").calculate_cost() if r.get("stats") else 0 for r in valid_results)
+        avg_cost = total_cost / len(valid_results) if valid_results else 0
         
         # 计算实际时间与理论时间的比率
         time_ratio = avg_time / avg_theoretical_time if avg_theoretical_time > 0 else "N/A"
@@ -366,12 +385,14 @@ class SingleModelDatasetRunner:
         report += f"## 概述\n\n"
         report += f"- 数据集: {self.dataset_path}\n"
         report += f"- 问题总数: {len(self.results)}\n"
+        report += f"- 超时问题数: {timeout_count} ({timeout_rate:.2%})\n"
+        report += f"- 有效问题数: {len(valid_results)}\n"
         report += f"- 正确数量: {correct_count}\n"
-        report += f"- 准确率: {accuracy:.2%}\n"
-        report += f"- 平均执行时间: {avg_time:.2f} 秒\n"
-        report += f"- 平均理论时间: {avg_theoretical_time:.2f} 秒\n"
+        report += f"- 准确率(有效问题): {accuracy:.2%}\n"
+        report += f"- 平均执行时间(有效问题): {avg_time:.2f} 秒\n"
+        report += f"- 平均理论时间(有效问题): {avg_theoretical_time:.2f} 秒\n"
         report += f"- 实际/理论时间比率: {time_ratio}\n"
-        report += f"- 平均成本: ${avg_cost:.4f}\n\n"
+        report += f"- 平均成本(有效问题): ${avg_cost:.4f}\n\n"
         
         # 添加TTFT和生成速度统计
         ttft_metrics = []
@@ -401,11 +422,16 @@ class SingleModelDatasetRunner:
         
         # 生成详细结果表格
         report += f"## 详细结果\n\n"
-        report += "| # | 问题 | 正确? | 执行时间(秒) | 理论时间(秒) | 成本($) |\n"
+        report += "| # | 问题 | 状态 | 执行时间(秒) | 理论时间(秒) | 成本($) |\n"
         report += "| --- | --- | --- | --- | --- | --- |\n"
         
         for i, result in enumerate(self.results):
-            is_correct = "✓" if result.get("is_correct", False) else "✗"
+            # 处理状态显示
+            if result.get("timed_out", False):
+                status = "⏱️ 超时"
+            else:
+                status = "✓" if result.get("is_correct", False) else "✗"
+                
             problem = result.get("problem", "")
             # 截断问题以适合表格
             if len(problem) > 50:
@@ -416,7 +442,7 @@ class SingleModelDatasetRunner:
             theoretical_time = result.get("theoretical_time", {}).get("total_time", 0)
             cost = result.get("stats").calculate_cost() if result.get("stats") else 0
             
-            report += f"| {i+1} | {problem} | {is_correct} | {exec_time:.2f} | {theoretical_time:.2f} | {cost:.4f} |\n"
+            report += f"| {i+1} | {problem} | {status} | {exec_time:.2f} | {theoretical_time:.2f} | {cost:.4f} |\n"
         
         return report
     
@@ -605,13 +631,14 @@ class PerformanceTracker:
         return report
 
 
-def solve_problem_with_model(query, config, stats_tracker):
+def solve_problem_with_model(query, config, stats_tracker, timeout=120):
     """使用模型解决问题
     
     参数:
         query: 问题
         config: 模型配置
         stats_tracker: 性能统计跟踪器
+        timeout: 请求超时时间(秒)，默认120秒
         
     返回:
         解决方案
@@ -641,6 +668,12 @@ def solve_problem_with_model(query, config, stats_tracker):
         # 收集完整响应
         collected_content = ""
         for chunk in response_stream:
+            # 检查是否超时
+            current_time = time.time()
+            if current_time - start_time > timeout:
+                print(f"\n\n请求超时！已经等待超过 {timeout} 秒。")
+                return f"TIMEOUT: 请求超过 {timeout} 秒超时限制。"
+                
             if first_token_time is None:
                 first_token_time = time.time()
                 
@@ -740,6 +773,13 @@ if __name__ == "__main__":
     api_key_path = yaml_config["api"]["large_key_path"]
     api_base = yaml_config["api"]["large_api_base_url"]
     
+    # 获取超时设置
+    timeout = args.timeout
+    if not timeout and "timeout" in yaml_config:
+        timeout = yaml_config.get("timeout", 120)
+        
+    print(f"设置请求超时时间: {timeout} 秒")
+    
     # 构建模型配置
     model_config = ModelConfig(
         model=model_name,
@@ -765,8 +805,8 @@ if __name__ == "__main__":
         # 创建数据集运行器
         dataset_runner = SingleModelDatasetRunner(model_config, dataset_path, limit=dataset_limit)
         
-        # 处理数据集
-        dataset_runner.process_dataset()
+        # 处理数据集（传递超时参数）
+        dataset_runner.process_dataset(timeout=timeout)
         
         # 保存结果并生成报告
         report_file = dataset_runner.save_results()
@@ -781,8 +821,8 @@ if __name__ == "__main__":
         # 创建性能跟踪器
         stats_tracker = PerformanceTracker(model_config.model)
         
-        # 解决问题
-        result = solve_problem_with_model(query, model_config, stats_tracker)
+        # 解决问题（传递超时参数）
+        result = solve_problem_with_model(query, model_config, stats_tracker, timeout=timeout)
         
         # 停止性能跟踪
         stats_tracker.stop_tracking()
@@ -804,9 +844,17 @@ if __name__ == "__main__":
 
 '''
 单个问题：
-python single_model_only.py --query "你的问题" --model "gpt-4o"
+python single_model_only.py --query "你的问题" --model "gpt-4o" --timeout 60
 数据集处理：
-python single_model_only.py --dataset "dataset/your_dataset.json" --limit 5 --model "qwen/qwen3-4b:free"
+python single_model_only.py --dataset "dataset/your_dataset.json" --limit 5 --model "qwen/qwen3-4b:free" --timeout 120
 从配置文件处理：
-python single_model_only.py --config "config.yaml"
+python single_model_only.py --config "config.yaml" --timeout 180
+
+参数说明：
+--query: 要解决的问题
+--model: 指定要使用的模型名称
+--dataset: 数据集文件路径
+--limit: 处理数据集的最大问题数
+--timeout: 模型请求超时时间(秒)，默认120秒
+--config: 配置文件路径，默认为 config.yaml
 '''

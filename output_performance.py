@@ -89,7 +89,7 @@ def get_model_performance(model_name: str) -> Dict[str, float]:
 
     else:
         print(f"警告: 未识别的模型 '{model_name}'，使用默认性能")
-        return False, f"错误: {str(e)}"
+        return {"latency": 0.5, "throughput": 71.2}
 
 def calculate_theoretical_time(model_name: str, tokens: int) -> Dict[str, float]:
     """

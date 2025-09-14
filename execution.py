@@ -260,7 +260,7 @@ def generate_step_result(prompt, difficulty, model_config, stats_tracker=None):
 def build_step_prompt(current_step, tasks, query):
     """构建当前步骤的提示"""
     prompt_template = """
-    You are a mathematical problem-solving assistant. I will provide you with a math problem and a specific step from my solution plan. Your task is to complete ONLY this specific step based on the description and token limit.
+    You are a problem-solving assistant. I will provide you with a problem and a specific step from my solution plan. Your task is to complete ONLY this specific step based on the description and token limit.
     PROBLEM:
     {Problem}
     CURRENT STEP:
@@ -563,16 +563,10 @@ def run_parallel_execution(query, config, workers=4):
         8. Make sure the Task is ended with a question mark (?)
         9. Format: 
         <Plan>
-        <Step ID="1" Task="..." Difficulty="1-10" Token="the number of tokens required" Rely="Output only relevant steps"/>
+        <Step ID="1" Task="..." Difficulty="the difficulty level" Token="the number of tokens required" Rely="Output only relevant steps"/>
         ...
         </Plan>
         Make sure the format with paired tags is correct and all steps are properly nested within the <Plan> tag.
-
-        Difficulty scale:
-        1-2: Basic computation
-        3-4: Standard operations 
-        5-6: Logical analysis 
-        7-10: Advanced synthesis
 
         Output ONLY the XML plan with no additional text.'''
     else:
@@ -810,14 +804,14 @@ def judge_question_difficulty(question, model_config):
         问题难度（字符串）
     """
     if model_config.use_local_router:
-        prompt = f"""Please determine the difficulty of the following math problem. 
+        prompt = f"""Please determine the difficulty of the following problem. 
         Difficulty scale:
         1-10 (1=simplest, 10=hardest)
         Problem: {question}
         Please output only the difficulty level as a number. No other explanations or details are needed.
         """
     else:
-        prompt = f"""Please determine the difficulty of the following math problem. 
+        prompt = f"""Please determine the difficulty of the following problem. 
         Difficulty scale:
         1-10 (1=simplest, 10=hardest)
         Problem: {question}
@@ -852,7 +846,7 @@ def call_small_model_directly(question, model_config, stats_tracker=None):
         小模型的响应内容
     """
     # 构建提示词
-    prompt = """You are a math problem-solving assistant. I will provide you with a math problem. Your task is to solve it step by step and provide the final answer.
+    prompt = """You are a problem-solving assistant. I will provide you with a problem. Your task is to solve it step by step and provide the final answer.
 
     PROBLEM:
     {question}
@@ -871,7 +865,7 @@ def call_large_model_directly(question, model_config, stats_tracker=None):
         大模型的响应内容
     """
     # 构建提示词
-    prompt = """You are a math problem-solving assistant. I will provide you with a math problem. Your task is to solve it step by step and provide the final answer.
+    prompt = """You are a problem-solving assistant. I will provide you with a problem. Your task is to solve it step by step and provide the final answer.
 
     PROBLEM:
     {question}
