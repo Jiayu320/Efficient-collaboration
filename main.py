@@ -64,7 +64,8 @@ def main():
         router_api_base=router_api_base,
         use_local_router=use_local_router,
         local_router_base=local_router_base,
-        local_router_model=local_router_model
+        local_router_model=local_router_model,
+        enable_threshold=enable_threshold
     )
     # 检查是否为数据集处理模式
     # 优先使用命令行参数，其次使用配置文件

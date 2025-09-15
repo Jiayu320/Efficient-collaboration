@@ -22,7 +22,8 @@ class ModelConfig:
                  router_api_base=None,
                  use_local_router=False,
                  local_router_base="http://127.0.0.1:8000/v1",
-                 local_router_model="saves/Qwen3-1.7B-Instruct/full/sft"):
+                 local_router_model="saves/Qwen3-1.7B-Instruct/full/sft",
+                 enable_threshold=True):
         """
         初始化模型配置
         
@@ -51,7 +52,7 @@ class ModelConfig:
         self.small_api_base = small_api_base
         self.large_api_base = large_api_base
         self.router_api_base = router_api_base
-        
+        self.enable_threshold = enable_threshold
         # 本地路由模型配置
         self.use_local_router = use_local_router
         self.local_router_base = local_router_base

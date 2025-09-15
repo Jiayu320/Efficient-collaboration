@@ -81,14 +81,14 @@ def merge_json_files(file1, file2, output_file=None, format_type='list'):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='合并两个JSON文件')
     parser.add_argument('--file1', 
-                        default='D:\\JIAYU\\Documents\\GitHub\\Efficient-collaboration\\dataset\\original_data\\AIME24.json',
+                        default='D:\\JIAYU\\Documents\\GitHub\\Efficient-collaboration\\dataset\\TestData\\AIME24.json',
                         help='第一个JSON文件路径')
     parser.add_argument('--file2', 
-                        default='D:\\JIAYU\\Documents\\GitHub\\Efficient-collaboration\\dataset\\original_data\\AIME25.json', 
+                        default='D:\\JIAYU\\Documents\\GitHub\\Efficient-collaboration\\dataset\\TestData\\AIME25.json', 
                         help='第二个JSON文件路径')
     parser.add_argument('-o', 
                         '--output', 
-                        default='D:\\JIAYU\\Documents\\GitHub\\Efficient-collaboration\\dataset\\original_data\\AIME24_25.json', 
+                        default='D:\\JIAYU\\Documents\\GitHub\\Efficient-collaboration\\dataset\\TestData\\AIME24_25.json', 
                         help='输出的JSON文件路径（可选）')
     parser.add_argument('--format', 
                         choices=['list', 'dict'], 

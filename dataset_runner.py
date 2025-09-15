@@ -9,7 +9,7 @@ from config import ModelConfig
 from performance import PerformanceTracker
 from execution import (
     run_parallel_execution, wait_for_completion_and_get_final_result,
-    judge_question_difficulty, call_small_model_directly, LLM_judge
+    judge_question_difficulty, call_small_model_directly, judge_correct
 )
 
 
@@ -103,8 +103,8 @@ class DatasetRunner:
         except Exception as e:
             print(f"加载数据集时出错: {e}")
             return []
-    
-    def process_dataset(self):
+
+    def process_dataset(self, enable_threshold=True):
         """处理整个数据集
         
         返回:
@@ -122,11 +122,11 @@ class DatasetRunner:
         # 使用tqdm显示进度
         for i, problem_data in enumerate(tqdm(self.dataset, desc="处理数据集")):
             problem = problem_data.get("problem", "")
-            solution = problem_data.get("solution", "")
+            solution = problem_data.get("answer", "")
             
             try:
                 # 每个问题的性能统计
-                result = self.process_single_problem(problem, solution)
+                result = self.process_single_problem(problem, solution, enable_threshold)
                 self.results.append(result)
                 
                 # 每处理完一个问题就保存一次结果
@@ -140,7 +140,7 @@ class DatasetRunner:
             
         return self.results
     
-    def process_single_problem(self, problem, solution):
+    def process_single_problem(self, problem, solution, enable_threshold):
         """处理单个问题
         
         参数:
@@ -176,8 +176,10 @@ class DatasetRunner:
             large_model_name = self.config.large_model if hasattr(self.config, 'large_model') else "gpt-4o"
             model_name = small_model_name if int(difficulty) < self.config.threshold else large_model_name
             stats_tracker = PerformanceTracker(model_name)
-            
-            if int(difficulty) < self.config.threshold:
+            if not enable_threshold:
+                print("禁用结果判断，直接使用并行执行流程")
+
+            if enable_threshold and int(difficulty) < self.config.threshold:
                 print(f"问题难度 {difficulty} 低于阈值 {self.config.threshold}，使用小模型处理")
                 
                 # 直接调用小模型处理
@@ -243,8 +245,9 @@ class DatasetRunner:
                 result["compression_ratio"] = task_metrics["compression_ratio"]
                 result["avg_task_plan_tokens"] = task_metrics["avg_task_plan_tokens"]
             
-            # 判断结果正确性（使用LLM进行判断）
-            is_correct, judge_result = LLM_judge(problem, model_solution, self.config)
+            # 判断结果正确性（使用gold_solution进行判断）
+            gold_answer = solution  # 使用提供的标准答案
+            is_correct, judge_result = judge_correct(problem, gold_answer, model_solution, self.config)
             result["is_correct"] = is_correct
             result["judge_result"] = judge_result
             
@@ -701,9 +704,9 @@ def run_dataset_evaluation(config, dataset_path, limit=None, workers=4):
     
     # 创建数据集处理器
     runner = DatasetRunner(config, dataset_path, limit, workers)
-    
+    enable_threshold = config.enable_threshold if hasattr(config, 'enable_threshold') else True
     # 处理数据集
-    runner.process_dataset()
+    runner.process_dataset(enable_threshold=enable_threshold)
     
     # 保存最终报告，使用层次化的目录结构
     report_file = runner.save_report(timestamp=timestamp)

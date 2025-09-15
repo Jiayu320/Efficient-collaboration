@@ -34,3 +34,5 @@ llamafactory-cli train \
     --swanlab_run_name training_data_all_3017 \
     --swanlab_api_key EQUfO6V0qY8iEo2HEMght \
     --swanlab_mode cloud
+
+pip install swanlab

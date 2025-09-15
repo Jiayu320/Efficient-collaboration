@@ -715,7 +715,7 @@ def judge_correct(question, gold_answer, final_answer, model_config):
         是否正确的布尔值和判断结果文本
     """
     global large_model_client
-    
+    print("--------------------------调用大模型根据真实答案判断答案正确性--------------------------")
     prompt = f"""Here is a math problem with a standard answer and a student's solution. Please help me determine if the student's solution is correct. If the numerical value are same, then it is correct.
                                
                 Problem: {question}
@@ -761,7 +761,7 @@ def LLM_judge(question, final_answer, model_config):
         是否正确的布尔值和判断结果文本
     """
     global large_model_client
-    
+    print("--------------------------调用大模型判断答案正确性（没有真实答案）--------------------------")
     prompt = f"""Here is a math problem and a student's solution. Please help me determine if the student's solution is correct. If the numerical value are same, then it is correct.
                                
                 Problem: {question}
