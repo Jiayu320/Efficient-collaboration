@@ -15,6 +15,15 @@ from performance import PerformanceTracker, calculate_performance_metrics
 from output_performance import count_tokens
 from token_patch import get_deepseek_tokenizer, count_deepseek_tokens, append_output, get_collected_tokens, reset_collected_output
 
+
+def get_api_key(file_path):
+    """从文件中获取API密钥"""
+    if os.path.exists(file_path):
+        with open(file_path, 'r') as f:
+            return f.read().strip()
+    else:
+        raise FileNotFoundError(f"API密钥文件 '{file_path}' 未找到")
+    
 # 正则表达式函数，用于去除ASY绘图代码
 def remove_asy_tags(text):
     """
@@ -714,8 +723,8 @@ def judge_correct(question, gold_answer, final_answer, model_config):
     返回:
         是否正确的布尔值和判断结果文本
     """
-    global large_model_client
-    print("--------------------------调用大模型根据真实答案判断答案正确性--------------------------")
+    model_name = "deepseek-chat"
+    print(f"--------------------------调用{model_name}根据真实答案判断答案正确性--------------------------")
     prompt = f"""Here is a math problem with a standard answer and a student's solution. Please help me determine if the student's solution is correct. If the numerical value are same, then it is correct.
                                
                 Problem: {question}
@@ -729,11 +738,11 @@ def judge_correct(question, gold_answer, final_answer, model_config):
     """
     
     # 使用全局预初始化的客户端，而不是每次创建新客户端
-    client = large_model_client
+    client = OpenAI(api_key=get_api_key('usage/deepseek'), base_url="https://api.deepseek.com")
     
     try:
         response = client.chat.completions.create(
-            model=model_config.large_model,
+            model=model_name,
             messages=[
                 {"role": "user", "content": prompt}
             ],
@@ -760,8 +769,9 @@ def LLM_judge(question, final_answer, model_config):
     返回:
         是否正确的布尔值和判断结果文本
     """
-    global large_model_client
-    print("--------------------------调用大模型判断答案正确性（没有真实答案）--------------------------")
+    model_name = "deepseek-chat"
+    client = OpenAI(api_key=get_api_key('usage/deepseek'), base_url="https://api.deepseek.com")
+    print(f"--------------------------调用{model_name}判断答案正确性（没有真实答案）--------------------------")
     prompt = f"""Here is a math problem and a student's solution. Please help me determine if the student's solution is correct. If the numerical value are same, then it is correct.
                                
                 Problem: {question}
@@ -773,11 +783,10 @@ def LLM_judge(question, final_answer, model_config):
     """
     
     # 使用全局预初始化的客户端，而不是每次创建新客户端
-    client = large_model_client
     
     try:
         response = client.chat.completions.create(
-            model=model_config.large_model,
+            model=model_name,
             messages=[
                 {"role": "user", "content": prompt}
             ],
@@ -803,20 +812,16 @@ def judge_question_difficulty(question, model_config):
     返回:
         问题难度（字符串）
     """
-    if model_config.use_local_router:
-        prompt = f"""Please determine the difficulty of the following problem. 
-        Difficulty scale:
-        1-10 (1=simplest, 10=hardest)
-        Problem: {question}
-        Please output only the difficulty level as a number. No other explanations or details are needed.
-        """
-    else:
-        prompt = f"""Please determine the difficulty of the following problem. 
-        Difficulty scale:
-        1-10 (1=simplest, 10=hardest)
-        Problem: {question}
-        Please output only the difficulty level as a number. No other explanations or details are needed.
-        """
+    
+    prompt = f"""Please determine the difficulty of the following problem. 
+    Difficulty scale:
+    1-2: Basic computation
+    3-4: Standard operations 
+    5-6: Logical analysis 
+    7-10: Advanced synthesis
+    Problem: {question}
+    Please output only the difficulty level as a number. No other explanations or details are needed.
+    """
 
     client = model_config.get_client(client_type="large")
     try:

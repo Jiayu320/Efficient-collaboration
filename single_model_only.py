@@ -315,15 +315,16 @@ class SingleModelDatasetRunner:
                 If the student's answer is correct, just output True; otherwise, just output False.
                 No explanation is required.
         """
-        
+        model_name = "deepseek-chat"
+        print(f"--------------------------调用{model_name}根据真实答案判断答案正确性--------------------------")
         # 使用客户端调用API
         client = OpenAI(
-            base_url="https://api.bianxie.ai/v1",
-            api_key=get_api_key("usage/bianxie1"),
+            base_url="https://api.deepseek.com",
+            api_key=get_api_key('usage/deepseek'),
             )
         try:
             response = client.chat.completions.create(
-                model="gpt-4o",
+                model=model_name,
                 messages=[
                     {"role": "user", "content": prompt}
                 ],
