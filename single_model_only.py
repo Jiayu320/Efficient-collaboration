@@ -13,6 +13,8 @@ from openai import OpenAI
 
 # 导入理论性能计算模块
 from output_performance import get_model_performance, calculate_theoretical_time, count_tokens
+# 导入日志模块
+from log_config import setup_logger, get_logger, log_separator
 
 
 class ModelConfig:
@@ -239,6 +241,12 @@ class SingleModelDatasetRunner:
         返回:
             处理结果字典
         """
+        # === 新增：获取日志记录器并记录新问题的开始 ===
+        logger = get_logger()
+        logger.info(f"===== 开始处理数据集问题: {problem[:150]}... =====")
+        log_separator()
+        # ==========================================
+
         print(f"\n处理问题: {problem[:100]}...")
         
         # 初始化结果字典
@@ -279,6 +287,12 @@ class SingleModelDatasetRunner:
             stats_tracker.stop_tracking()
             result["stats"] = stats_tracker
             
+            # === 新增：记录当前问题的性能报告到日志 ===
+            logger.info("===== 当前问题的性能报告 =====")
+            logger.info(stats_tracker.format_performance_report())
+            log_separator()
+            # ==========================================
+            
             # 计算理论时间
             completion_tokens = stats_tracker.token_usage["completion_tokens"]
             theoretical_time = calculate_theoretical_time(self.config.model, completion_tokens)
@@ -287,6 +301,10 @@ class SingleModelDatasetRunner:
         except Exception as e:
             print(f"处理问题时出错: {e}")
             result["error"] = str(e)
+            # === 新增：记录错误日志 ===
+            logger.error(f"处理问题时发生错误: {e}", exc_info=True)
+            log_separator()
+            # =========================
         
         # 计算总执行时间
         result["execution_time"] = time.time() - start_time
@@ -425,7 +443,7 @@ class SingleModelDatasetRunner:
         report += f"## 详细结果\n\n"
         report += "| # | 问题 | 状态 | 执行时间(秒) | 理论时间(秒) | 成本($) |\n"
         report += "| --- | --- | --- | --- | --- | --- |\n"
-        
+
         for i, result in enumerate(self.results):
             # 处理状态显示
             if result.get("timed_out", False):
@@ -445,6 +463,11 @@ class SingleModelDatasetRunner:
             
             report += f"| {i+1} | {problem} | {status} | {exec_time:.2f} | {theoretical_time:.2f} | {cost:.4f} |\n"
         
+        log_separator()
+        logger = get_logger()
+        logger.info("===== 详细结果表格 =====")
+        logger.info(report)
+
         return report
     
     def save_results(self, timestamp=None):
@@ -464,6 +487,10 @@ class SingleModelDatasetRunner:
         run_dir = os.path.join(output_dir, timestamp)
         os.makedirs(run_dir, exist_ok=True)
         
+        # === 新增：为数据集运行设置日志记录器 ===
+        setup_logger(run_dir, log_filename="dataset_run_details.log")
+        # =======================================
+
         # 保存报告
         report = self.generate_report()
         report_file = os.path.join(run_dir, "report.md")
@@ -644,11 +671,26 @@ def solve_problem_with_model(query, config, stats_tracker, timeout=120):
     返回:
         解决方案
     """
+    # === 新增：获取日志记录器 ===
+    logger = get_logger()
+    # ============================
+
     print(f"开始使用模型 {config.model} 解决问题...\n")
     print(f"问题: {query}\n")
     
     # 获取客户端
     client = config.get_client()
+
+    messages = [
+        {"role": "system", "content": config.system_prompt},
+        {"role": "user", "content": query}
+    ]
+
+    # === 新增：记录模型的输入(Prompt) ===
+    logger.info("===== Prompt 给模型 =====")
+    logger.info(json.dumps(messages, indent=2, ensure_ascii=False))
+    log_separator()
+    # ==================================
     
     # 开始计时
     start_time = time.time()
@@ -658,10 +700,7 @@ def solve_problem_with_model(query, config, stats_tracker, timeout=120):
         # 使用流式API
         response_stream = client.chat.completions.create(
             model=config.model,
-            messages=[
-                {"role": "system", "content": config.system_prompt},
-                {"role": "user", "content": query}
-            ],
+            messages=messages,
             stream=True,
             extra_body={"enable_thinking": False}
         )
@@ -686,6 +725,12 @@ def solve_problem_with_model(query, config, stats_tracker, timeout=120):
                     print(content, end="", flush=True)
         
         print("\n\n")
+
+        # === 新增：记录模型的完整输出 ===
+        logger.info("===== 来自模型的完整输出 =====")
+        logger.info(collected_content)
+        log_separator()
+        # ================================
         
         # 计算首个令牌响应时间
         ttft = first_token_time - start_time if first_token_time else None
@@ -717,7 +762,7 @@ def solve_problem_with_model(query, config, stats_tracker, timeout=120):
         return f"错误: {str(e)}"
 
 
-def save_single_result(query, result, performance_report, theoretical_time, model_config):
+def save_single_result(query, result, performance_report, theoretical_time, model_config, run_dir):
     """保存单个问题的处理结果
     
     参数:
@@ -726,17 +771,12 @@ def save_single_result(query, result, performance_report, theoretical_time, mode
         performance_report: 性能报告
         theoretical_time: 理论时间计算结果
         model_config: 模型配置
+        run_dir: 预先创建的运行目录
         
     返回:
         输出文件路径
     """
     try:
-        # 创建输出目录
-        timestamp = time.strftime("%Y%m%d_%H%M%S")
-        output_dir = build_output_path(model_config.model)
-        run_dir = os.path.join(output_dir, timestamp)
-        os.makedirs(run_dir, exist_ok=True)
-        
         # 构建报告内容
         model_info = f"# 单模型求解结果\n\n使用模型: {model_config.model}\n\n"
         
@@ -806,17 +846,32 @@ if __name__ == "__main__":
         # 创建数据集运行器
         dataset_runner = SingleModelDatasetRunner(model_config, dataset_path, limit=dataset_limit)
         
+        # === 修改：先调用保存以设置日志记录器 ===
+        # 创建一个时间戳供整个运行过程使用
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        # 调用保存函数，它会创建目录并设置日志
+        dataset_runner.save_results(timestamp)
+        
         # 处理数据集（传递超时参数）
         dataset_runner.process_dataset(timeout=timeout)
         
-        # 保存结果并生成报告
-        report_file = dataset_runner.save_results()
+        # 再次保存以更新报告和JSON文件
+        report_file = dataset_runner.save_results(timestamp)
         print(f"数据集处理完成，报告已保存到 {report_file}")
     else:
         # 单个问题处理模式
         # 获取查询
         query = args.query if args.query else yaml_config["query"]
         print("启动单模型单独求解程序...")
+
+        # === 新增：提前创建目录并设置日志记录器 ===
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        output_dir = build_output_path(model_config.model)
+        run_dir = os.path.join(output_dir, timestamp)
+        os.makedirs(run_dir, exist_ok=True)
+        setup_logger(run_dir, log_filename="single_run_details.log")
+        # ==========================================
+
         print(f"当前查询: {query}")
         
         # 创建性能跟踪器
@@ -836,11 +891,20 @@ if __name__ == "__main__":
         
         # 生成性能报告
         performance_report = stats_tracker.format_performance_report()
+        
+        # === 新增：记录最终性能报告 ===
+        logger = get_logger()
+        logger.info("===== 最终性能报告 =====")
+        logger.info(performance_report)
+        
+        log_separator()
+        # ==============================
+
         print("\n性能统计:")
         print(performance_report)
         
-        # 保存结果到文件
-        output_file = save_single_result(query, result, performance_report, theoretical_time, model_config)
+        # 保存结果到文件 (传递已创建的目录)
+        output_file = save_single_result(query, result, performance_report, theoretical_time, model_config, run_dir)
         print(f"执行完成")
 
 '''

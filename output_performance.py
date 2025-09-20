@@ -55,6 +55,14 @@ def get_model_performance(model_name: str) -> Dict[str, float]:
     # Claude模型性能
     if "claude-3-5" in model_name_lower or "claude-3.5" in model_name_lower or "claude-3-5-sonnet" in model_name_lower:
         return {"latency": calculate_average([0.76, 1.41, 1.75, 1.54, 1.23]), "throughput": calculate_average([52.59, 49.44, 56.96, 45.58, 52.89])}
+    elif "claude-3-7" in model_name_lower or "claude-3.7" in model_name_lower or "claude-3-7-sonnet" in model_name_lower:
+        return {"latency": calculate_average([1.41, 3.99, 2.74, 2.40]), "throughput": calculate_average([56.31, 69.85, 53.88, 90.04])}
+
+    # Gemini模型性能
+    elif "gemini-2.5-flash-thinking" in model_name_lower:
+        return {"latency": calculate_average([0.41, 0.59, 1.21]), "throughput": calculate_average([106.6, 118.1, 86.42])}
+    elif "gemini-2.5-pro" in model_name_lower:
+        return {"latency": calculate_average([2.20, 2.99, 2.34]), "throughput": calculate_average([100.7, 94.10, 86.46])}
 
     # OpenAI模型性能
     elif "gpt-4o" in model_name_lower:

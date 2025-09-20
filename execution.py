@@ -14,6 +14,8 @@ from config import ModelConfig, load_config, parse_args
 from performance import PerformanceTracker, calculate_performance_metrics
 from output_performance import count_tokens
 from token_patch import get_deepseek_tokenizer, count_deepseek_tokens, append_output, get_collected_tokens, reset_collected_output
+# 导入日志配置模块
+from log_config import get_logger, log_separator
 
 
 def get_api_key(file_path):
@@ -22,6 +24,7 @@ def get_api_key(file_path):
         with open(file_path, 'r') as f:
             return f.read().strip()
     else:
+        log.error(f"API密钥文件 '{file_path}' 未找到")
         raise FileNotFoundError(f"API密钥文件 '{file_path}' 未找到")
     
 # 正则表达式函数，用于去除ASY绘图代码
@@ -269,20 +272,52 @@ def generate_step_result(prompt, difficulty, model_config, stats_tracker=None):
 def build_step_prompt(current_step, tasks, query):
     """构建当前步骤的提示"""
     prompt_template = """
+    You are a specialized AI module acting as a precision-focused computational and reasoning engine. Your sole function is to execute a single, specific subtask from a larger problem-solving plan with absolute accuracy.
+    You will be provided with the following inputs:
+
+    1.  **`PROBLEM`**: The overall problem for context, but you should not attempt to solve it.
+    2.  **`CURRENT STEP (Task)`**: The specific, isolated instruction you must execute.
+    3.  **`CONTEXT (Results from prior steps)`**: Crucial information from completed steps. **You MUST use this context if the task relies on it.**
+
+    Your output must strictly adhere to the following two-part format:
+
+    1.  **`Reasoning:`**: Provide a brief, step-by-step explanation of your process for completing the task. Show your work for any calculations. This section should be concise and logical.
+    2.  **`Answer:`**: State the final, direct answer to the `Task`. This should be the conclusive output of your reasoning, presented as cleanly as possible (e.g., a number, a formula, a short statement).
+
+    **CRITICAL RULES:**
+    * **DO NOT** exceed the scope of the `Task`.
+    * **DO NOT** provide any information that was not explicitly requested.
+    * **DO NOT** add conversational filler, greetings, or sign-offs.
+    * Your entire response must be under **{Token}** tokens.
+
+    **PROBLEM:**
+    {Problem}
+
+    **CURRENT STEP:**
+    Task: {Task}
+
+    {Relied_Results}
+    """
+    prompt_template_prior = """
     You are a problem-solving assistant. I will provide you with a problem and a specific step from my solution plan. Your task is to complete ONLY this specific step based on the description and token limit.
     PROBLEM:
     {Problem}
     CURRENT STEP:
     Task: {Task}
-    Relied Results: {Relied_Results}
+    {Relied_Results}
     Let's think step by step and use less than {Token} tokens:
     """
     # 获得依赖的任务的具体结果
-    relied_results = tasks[current_step].get('Rely', '')
-    if relied_results:
-        relied_results = [tasks[step_id]['Result'] for step_id in relied_results.split(',') if step_id in tasks]
+    rely_ids = tasks[current_step].get('Rely', '')
+    if rely_ids != '':
+        relied_results = "\n    **CONTEXT (Results from prior steps):**\n"
+        # 遍历每个依赖的步骤ID
+        for step_id in rely_ids.split(','):
+            if step_id in tasks and 'Result' in tasks[step_id] and tasks[step_id]['Result']:
+                relied_results += f"\n    Task {step_id}: {tasks[step_id].get('Task', '')} ; Result: {tasks[step_id]['Result']}"
     else:
-        relied_results = []
+        relied_results = ""
+    
     return prompt_template.format(
         Problem=query,
         Task=tasks[current_step].get('Task', ''),
@@ -310,12 +345,29 @@ def process_step(step_id, tasks, query, model_config, stats_tracker=None):
         stats_tracker: 性能统计跟踪器
     """
     try:
+        # === 新增：获取日志记录器 ===
+        logger = get_logger()
+        # ============================
+
         print(f"\n开始执行步骤 {step_id}: {tasks[step_id].get('Task', '未知任务')}")
         prompt, difficulty = build_step_prompt(step_id, tasks, query)
         
+        # === 新增：记录执行器模型的输入 ===
+        model_type = "大模型" if int(difficulty) >= model_config.threshold else "小模型"
+        logger.info(f"===== Prompt 给执行器 ({model_type} - 步骤 {step_id}) =====")
+        logger.info(prompt)
+        log_separator()
+        # =================================
+
         # 使用模型配置生成结果
         result = generate_step_result(prompt, difficulty, model_config, stats_tracker)
         
+        # === 新增：记录执行器模型的输出 ===
+        logger.info(f"===== 来自执行器 ({model_type} - 步骤 {step_id}) 的输出 =====")
+        logger.info(result)
+        log_separator()
+        # =================================
+
         tasks[step_id]['Result'] = result
         completed_steps.add(step_id)
         print(f"步骤 {step_id} 执行完成")
@@ -429,6 +481,10 @@ def wait_for_completion_and_get_final_result(tasks, query, config, stats_tracker
     返回:
         最终结果字符串
     """
+    # === 新增：获取日志记录器 ===
+    logger = get_logger()
+    # ============================
+
     # 确保所有任务已完成
     if not all('Result' in task and task['Result'] for task in tasks.values()):
         print("等待所有任务完成...")
@@ -475,7 +531,21 @@ def wait_for_completion_and_get_final_result(tasks, query, config, stats_tracker
     # 调用小模型获取最终答案
     try:
         final_prompt = prompt.format(query=query, steps=steps_text)
+
+        # === 新增：记录最终总结的Prompt ===
+        logger.info("===== Prompt 给最终总结模型 (小模型) =====")
+        logger.info(final_prompt)
+        log_separator()
+        # =================================
+
         final_answer = generate_step_result(final_prompt, "1", config, stats_tracker)  # 使用小模型（难度为1，低于阈值）
+
+        # === 新增：记录最终总结的输出 ===
+        logger.info("===== 来自最终总结模型 (小模型) 的输出 =====")
+        logger.info(final_answer)
+        log_separator()
+        # =================================
+
         final_result += f"## 最终答案\n{final_answer}\n"
         # 停止性能跟踪
         stats_tracker.stop_tracking()
@@ -524,6 +594,261 @@ def generate_task_dependency_report(tasks):
     
     return report
 
+def dataset_run_parallel_execution(query, solution, config, workers=4):
+    """
+    生成数据集的流程，给定问题和参考答案，利用规划的模型来生成数据
+    
+    参数:
+        query: 要解决的问题
+        config: 模型配置对象
+        workers: 并行工作线程数
+    """
+    global xml_buffer, tasks, completed_steps, futures, router_model_client
+    
+    # === 新增：获取日志记录器 ===
+    logger = get_logger()
+    # ============================
+
+    # 创建性能统计跟踪器
+    stats_tracker = PerformanceTracker(config)
+    
+    # 初始化所有客户端
+    initialize_clients(config)
+    
+    # 重置全局状态
+    xml_buffer = ""
+    tasks = defaultdict(dict)
+    completed_steps = set()
+    futures = {}
+    future_to_id = {}
+    
+    # 创建线程池
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=workers)
+    
+    # 初始化变量跟踪解析进度
+    task_count = 0
+    print("开始处理问题：", query)
+    print("正在获取解决方案计划...")
+
+    if config.use_local_router:
+        system_prompt = '''You are an assistant whose job is to generate a solution plan. Given a math problem, generate a solution plan less than 10 steps in XML format with the following constraints:
+        1. Plan must contain EXACTLY 1-10 steps (never more than 10)
+        2. Each step must be distinct and non-redundant
+        3. Merge trivial steps into logical units
+        4. Focus on key insights and critical transitions
+        5. Avoid step-by-step computations, focus on conceptual transitions
+        6. Mark computational steps with Difficulty≥3
+        7. Ensure all Rely attributes reference valid step IDs
+        8. Make sure the Task is ended with a question mark (?)
+        9. Format: 
+        <Plan>
+        <Step ID="1" Task="..." Difficulty="1-10" Token="Estimate the number of tokens required to complete a subtask" Rely="Output only relevant steps"/>
+        ...
+        </Plan>
+        Make sure the format with paired tags is correct and all steps are properly nested within the <Plan> tag.
+
+        Difficulty scale:
+        1-2: Basic computation
+        3-4: Standard operations 
+        5-6: Logical analysis 
+        7-10: Advanced synthesis
+
+        Output ONLY the XML plan with no additional text.
+        '''
+    else:
+        system_prompt = '''You are an expert **first-principles thinker and master strategist**. Your primary function is to deconstruct any complex problem into a clear, logical, and operational sequence of steps for a machine to execute.
+
+Given a problem, your output must consist of two parts, in this exact order:
+
+1.  A **`<think>` block**: Contains your high-level strategic analysis of the problem.
+2.  A **`<Plan>` block**: Contains the XML-formatted, step-by-step operational plan.
+
+**Part 1: The `<think>` Block**
+Before generating the plan, you must first perform and explicitly state your strategic analysis within `<think>` tags. This analysis must be thorough and answer the following three questions:
+
+  * **Core Principle Identification**: What are the fundamental principles, theorems, or formulas required to solve this problem? Be specific (e.g., "This requires the prime factorization of 20\!, followed by a combinatorial count using the number of distinct prime factors," not just "number theory").
+  * **Pitfall Prediction**: What are the most likely traps? This includes:
+      * *Conceptual Traps*: Misinterpreting definitions (e.g., confusing midsegment with area bisector), mixing up reference frames, making incorrect assumptions.
+      * *Calculation Traps*: Overlooking special cases/exceptions (e.g., initial terms in a series), using the wrong formula (e.g., for error propagation or molecular speed), making unit conversion errors (e.g., g/mol vs kg/molecule).
+      * *Completeness Traps*: Stopping the reasoning process too early and failing to perform the final calculation or count.
+  * **Strategy Formulation**: Based on the principles and pitfalls, what is your high-level, step-by-step strategy? **This strategy must be concrete.** For any calculation step, explicitly state the formula or method you intend to use. (e.g., "First, find the prime factors of N. Second, count the number of distinct prime factors, let's say `k`. Third, the number of coprime factor pairs is `2^(k-1)`. Finally, calculate this value.").
+
+**Part 2: The `<Plan>` Block**
+After the `<think>` block, generate a solution plan that is a direct, operational implementation of your stated strategy. The plan must adhere to these strict constraints:
+
+#### **XML Plan Constraints:**
+
+1.  **Plan Length**: Must contain between 2 and 10 steps.
+2.  **Actionable & Precise Steps**: Each `<Step>` `Task` must be a distinct and **unambiguous operational instruction**.
+      * For conceptual steps, ask a precise question about a definition or property.
+      * For calculation steps, **the task must specify the exact formula or method to be used** (e.g., "Using the formula for coprime factor pairs, `2^(k-1)`, calculate the total number where `k` is the number of distinct prime factors?").
+3.  **Logical Flow & Completeness**: The plan must represent a clear logical progression from start to finish. **The final step must be the final numerical calculation or conclusive statement.**
+4.  **Contextual Linking**: When a step `N` relies on a step `M`, the `Task` for step `N` should explicitly reference the output or variables from `M`.
+5.  **Difficulty**: Mark steps requiring non-trivial synthesis with `Difficulty >= 5`.
+6.  **Attribute Integrity**: All attributes must be correctly formatted. The `Task` must end with a question mark (?).
+7.  **XML Format**: Output ONLY the `<think>` and `<Plan>` blocks as specified.
+
+-----
+
+### **Examples of Good vs. Flawed Plans**
+
+#### **Good Example \#1: Correct Core Principle and Complete Plan**
+
+**Question**: "For how many rational numbers between 0 and 1 will $20\!$ be the resulting product of their numerator and denominator in lowest terms?"
+
+**Response**:
+<think>
+**Core Principle Identification**: The core principle is number theory, specifically concerning prime factorization and coprime numbers. A rational number `a/b` is in lowest terms if `gcd(a, b) = 1`. The condition `a*b = 20!` means `a` and `b` must be formed by partitioning the prime factors of `20!`. For `a` and `b` to be coprime, they cannot share any prime factors.
+**Pitfall Prediction**: The primary trap is stopping after identifying the principle and failing to perform the final count. The second trap is miscounting; the number of ways to partition `k` distinct items into two groups is `2^k`, but since `a/b` must be between 0 and 1, `a` must be less than `b`. This means we must exclude the case `a=b` (if possible) and divide the remaining pairs by 2. For a number like `20!` which is not a perfect square, `a` can never equal `b`.
+**Strategy Formulation**: 1. Find the prime factorization of 20\!. 2. Identify the number of *distinct* prime factors, let's call this `k`. 3. For `a` and `b` to be coprime, each distinct prime factor's entire power (e.g., `2^18`) must go entirely to either `a` or `b`. There are `2^k` ways to distribute these `k` distinct prime factors into two sets. 4. Since `a < b`, we divide the total number of pairs by 2. The case `a=b` is impossible as 20\! is not a perfect square. Thus the final answer is `2^k / 2 = 2^(k-1)`. 5. I will execute this final calculation.
+</think>
+<Plan>
+<Step ID="1" Task="What are the distinct prime factors of 20\! ?" Difficulty="4" Token="50" Rely=""/>
+<Step ID="2" Task="Count the number of distinct prime factors found in Step 1. Let this count be k. What is the value of k?" Difficulty="2" Token="20" Rely="1"/>
+<Step ID="3" Task="The number of pairs of coprime factors (a,b) of 20\! is 2^k. The number of rational numbers a/b between 0 and 1 is half of this. Using the formula N = 2^(k-1), what is the final number of such rational numbers?" Difficulty="4" Token="50" Rely="2"/>
+</Plan>
+
+-----
+
+#### **Bad Example \#1: Flawed Geometric Model**
+
+**Question**: "One base of a trapezoid is $100$ units longer than the other base. The segment that joins the midpoints of the legs divides the trapezoid into two regions whose areas are in the ratio $2:3$. Let $x$ be the length of the segment that divides the trapezoid into two regions of equal area. Find the greatest integer that does not exceed $x^2/100$."
+
+**Flawed Plan**:
+<Plan>
+<Step ID="1" Task="If we denote the shorter base as 'a' and the longer base as 'a + 100', what is the length of the segment joining the midpoints of the legs?" Difficulty="2" Token="30" Rely=""/>
+<Step ID="2" Task="Using the fact that the midpoint segment divides the trapezoid into regions with area ratio 2:3, what equation can we write relating a and the height h?" Difficulty="5" Token="60" Rely="1"/>
+<Step ID="3" Task="What is the length x of the equal-area-dividing segment in terms of a?" Difficulty="4" Token="50" Rely=""/>
+<Step ID="4" Task="Calculate x²/100 and find the greatest integer." Difficulty="3" Token="30" Rely="2,3"/>
+</Plan>
+**Justification for why this is flawed**: This plan is **conceptually flawed**. It incorrectly assumes that the information about the "midpoint segment" (midsegment) can be directly used to find the base `a`. The midsegment divides the trapezoid's height in half, creating two smaller trapezoids. The ratio of their areas is fixed by the lengths of the bases and does not depend on `h`. The plan fails to establish the correct geometric relationship (using similar trapezoids and area formulas) needed to find `a`.
+
+-----
+
+#### **Bad Example \#2: Ignoring Exceptions and Incomplete Plan**
+
+**Question**: "Find the remainder when $9 \\times 99 \\times 999 \\times \\cdots \\times \\underbrace{99\\cdots9}\_{\\text{999 9's}}$ is divided by $1000$."
+
+**Flawed Plan**:
+<Plan>
+<Step ID="1" Task="How can we express a number with n consecutive 9's in terms of powers of 10?" Difficulty="2" Token="20" Rely=""/>
+<Step ID="2" Task="What are the remainders when 9, 99, and 999 are divided by 1000?" Difficulty="3" Token="30" Rely=""/>
+<Step ID="3" Task="For numbers with 4 or more 9's, what is their remainder when divided by 1000?" Difficulty="4" Token="40" Rely="1"/>
+<Step ID="4" Task="How many terms in our product have a remainder of 999?" Difficulty="3" Token="30" Rely=""/>
+<Step ID="5" Task="What is the final remainder of the entire product?" Difficulty="4" Token="50" Rely="2,3,4"/>
+</Plan>
+**Justification for why this is flawed**: This plan is **incomplete and invites error**. While it correctly separates some cases, Step 5 is too vague. A good plan would have separate, explicit steps to: (a) calculate the product of the remainders of the special cases (`9 * 99`), (b) calculate the product of the remainders of the general cases (`999^997`), and (c) multiply the results from (a) and (b) together modulo 1000. Lumping these into one step caused the model to forget one of the terms in the final calculation.
+        '''
+        user_query = f'''
+            Question: {query}
+            Solution: {solution}
+            Please generate a solution plan for the question in XML format you can use the solution as a reference.
+        '''
+    # === 新增：记录 Planner 的输入 ===
+    logger.info("===== Prompt 给 Planner (Router) =====")
+    logger.info(f"System Prompt:\n{system_prompt}")
+    logger.info(f"User Query:\n{user_query}")
+    log_separator()
+    # ===============================
+
+    # 使用预初始化的路由模型客户端
+    try:
+        # 记录路由模型开始生成计划的时间，用于计算首个令牌响应时间
+        router_start_time = time.time()
+        first_token_received = False
+        ttft = None
+        
+        # 根据配置决定是使用本地路由模型还是远程路由模型
+        if config.use_local_router:
+            response_stream = router_model_client.chat.completions.create(
+                model=config.local_router_model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_query}
+                ],
+                stream=True,
+                temperature=0.5,
+                top_p=0.95,
+                max_tokens=8192,
+                extra_body={"enable_thinking": False}
+            )
+        else:
+            response_stream = router_model_client.chat.completions.create(
+                model=config.router_model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_query}
+                ],
+                stream=True
+            )
+        
+        # 计算输入tokens (估计值，实际应该通过API返回)
+        prompt_tokens = len(system_prompt.split()) + len(query.split())
+        completion_tokens = 0
+        full_completion = "" # 用于收集完整的 router 输出
+        
+        for chunk in response_stream:
+            if hasattr(chunk.choices[0], 'delta') and hasattr(chunk.choices[0].delta, 'content'):
+                content = chunk.choices[0].delta.content
+                if content:
+                    # 记录首个token响应时间
+                    if not first_token_received:
+                        ttft = time.time() - router_start_time
+                        first_token_received = True
+                        if stats_tracker:
+                            stats_tracker.update_ttft("router_model", ttft)
+                    
+                    print(content, end="", flush=True)  # 实时输出
+                    full_completion += content # 累加内容
+                    
+                    # 使用deepseek_v3_tokenizer更新完成tokens计数
+                    completion_tokens += count_deepseek_tokens(content)
+                    
+                    # 添加到XML缓冲区
+                    xml_buffer += content
+                    
+                    # 尝试解析缓冲区中的完整标签
+                    parsed_count = 0
+                    while process_xml_buffer():
+                        parsed_count += 1
+                        task_count += 1
+                    
+                    # 只有在解析到新任务时才启动路由
+                    if parsed_count > 0:
+                        print(f"\n已解析 {task_count} 个任务，启动任务调度...")
+                        router(tasks, config, query, executor)
+        
+        # === 新增：记录 Planner 的完整输出 ===
+        logger.info("===== 来自 Planner (Router) 的输出 =====")
+        logger.info(full_completion)
+        log_separator()
+        # ==================================
+
+        # 更新router模型的token使用情况
+        if stats_tracker:
+            stats_tracker.update_token_usage("router_model", prompt_tokens, completion_tokens)
+                        
+    except Exception as e:
+        print(f"\n处理响应时出错: {e}")
+    
+    print(f"\n计划生成完成，共解析 {task_count} 个任务")
+    
+    # 继续处理可能的剩余XML标签
+    while process_xml_buffer():
+        pass
+    
+    # 处理所有剩余任务直到全部完成
+    print("\n\n开始执行所有任务...")
+    while tasks and any(step_id not in completed_steps for step_id in tasks):
+        if not router(tasks, config, query, executor, stats_tracker):
+            break
+    
+    # 关闭线程池
+    executor.shutdown()
+    
+    return tasks, stats_tracker
+
+
 def run_parallel_execution(query, config, workers=4):
     """运行并行执行流程
     
@@ -538,6 +863,10 @@ def run_parallel_execution(query, config, workers=4):
         (tasks, stats_tracker): 任务字典和性能统计跟踪器
     """
     global xml_buffer, tasks, completed_steps, futures, router_model_client
+
+    # === 新增：获取日志记录器 ===
+    logger = get_logger()
+    # ============================
     
     # 创建性能统计跟踪器
     stats_tracker = PerformanceTracker(config)
@@ -579,47 +908,100 @@ def run_parallel_execution(query, config, workers=4):
 
         Output ONLY the XML plan with no additional text.'''
     else:
-        system_prompt = '''You are an assistant whose job is to generate a solution plan. Given a math problem, generate a solution plan less than 10 steps in XML format with the following constraints:
-        1. Plan must contain EXACTLY 1-10 steps (never more than 10)
-        2. Each step must be distinct and non-redundant
-        3. Merge trivial steps into logical units
-        4. Focus on key insights and critical transitions
-        5. Avoid step-by-step computations, focus on conceptual transitions
-        6. Mark computational steps with Difficulty≥3
-        7. Ensure all Rely attributes reference valid step IDs
-        8. Make sure the Task is ended with a question mark (?)
-        9. Format: 
-        <Plan>
-        <Step ID="1" Task="..." Difficulty="1-10" Token="Estimate the number of tokens required to complete a subtask" Rely="Output only relevant steps"/>
-        ...
-        </Plan>
-        Make sure the format with paired tags is correct and all steps are properly nested within the <Plan> tag.
+        system_prompt = '''You are an expert **first-principles thinker and master strategist**. Your primary function is to deconstruct any complex problem into a clear, logical, and operational sequence of steps for a machine to execute.
 
-        Difficulty scale:
-        1-2: Basic computation
-        3-4: Standard operations 
-        5-6: Logical analysis 
-        7-10: Advanced synthesis
+Given a problem, your output must consist of two parts, in this exact order:
 
-        Output ONLY the XML plan with no additional text.
-        Example:
-        Question: Let's say a language  $L \\subseteq \\{0,1\\}^*$  is in  $\\textbf{P}_{angel}$  if there exists a polynomial  $p : \\mathbb{N} \\mapsto \\mathbb{N}$ , a sequence of strings  $\\{\\alpha_n\\}_{n \\in \\mathbb{N}}$  with  $\\alpha_n \\in \\{0,1\\}^{p(n)}$ , and a deterministic polynomial time Turing Machine  $M$  such that for every  $x \\in \\{0,1\\}^n$   $$ x \\in L \\Leftrightarrow M(x, \\alpha_n) = 1 $$  Let us call  $\\alpha_n$  to be the *angel string*for all  $x$  of the length  $n$ . Note that the *angel string* is  $\\textbf{not}$  similar to a *witness* or *certificate*as used in the definition of  $\\textbf{NP}$  For example, all unary languages, even  $UHALT$  which is undecidable, are in  $\\textbf{P}_{angel}$  because the \\textit{angel string} can simply be a single bit that tells us if the given unary string is in  $UHALT$  or not.\n\n\nA set  $S \\subseteq \\Sigma^*$  is said to be **sparse** if there exists a polynomial   $p : \\mathbb{N} \\mapsto \\mathbb{N}$  such that for each  $n \\in \\mathbb{N}$ , the number of strings of length  $n$  in  $S$  is bounded by  $p(n)$ . In other words,  $|S^{=n}| \\leq p(n)$ , where  $S^{=n} \\subseteq S$  contains all the strings in  $S$  that are of length  $n$ . \n\n[list=1]\n    [*] Given  $k \\in \\mathbb{N}$  sparse sets  $S_1, S_2 \\ldots S_k$ , show that there exists a sparse set  $S$  and a deterministic polynomial time TM  $M$  with oracle access to  $S$  such that given an input  $\\langle x,i \\rangle$  the TM  $M$  will accept it if and only if  $x \\in S_i$ .\n    Define the set  $S$  (note that it need not be computable), and give the description of  $M$  with oracle  $S$ .\n    Note that a TM  $M$  with oracle access to  $S$  can query whether  $s \\in S$  and get the correct answer in return in constant time. [/*]\n    \n    [*] Let us define a variant of  $\\textbf{P}_{angel}$  called  $\\textbf{P}_{bad-angel}$  with a constraint that there should exists a polynomial time algorithm that can **compute** the angel string for any length  $n \\in \\mathbb{N}$ . In other words, there is a poly-time algorithm  $A$  such that  $\\alpha_n = A(n)$ . \n    Is  $\\textbf{P} =\\textbf{P}_{bad-angel}$ ? Is  $\\textbf{NP}=\\textbf{P}_{bad-angel}$ ? Justify.\n    [/*]\n    \n    [*] Let the language  $L \\in$   $\\textbf{P}_{angel}$ . Show that there exists a sparse set  $S_L$  and a deterministic polynomial time TM  $M$  with oracle access to  $S_L$  that can decide the language  $L$ .  [/*]
-        Plan: <Plan><Step ID=\"1\" Task=\"What does a sparse set mean in this context?\" Difficulty=\"2\" Token=\"20\" Rely=\"\"/><Step ID=\"2\" Task=\"How can we construct a set S that encodes information about k sparse sets?\" Difficulty=\"3\" Token=\"30\" Rely=\"1\"/><Step ID=\"3\" Task=\"How can we design a polynomial time TM M with oracle access to S to decide membership in Si?\" Difficulty=\"4\" Token=\"40\" Rely=\"2\"/><Step ID=\"4\" Task=\"What is the key difference between P_angel and P_bad-angel?\" Difficulty=\"2\" Token=\"20\" Rely=\"\"/><Step ID=\"5\" Task=\"Is P equal to P_bad-angel? Why or why not?\" Difficulty=\"3\" Token=\"35\" Rely=\"4\"/><Step ID=\"6\" Task=\"Is NP equal to P_bad-angel? Why or why not?\" Difficulty=\"4\" Token=\"40\" Rely=\"4,5\"/><Step ID=\"7\" Task=\"For a language L in P_angel, how can we encode the angel strings into a sparse set S_L?\" Difficulty=\"4\" Token=\"35\" Rely=\"1,4\"/><Step ID=\"8\" Task=\"How can we design a TM with oracle access to S_L to decide L?\" Difficulty=\"4\" Token=\"35\" Rely=\"7\"/></Plan>
-        Question: Consider the following two person game. A number of pebbles are situated on the table. Two players make their moves alternately. A move consists of taking off the table  $x$  pebbles where  $x$  is the square of any positive integer. The player who is unable to make a move loses. Prove that there are infinitely many initial situations in which the second player can win no matter how his opponent plays.
-        Plan: <Plan><Step ID=\"1\" Task=\"What are the valid moves in this game?\" Difficulty=\"1\" Token=\"20\" Rely=\"\"/><Step ID=\"2\" Task=\"Which positions are winning for the first player?\" Difficulty=\"4\" Token=\"40\" Rely=\"1\"/><Step ID=\"3\" Task=\"Which positions are winning for the second player?\" Difficulty=\"4\" Token=\"40\" Rely=\"1,2\"/><Step ID=\"4\" Task=\"Can we identify a pattern for winning second player positions?\" Difficulty=\"5\" Token=\"50\" Rely=\"3\"/><Step ID=\"5\" Task=\"For which specific number(s) of pebbles can the second player force a win?\" Difficulty=\"4\" Token=\"50\" Rely=\"4\"/><Step ID=\"6\" Task=\"Can we prove there are infinitely many such winning positions?\" Difficulty=\"5\" Token=\"60\" Rely=\"5\"/><Step ID=\"7\" Task=\"Can we express these winning positions as a formula or pattern?\" Difficulty=\"4\" Token=\"40\" Rely=\"5,6\"/></Plan>
-        Question: An IPv4 packet contains the following data (in hexadecimal value) in the IP header: 4500 0034 B612 4000 4006 6F80 0A00 008B 5BC6 AEE0 . Does the header contains error?
-        Plan: <Plan><Step ID=\"1\" Task=\"What is the structure and format of an IPv4 header?\" Difficulty=\"2\" Token=\"30\" Rely=\"\"/><Step ID=\"2\" Task=\"What does each part of the given hexadecimal data represent in the IPv4 header?\" Difficulty=\"3\" Token=\"40\" Rely=\"1\"/><Step ID=\"3\" Task=\"What is the header length according to the data?\" Difficulty=\"2\" Token=\"20\" Rely=\"2\"/><Step ID=\"4\" Task=\"Calculate the header checksum from the given data?\" Difficulty=\"4\" Token=\"50\" Rely=\"2\"/><Step ID=\"5\" Task=\"What is the checksum value provided in the header?\" Difficulty=\"2\" Token=\"20\" Rely=\"2\"/><Step ID=\"6\" Task=\"Does the calculated checksum match the provided checksum?\" Difficulty=\"3\" Token=\"30\" Rely=\"4,5\"/><Step ID=\"7\" Task=\"Are there any other potential errors in the header fields?\" Difficulty=\"3\" Token=\"40\" Rely=\"2\"/><Step ID=\"8\" Task=\"Does the IPv4 header contain any errors based on all checks?\" Difficulty=\"2\" Token=\"25\" Rely=\"6,7\"/></Plan>
-        Question: A stationary source emits sound of frequency $f_{0}=492 \\mathrm{~Hz}$. The sound is reflected by a large car approaching the source with a speed of $2 \\mathrm{~ms}^{-1}$. The reflected signal is received by the source and superposed with the original. What will be the beat frequency of the resulting signal in Hz? (Given that the speed of sound in air is $330 \\mathrm{~ms}^{-1}$ and the car reflects the sound at the frequency it has received).
-        Plan: <Plan><Step ID=\"1\" Task=\"What is the frequency received by the approaching car?\" Difficulty=\"3\" Token=\"30\" Rely=\"\"/><Step ID=\"2\" Task=\"What is the frequency reflected by the car?\" Difficulty=\"2\" Token=\"20\" Rely=\"1\"/><Step ID=\"3\" Task=\"What is the frequency of the reflected sound received back at the source?\" Difficulty=\"3\" Token=\"30\" Rely=\"2\"/><Step ID=\"4\" Task=\"What is the beat frequency when the original signal and reflected signal superpose?\" Difficulty=\"2\" Token=\"25\" Rely=\"3\"/></Plan>
-        Question: 2.2 Find the numerical value of $\\frac{\\rho_{i} T_{i}}{\\rho_{a} T_{a}}-1$ using $\\gamma=0.0250 \\mathrm{Nm}^{-1}, R_{0}=1.00 \\mathrm{~cm}$, and $P_{a}=1.013 \\times 10^{5} \\mathrm{Nm}^{-2}$.
-        Plan: <Plan><Step ID=\"1\" Task=\"What is the relationship between pressure, density, and temperature for an ideal gas?\" Difficulty=\"2\" Token=\"30\" Rely=\"\"/><Step ID=\"2\" Task=\"How are the internal pressure (Pi) and external pressure (Pa) related using the Young-Laplace equation?\" Difficulty=\"3\" Token=\"35\" Rely=\"\"/><Step ID=\"3\" Task=\"Calculate the internal pressure (Pi) using γ, R0, and Pa?\" Difficulty=\"3\" Token=\"30\" Rely=\"2\"/><Step ID=\"4\" Task=\"How can we express the ratio of ρiTi/ρaTa in terms of pressures Pi and Pa?\" Difficulty=\"3\" Token=\"35\" Rely=\"1\"/><Step ID=\"5\" Task=\"Calculate the numerical value of Pi/Pa using the given values?\" Difficulty=\"3\" Token=\"25\" Rely=\"3\"/><Step ID=\"6\" Task=\"Calculate the numerical value of ρiTi/ρaTa using the pressure ratio?\" Difficulty=\"3\" Token=\"25\" Rely=\"4,5\"/><Step ID=\"7\" Task=\"Calculate the final value of ρiTi/ρaTa - 1?\" Difficulty=\"2\" Token=\"20\" Rely=\"6\"/></Plan>
-        Question: "Mrs. Walter gave an exam in a mathematics class of five students. She entered the scores in random order into a spreadsheet, which recalculated the class average after each score was entered. Mrs. Walter noticed that after each score was entered, the average was always an integer. The scores (listed in ascending order) were 71,76,80,82,and 91. What was the last score Mrs. Walter entered?"
-        Plan: <Plan><Step ID=\"1\" Task=\"What is the average of all five scores?\" Difficulty=\"2\" Token=\"25\" Rely=\"\"/><Step ID=\"2\" Task=\"What are the possible sums after entering 1, 2, 3, 4, and 5 scores?\" Difficulty=\"3\" Token=\"40\" Rely=\"\"/><Step ID=\"3\" Task=\"What are the possible averages after entering each score?\" Difficulty=\"3\" Token=\"40\" Rely=\"2\"/><Step ID=\"4\" Task=\"Which averages are integers?\" Difficulty=\"2\" Token=\"30\" Rely=\"3\"/><Step ID=\"5\" Task=\"What are the possible orders for entering the scores to get integer averages each time?\" Difficulty=\"4\" Token=\"60\" Rely=\"4\"/><Step ID=\"6\" Task=\"For each possible order, what is the last score entered?\" Difficulty=\"3\" Token=\"40\" Rely=\"5\"/><Step ID=\"7\" Task=\"Is there only one possible last score or multiple possibilities?\" Difficulty=\"2\" Token=\"30\" Rely=\"6\"/><Step ID=\"8\" Task=\"What was the last score Mrs. Walter entered?\" Difficulty=\"1\" Token=\"20\" Rely=\"7\"/></Plan>
-        '''
+1.  A **`<think>` block**: Contains your high-level strategic analysis of the problem.
+2.  A **`<Plan>` block**: Contains the XML-formatted, step-by-step operational plan.
+
+**Part 1: The `<think>` Block**
+Before generating the plan, you must first perform and explicitly state your strategic analysis within `<think>` tags. This analysis must be thorough and answer the following three questions:
+
+  * **Core Principle Identification**: What are the fundamental principles, theorems, or formulas required to solve this problem? Be specific (e.g., "This requires the prime factorization of 20\!, followed by a combinatorial count using the number of distinct prime factors," not just "number theory").
+  * **Pitfall Prediction**: What are the most likely traps? This includes:
+      * *Conceptual Traps*: Misinterpreting definitions (e.g., confusing midsegment with area bisector), mixing up reference frames, making incorrect assumptions.
+      * *Calculation Traps*: Overlooking special cases/exceptions (e.g., initial terms in a series), using the wrong formula (e.g., for error propagation or molecular speed), making unit conversion errors (e.g., g/mol vs kg/molecule).
+      * *Completeness Traps*: Stopping the reasoning process too early and failing to perform the final calculation or count.
+  * **Strategy Formulation**: Based on the principles and pitfalls, what is your high-level, step-by-step strategy? **This strategy must be concrete.** For any calculation step, explicitly state the formula or method you intend to use. (e.g., "First, find the prime factors of N. Second, count the number of distinct prime factors, let's say `k`. Third, the number of coprime factor pairs is `2^(k-1)`. Finally, calculate this value.").
+
+**Part 2: The `<Plan>` Block**
+After the `<think>` block, generate a solution plan that is a direct, operational implementation of your stated strategy. The plan must adhere to these strict constraints:
+
+#### **XML Plan Constraints:**
+
+1.  **Plan Length**: Must contain between 2 and 10 steps.
+2.  **Actionable & Precise Steps**: Each `<Step>` `Task` must be a distinct and **unambiguous operational instruction**.
+      * For conceptual steps, ask a precise question about a definition or property.
+      * For calculation steps, **the task must specify the exact formula or method to be used** (e.g., "Using the formula for coprime factor pairs, `2^(k-1)`, calculate the total number where `k` is the number of distinct prime factors?").
+3.  **Logical Flow & Completeness**: The plan must represent a clear logical progression from start to finish. **The final step must be the final numerical calculation or conclusive statement.**
+4.  **Contextual Linking**: When a step `N` relies on a step `M`, the `Task` for step `N` should explicitly reference the output or variables from `M`.
+5.  **Difficulty**: Mark steps requiring non-trivial synthesis with `Difficulty >= 5`.
+6.  **Attribute Integrity**: All attributes must be correctly formatted. The `Task` must end with a question mark (?).
+7.  **XML Format**: Output ONLY the `<think>` and `<Plan>` blocks as specified.
+
+-----
+
+### **Examples of Good vs. Flawed Plans**
+
+#### **Good Example \#1: Correct Core Principle and Complete Plan**
+
+**Question**: "For how many rational numbers between 0 and 1 will $20\!$ be the resulting product of their numerator and denominator in lowest terms?"
+
+**Response**:
+<think>
+**Core Principle Identification**: The core principle is number theory, specifically concerning prime factorization and coprime numbers. A rational number `a/b` is in lowest terms if `gcd(a, b) = 1`. The condition `a*b = 20!` means `a` and `b` must be formed by partitioning the prime factors of `20!`. For `a` and `b` to be coprime, they cannot share any prime factors.
+**Pitfall Prediction**: The primary trap is stopping after identifying the principle and failing to perform the final count. The second trap is miscounting; the number of ways to partition `k` distinct items into two groups is `2^k`, but since `a/b` must be between 0 and 1, `a` must be less than `b`. This means we must exclude the case `a=b` (if possible) and divide the remaining pairs by 2. For a number like `20!` which is not a perfect square, `a` can never equal `b`.
+**Strategy Formulation**: 1. Find the prime factorization of 20\!. 2. Identify the number of *distinct* prime factors, let's call this `k`. 3. For `a` and `b` to be coprime, each distinct prime factor's entire power (e.g., `2^18`) must go entirely to either `a` or `b`. There are `2^k` ways to distribute these `k` distinct prime factors into two sets. 4. Since `a < b`, we divide the total number of pairs by 2. The case `a=b` is impossible as 20\! is not a perfect square. Thus the final answer is `2^k / 2 = 2^(k-1)`. 5. I will execute this final calculation.
+</think>
+<Plan>
+<Step ID="1" Task="What are the distinct prime factors of 20\! ?" Difficulty="4" Token="50" Rely=""/>
+<Step ID="2" Task="Count the number of distinct prime factors found in Step 1. Let this count be k. What is the value of k?" Difficulty="2" Token="20" Rely="1"/>
+<Step ID="3" Task="The number of pairs of coprime factors (a,b) of 20\! is 2^k. The number of rational numbers a/b between 0 and 1 is half of this. Using the formula N = 2^(k-1), what is the final number of such rational numbers?" Difficulty="4" Token="50" Rely="2"/>
+</Plan>
+
+-----
+
+#### **Bad Example \#1: Flawed Geometric Model**
+
+**Question**: "One base of a trapezoid is $100$ units longer than the other base. The segment that joins the midpoints of the legs divides the trapezoid into two regions whose areas are in the ratio $2:3$. Let $x$ be the length of the segment that divides the trapezoid into two regions of equal area. Find the greatest integer that does not exceed $x^2/100$."
+
+**Flawed Plan**:
+<Plan>
+<Step ID="1" Task="If we denote the shorter base as 'a' and the longer base as 'a + 100', what is the length of the segment joining the midpoints of the legs?" Difficulty="2" Token="30" Rely=""/>
+<Step ID="2" Task="Using the fact that the midpoint segment divides the trapezoid into regions with area ratio 2:3, what equation can we write relating a and the height h?" Difficulty="5" Token="60" Rely="1"/>
+<Step ID="3" Task="What is the length x of the equal-area-dividing segment in terms of a?" Difficulty="4" Token="50" Rely=""/>
+<Step ID="4" Task="Calculate x²/100 and find the greatest integer." Difficulty="3" Token="30" Rely="2,3"/>
+</Plan>
+**Justification for why this is flawed**: This plan is **conceptually flawed**. It incorrectly assumes that the information about the "midpoint segment" (midsegment) can be directly used to find the base `a`. The midsegment divides the trapezoid's height in half, creating two smaller trapezoids. The ratio of their areas is fixed by the lengths of the bases and does not depend on `h`. The plan fails to establish the correct geometric relationship (using similar trapezoids and area formulas) needed to find `a`.
+
+-----
+
+#### **Bad Example \#2: Ignoring Exceptions and Incomplete Plan**
+
+**Question**: "Find the remainder when $9 \\times 99 \\times 999 \\times \\cdots \\times \\underbrace{99\\cdots9}\_{\\text{999 9's}}$ is divided by $1000$."
+
+**Flawed Plan**:
+<Plan>
+<Step ID="1" Task="How can we express a number with n consecutive 9's in terms of powers of 10?" Difficulty="2" Token="20" Rely=""/>
+<Step ID="2" Task="What are the remainders when 9, 99, and 999 are divided by 1000?" Difficulty="3" Token="30" Rely=""/>
+<Step ID="3" Task="For numbers with 4 or more 9's, what is their remainder when divided by 1000?" Difficulty="4" Token="40" Rely="1"/>
+<Step ID="4" Task="How many terms in our product have a remainder of 999?" Difficulty="3" Token="30" Rely=""/>
+<Step ID="5" Task="What is the final remainder of the entire product?" Difficulty="4" Token="50" Rely="2,3,4"/>
+</Plan>
+**Justification for why this is flawed**: This plan is **incomplete and invites error**. While it correctly separates some cases, Step 5 is too vague. A good plan would have separate, explicit steps to: (a) calculate the product of the remainders of the special cases (`9 * 99`), (b) calculate the product of the remainders of the general cases (`999^997`), and (c) multiply the results from (a) and (b) together modulo 1000. Lumping these into one step caused the model to forget one of the terms in the final calculation.
+'''
     user_prompt = f'''
-    Question: {query}
-    Plan:
+    **Question**: {query}
+    **Plan**:
     '''
+    # === 新增：记录 Planner 的输入 ===
+    logger.info("===== Prompt 给 Planner (Router) =====")
+    logger.info(f"System Prompt:\n{system_prompt}")
+    logger.info(f"User Prompt:\n{user_prompt}")
+    log_separator()
+    # ===============================
+
     # 使用预初始化的路由模型客户端
     try:
         # 记录路由模型开始生成计划的时间，用于计算首个令牌响应时间
@@ -669,6 +1051,7 @@ def run_parallel_execution(query, config, workers=4):
                             stats_tracker.update_ttft("router_model", ttft)
                     
                     print(content, end="", flush=True)  # 实时输出
+                    full_completion += content # 累加内容
                     
                     # 使用deepseek_v3_tokenizer更新完成tokens计数
                     completion_tokens += count_deepseek_tokens(content)
@@ -687,6 +1070,12 @@ def run_parallel_execution(query, config, workers=4):
                         print(f"\n已解析 {task_count} 个任务，启动任务调度...")
                         router(tasks, config, query, executor)
         
+        # === 新增：记录 Planner 的完整输出 ===
+        logger.info("===== 来自 Planner (Router) 的输出 =====")
+        logger.info(full_completion)
+        log_separator()
+        # ==================================
+
         # 更新router模型的token使用情况
         if stats_tracker:
             stats_tracker.update_token_usage("router_model", prompt_tokens, completion_tokens)
@@ -850,13 +1239,32 @@ def call_small_model_directly(question, model_config, stats_tracker=None):
     返回:
         小模型的响应内容
     """
+    # === 新增：获取日志记录器 ===
+    logger = get_logger()
+    # ============================
+
     # 构建提示词
     prompt = """You are a problem-solving assistant. I will provide you with a problem. Your task is to solve it step by step and provide the final answer.
 
     PROBLEM:
     {question}
     """.format(question=question)
-    return generate_step_result(prompt, "1", model_config, stats_tracker)
+
+    # === 新增：记录小模型的输入 ===
+    logger.info("===== Prompt 给执行器 (小模型 - 直接调用) =====")
+    logger.info(prompt)
+    log_separator()
+    # ===============================
+    
+    result = generate_step_result(prompt, "1", model_config, stats_tracker)
+
+    # === 新增：记录小模型的输出 ===
+    logger.info("===== 来自执行器 (小模型 - 直接调用) 的输出 =====")
+    logger.info(result)
+    log_separator()
+    # ===============================
+
+    return result
 
 def call_large_model_directly(question, model_config, stats_tracker=None):
     """直接调用大模型进行处理

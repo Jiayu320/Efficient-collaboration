@@ -7,10 +7,12 @@ from output_performance import generate_theoretical_performance_report
 from execution import (
     run_parallel_execution, print_results, wait_for_completion_and_get_final_result,
     judge_question_difficulty, call_small_model_directly, generate_task_dependency_report,
-    judge_correct, LLM_judge, save_result_to_file
+    judge_correct, LLM_judge, save_result_to_file, build_report_path
 )
 # 导入数据集处理模块
 from dataset_runner import run_dataset_evaluation
+# 导入日志配置模块
+from log_config import setup_logger, get_logger, log_separator
 
 def main():
     """主程序入口"""
@@ -171,6 +173,22 @@ def main():
     print("===== 单问题处理模式 =====")
     # 设置查询
     query = yaml_config["query"]
+    
+    # === 新增：设置日志 ===
+    # 提前构建报告路径以确定日志目录
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    output_dir = build_report_path(
+        base_dir="data_reports", 
+        is_dataset=False, 
+        config=config, 
+        timestamp=timestamp
+    )
+    setup_logger(output_dir)
+    logger = get_logger()
+    logger.info("===== 单问题处理模式启动 =====")
+    log_separator()
+    # ========================
+
     print(f"使用小模型: {config.small_model}")
     print(f"使用大模型: {config.large_model}")
     if config.use_local_router:
@@ -257,6 +275,13 @@ def main():
         print("\n实际性能统计:")
         print(performance_report)
         
+        # === 新增：记录性能报告到日志 ===
+        logger.info("===== 最终性能报告 (Markdown) =====")
+        logger.info(performance_report)
+        logger.info(correctness_report)
+        log_separator()
+        # ===============================
+
         # 生成基于理论模型的性能报告
         theoretical_report = generate_theoretical_performance_report(tasks, config, stats_tracker.planner_output)
         print("\n理论性能模型分析:")
@@ -268,12 +293,49 @@ def main():
         print(dependency_report)
         
         # 将最终结果保存到文件
-        output_file = save_result_to_file(final_result, config, workers, correctness_report, performance_report, dependency_report, theoretical_report)
+        output_file = save_result_to_file(final_result, config, workers, correctness_report, performance_report, dependency_report, theoretical_report, output_dir)
         if output_file:
             print(f"结果已保存至: {output_file}")
             
     except Exception as e:
         print(f"处理过程中出错: {e}")
+
+# 修改 save_result_to_file 函数签名以接收 output_dir
+def save_result_to_file(final_result, config, workers, correctness_report, performance_report, dependency_report, theoretical_report=None, output_dir=None):
+    """将结果保存到文件"""
+    try:
+        if output_dir is None:
+            # 如果没有提供目录，则创建一个
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            output_dir = build_report_path(
+                base_dir="data_reports", 
+                is_dataset=False, 
+                config=config, 
+                timestamp=timestamp
+            )
+        
+        # 使用简化的文件名
+        output_file = os.path.join(output_dir, "result.md")
+        
+        model_usage = f"使用小模型: {config.small_model}\n\n使用大模型: {config.large_model}\n\n使用路由模型: {config.router_model}\n\n"
+        threshold_info = f"难度阈值: {config.threshold}\n\n工作线程数: {workers}\n\n"
+        model_usage += threshold_info
+        
+        # 将性能报告、依赖关系报告和理论性能报告添加到最终结果中
+        final_result_with_stats = model_usage + "\n\n" + final_result + "\n\n" + correctness_report + performance_report + "\n\n" + dependency_report
+        
+        # 如果有理论性能报告，也添加进去
+        if theoretical_report:
+            final_result_with_stats += "\n\n" + theoretical_report
+
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write(final_result_with_stats)
+        print(f"结果已保存至: {output_file}")
+        return output_file
+    except Exception as e:
+        print(f"保存结果时出错: {e}")
+        return None
+
 
 if __name__ == "__main__":
     main()

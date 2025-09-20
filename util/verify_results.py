@@ -143,8 +143,8 @@ def process_result_file(file_path, key_manager):
         api_call_count = 0  # 记录API调用次数
         
         for item in data:
-            gold_solution = item.get("gold_solution")
-            model_solution = item.get("model_solution")
+            gold_solution = item.get("answer")
+            model_solution = item.get("solution")
             
             if not gold_solution or not model_solution:
                 continue
@@ -224,17 +224,23 @@ def update_report(report_path, data):
 def find_all_result_files(base_dir):
     """查找所有的dataset_results.json文件"""
     result_files = []
+    '''
     for root, dirs, files in os.walk(base_dir):
         if "dataset_results.json" in files:
             result_files.append(os.path.join(root, "dataset_results.json"))
+    '''
+    for root, dirs, files in os.walk(base_dir):
+        for file in files:
+            if file.endswith(".json"):
+                result_files.append(os.path.join(root, file))
     return result_files
 
 def main():
     parser = argparse.ArgumentParser(description="验证模型判断结果")
     parser.add_argument("--key_dir", type=str, default="usage", 
                        help="API密钥目录路径，默认为usage")
-    parser.add_argument("--data_dir", type=str, default="data_reports/dataset", 
-                       help="数据目录路径，默认为data_reports/dataset")
+    parser.add_argument("--data_dir", type=str, default="dataset/generated_data", 
+                       help="数据目录路径，默认为dataset/generated_data")
     parser.add_argument("--workers", type=int, default=10,
                        help="并行处理的线程数，默认为3")
     parser.add_argument("--limit", type=int, default=None,

@@ -1,0 +1,65 @@
+# 问题 4 的理论性能分析报告
+
+## 问题描述
+
+Compute the mean molecular speed v in the heavy gas radon (Rn) in m/s
+
+# 理论性能模型分析
+
+## 模型性能参数
+
+| 模型 | 延迟 (秒) | 吞吐量 (tokens/s) |
+| --- | --- | --- |
+| 小模型 (qwen2.5-3b-instruct) | 0.690 | 64.53 |
+| 大模型 (gpt-4o) | 0.735 | 144.50 |
+| 路由模型 (claude-3-5-sonnet-latest) | 1.338 | 51.49 |
+
+## 执行流程理论时间
+
+| 阶段 | 理论时间 (秒) | 百分比 |
+| --- | --- | --- |
+| 规划阶段总时间 (Planner) | 6.329 | 100% |
+| 规划过程中启动的任务数 | 5 / 6 | 83.3% |
+| 规划与执行重叠的任务数 | 5 / 6 | 83.3% |
+| 第一个任务规划完成时间 | 2.251 | - |
+| 最后一个任务规划完成时间 | 6.271 | - |
+| 最后一个任务执行完成时间 | 7.900 | - |
+| 任务总执行时间(累计) | 6.619 | - |
+| 流水线加速比 | 2.48x | - |
+| 并行效率 | 83.8% | - |
+
+## 任务类型理论时间
+
+| 模型类型 | 任务数 | 顺序执行时间 (秒) | 并行加速比 |
+| --- | --- | --- | --- |
+| 小模型任务 | 6 | 6.619 | - |
+| 大模型任务 | 0 | 0.000 | - |
+| 规划模型 | 1 | 12.990 | - |
+| 顺序总时间 | - | 19.610 | - |
+| 并行总时间 | - | 7.900 | 2.48x |
+
+## 任务执行明细
+
+| 步骤ID | 任务描述 | 使用模型 | 理论开始时间 (秒) | 理论结束时间 (秒) | 理论执行时间 (秒) | 工作线程 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | What is the formula for the mean molecular speed of a gas in terms of temperature, molar mass, and physical constants? | 小模型 | 2.251 | 3.406 | 1.155 | 2 |
+| 2 | What is the molar mass of radon (Rn) in kg/mol? | 小模型 | 2.930 | 3.930 | 1.000 | 3 |
+| 3 | What is the standard temperature to use for this calculation in Kelvin? | 小模型 | 3.571 | 4.571 | 1.000 | 4 |
+| 4 | What is the value of the universal gas constant R in J/(mol·K)? | 小模型 | 4.309 | 5.309 | 1.000 | 5 |
+| 5 | Using the values from Steps 2-4, substitute into the formula from Step 1 to calculate the mean molecular speed of radon in m/s? | 小模型 | 5.436 | 6.746 | 1.310 | 6 |
+| 6 | Verify the calculation by checking the units and performing any necessary conversions to ensure the final answer is in m/s? | 小模型 | 6.746 | 7.900 | 1.155 | 7 |
+
+## 理论执行甘特图
+
+```
+时间轴:
+0                                                            5.65s
++------------------------------------------------------------+
+步骤 1 |############                                                | 2.25s - 3.41s
+步骤 2 |       ##########                                           | 2.93s - 3.93s
+步骤 3 |              ##########                                    | 3.57s - 4.57s
+步骤 4 |                     ###########                            | 4.31s - 5.31s
+步骤 5 |                                 ##############             | 5.44s - 6.75s
+步骤 6 |                                               #############| 6.75s - 7.90s
+```
+

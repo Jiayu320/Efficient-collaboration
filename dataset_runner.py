@@ -11,6 +11,8 @@ from execution import (
     run_parallel_execution, wait_for_completion_and_get_final_result,
     judge_question_difficulty, call_small_model_directly, judge_correct
 )
+# 导入日志配置模块
+from log_config import setup_logger, get_logger, log_separator
 
 
 def build_report_path(base_dir="data_reports", is_dataset=True, dataset_name="", config=None, timestamp=None):
@@ -102,6 +104,7 @@ class DatasetRunner:
             return dataset
         except Exception as e:
             print(f"加载数据集时出错: {e}")
+            logger.error(f"加载数据集时出错: {e}", exc_info=True)
             return []
 
     def process_dataset(self, enable_threshold=True):
@@ -123,10 +126,10 @@ class DatasetRunner:
         for i, problem_data in enumerate(tqdm(self.dataset, desc="处理数据集")):
             problem = problem_data.get("problem", "")
             solution = problem_data.get("answer", "")
-            
+            logger = get_logger()
             try:
                 # 每个问题的性能统计
-                result = self.process_single_problem(problem, solution, enable_threshold)
+                result = self.process_single_problem(problem, solution, enable_threshold, i + 1)
                 self.results.append(result)
                 
                 # 每处理完一个问题就保存一次结果
@@ -134,22 +137,32 @@ class DatasetRunner:
                 
                 # 打印当前进度
                 print(f"完成进度: {i+1}/{len(self.dataset)}")
+                logger.info(f"完成进度: {i+1}/{len(self.dataset)}")
             except Exception as e:
                 print(f"处理问题时出错: {e}")
                 print(f"已跳过该问题，继续处理下一个问题")
+                logger.error(f"处理问题时出错: {e}", exc_info=True)
             
         return self.results
     
-    def process_single_problem(self, problem, solution, enable_threshold):
+    def process_single_problem(self, problem, solution, enable_threshold, problem_index):
         """处理单个问题
         
         参数:
             problem: 问题文本
             solution: 标准答案
+            problem_index: 问题的索引号
             
         返回:
             处理结果字典
         """
+        # === 新增：获取日志记录器并记录新问题的开始 ===
+        logger = get_logger()
+        logger.info(f"===== 开始处理问题 #{problem_index} =====")
+        logger.info(f"问题: {problem[:200]}...")
+        log_separator()
+        # ==========================================
+
         print(f"\n处理问题: {problem[:100]}...")
         
         # 初始化结果字典
@@ -170,18 +183,18 @@ class DatasetRunner:
             # 判断问题难度
             difficulty = judge_question_difficulty(problem, self.config)
             result["difficulty"] = difficulty
-            
+            logger = get_logger()
             # 创建性能统计跟踪器
             small_model_name = self.config.small_model if hasattr(self.config, 'small_model') else "qwen3-14b"
             large_model_name = self.config.large_model if hasattr(self.config, 'large_model') else "gpt-4o"
             model_name = small_model_name if int(difficulty) < self.config.threshold else large_model_name
             stats_tracker = PerformanceTracker(model_name)
             if not enable_threshold:
-                print("禁用结果判断，直接使用并行执行流程")
+                logger.info("禁用结果判断，直接使用并行执行流程")
 
             if enable_threshold and int(difficulty) < self.config.threshold:
-                print(f"问题难度 {difficulty} 低于阈值 {self.config.threshold}，使用小模型处理")
-                
+                logger.info(f"问题难度 {difficulty} 低于阈值 {self.config.threshold}，使用小模型处理")
+
                 # 直接调用小模型处理
                 model_solution = call_small_model_directly(problem, self.config, stats_tracker)
                 
@@ -234,7 +247,8 @@ class DatasetRunner:
                     # 保存理论性能指标
                     result["theoretical_metrics_raw"] = theoretical_metrics
                 except Exception as e:
-                    print(f"提取理论性能指标时出错: {e}")
+                    logger = get_logger()
+                    logger.error(f"提取理论性能指标时出错: {e}", exc_info=True)
                 
                 # 计算任务规划指标
                 from task_metrics import calculate_task_metrics
@@ -254,10 +268,19 @@ class DatasetRunner:
             # 记录性能统计
             stats_tracker.stop_tracking()
             result["stats"] = stats_tracker
+            
+            # === 新增：记录当前问题的性能报告 ===
+            logger.info(f"===== 问题 #{problem_index} 性能报告 (Markdown) =====")
+            logger.info(stats_tracker.format_performance_report())
+            log_separator()
+            # ======================================
 
         except Exception as e:
-            print(f"处理问题时出错: {e}")
             result["error"] = str(e)
+            # === 新增：记录错误日志 ===
+            logger.error(f"处理问题 #{problem_index} 时发生错误: {e}", exc_info=True)
+            log_separator()
+            # =========================
         
         # 计算总执行时间
         result["execution_time"] = time.time() - start_time
@@ -386,7 +409,7 @@ class DatasetRunner:
                         theoretical_results["count"] += 1
                         print(f"成功提取理论性能数据: 总时间={total_time_match.group(1)}, 顺序时间={sequential_time_match.group(1)}")
                 except Exception as e:
-                    print(f"提取理论报告数据出错: {e}")
+                    logger.error(f"提取理论报告数据出错: {e}", exc_info=True)
                 
         # 计算平均值
         avg_tasks_num = total_tasks_count / task_planning_results_count if task_planning_results_count > 0 else 0
@@ -493,7 +516,10 @@ class DatasetRunner:
                 plan_tokens = f"{plan_tokens:.1f}"
             
             report += f"| {i+1} | {problem} | {is_correct} | {exec_time:.2f} | {total_cost:.4f} | {tasks_num} | {compression} | {plan_tokens} |\n"
-        
+        logger = get_logger()
+        logger.info("===== 数据集处理报告 =====")
+        logger.info(report)
+
         return report
     
     def save_report(self, output_dir=None, timestamp=None):
@@ -702,6 +728,22 @@ def run_dataset_evaluation(config, dataset_path, limit=None, workers=4):
     # 创建统一的时间戳
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     
+    # === 新增：设置日志 ===
+    dataset_name = os.path.basename(dataset_path)
+    output_dir = build_report_path(
+        base_dir="data_reports",
+        is_dataset=True,
+        dataset_name=dataset_name,
+        config=config,
+        timestamp=timestamp
+    )
+    setup_logger(output_dir)
+    logger = get_logger()
+    logger.info("===== 数据集处理模式启动 =====")
+    logger.info(f"数据集: {dataset_path}")
+    log_separator()
+    # ========================
+
     # 创建数据集处理器
     runner = DatasetRunner(config, dataset_path, limit, workers)
     enable_threshold = config.enable_threshold if hasattr(config, 'enable_threshold') else True

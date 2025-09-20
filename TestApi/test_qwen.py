@@ -9,7 +9,7 @@ try:
     )
 
     completion = client.chat.completions.create(
-        model="qwen-plus",  # 模型列表：https://help.aliyun.com/zh/model-studio/getting-started/models
+        model="qwen2.5-3b-instruct",  # 模型列表：https://help.aliyun.com/zh/model-studio/getting-started/models
         messages=[
             {'role': 'system', 'content': 'You are a helpful assistant.'},
             {'role': 'user', 'content': '你是谁？'}

@@ -20,7 +20,15 @@ def get_model_pricing(model_name: str) -> Dict[str, float]:
     # Claude模型价格
     if "claude-3-5" in model_name_lower or "claude-3.5" in model_name_lower or "claude-3-5-sonnet" in model_name_lower:
         return {"prompt": 3.0, "completion": 15.0}
+    elif "claude-3-7" in model_name_lower or "claude-3.7" in model_name_lower or "claude-3-7-sonnet" in model_name_lower:
+        return {"prompt": 3.0, "completion": 15.0}
     
+    # Gemini模型价格 
+    elif "gemini-2.5-flash-thinking" in model_name_lower:
+        return {"prompt": 0.30, "completion": 2.50}
+    elif "gemini-2.5-pro" in model_name_lower:
+        return {"prompt": 1.25, "completion": 10.0}
+
     # OpenAI模型价格
     elif "gpt-4o" in model_name_lower:
         return {"prompt": 2.5, "completion": 10.0}
