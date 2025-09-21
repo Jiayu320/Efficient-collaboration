@@ -822,7 +822,7 @@ def run_parallel_execution(query, config, workers=4):
     # 重置收集的输出内容
     reset_collected_output()
     返回:
-        (tasks, stats_tracker): 任务字典和性能统计跟踪器
+        (tasks, stats_tracker, full_completion): 任务字典, 性能跟踪器, 和规划器的完整输出
     """
     global xml_buffer, tasks, completed_steps, futures, router_model_client
 
@@ -963,7 +963,8 @@ After the `<think>` block, generate a solution plan that is a direct, operationa
     logger.info(f"User Prompt:\n{user_prompt}")
     log_separator()
     # ===============================
-
+    
+    full_completion = "" 
     # 使用预初始化的路由模型客户端
     try:
         # 记录路由模型开始生成计划的时间，用于计算首个令牌响应时间
@@ -999,7 +1000,6 @@ After the `<think>` block, generate a solution plan that is a direct, operationa
         # 使用deepseek_v3_tokenizer计算tokens
         prompt_tokens = count_deepseek_tokens(system_prompt) + count_deepseek_tokens(query)
         completion_tokens = 0
-        full_completion = ""  # 用于收集所有输出内容
         
         for chunk in response_stream:
             if hasattr(chunk.choices[0], 'delta') and hasattr(chunk.choices[0].delta, 'content'):
@@ -1066,7 +1066,7 @@ After the `<think>` block, generate a solution plan that is a direct, operationa
     # 关闭线程池
     executor.shutdown(wait=True)
     
-    return tasks, stats_tracker
+    return tasks, stats_tracker, full_completion
 
 def judge_correct(question, gold_answer, final_answer, model_config):
     """判断最终答案是否正确
