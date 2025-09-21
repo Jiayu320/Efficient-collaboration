@@ -24,7 +24,8 @@ def get_api_key(file_path):
         with open(file_path, 'r') as f:
             return f.read().strip()
     else:
-        log.error(f"API密钥文件 '{file_path}' 未找到")
+        logger = get_logger()
+        logger.error(f"API密钥文件 '{file_path}' 未找到")
         raise FileNotFoundError(f"API密钥文件 '{file_path}' 未找到")
     
 # 正则表达式函数，用于去除ASY绘图代码
