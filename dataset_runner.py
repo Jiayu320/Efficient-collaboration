@@ -8,6 +8,7 @@ from tqdm import tqdm
 from config import ModelConfig
 from performance import PerformanceTracker
 from execution import (
+    dataset_run_parallel_execution, # 新增导入
     run_parallel_execution, wait_for_completion_and_get_final_result,
     judge_question_difficulty, call_small_model_directly, judge_correct
 )
@@ -188,7 +189,7 @@ class DatasetRunner:
             small_model_name = self.config.small_model if hasattr(self.config, 'small_model') else "qwen3-14b"
             large_model_name = self.config.large_model if hasattr(self.config, 'large_model') else "gpt-4o"
             model_name = small_model_name if int(difficulty) < self.config.threshold else large_model_name
-            stats_tracker = PerformanceTracker(model_name)
+            stats_tracker = PerformanceTracker(self.config)
             if not enable_threshold:
                 logger.info("禁用结果判断，直接使用并行执行流程")
 
@@ -534,19 +535,17 @@ class DatasetRunner:
         """
         if timestamp is None:
             timestamp = time.strftime("%Y%m%d_%H%M%S")
-            
-        # 使用层次化的目录结构
-        # 从数据集路径获取数据集名称
-        dataset_name = os.path.basename(self.dataset_path)
         
-        # 构建层次化的路径结构
-        output_dir = build_report_path(
-            base_dir="data_reports", 
-            is_dataset=True,
-            dataset_name=dataset_name,
-            config=self.config,
-            timestamp=timestamp
-        )
+        # 如果没有提供 output_dir，则构建它
+        if output_dir is None:
+            dataset_name = os.path.basename(self.dataset_path)
+            output_dir = build_report_path(
+                base_dir="data_reports", 
+                is_dataset=True,
+                dataset_name=dataset_name,
+                config=self.config,
+                timestamp=timestamp
+            )
         
         # 报告文件路径
         report_file = os.path.join(output_dir, f"dataset_report.md")
@@ -562,8 +561,7 @@ class DatasetRunner:
         
         # 创建理论性能报告目录
         theory_dir = os.path.join(output_dir, "theoretical_reports")
-        if not os.path.exists(theory_dir):
-            os.makedirs(theory_dir)
+        os.makedirs(theory_dir, exist_ok=True)
             
         # 为每个问题保存单独的理论性能报告（如果有）
         for i, result in enumerate(self.results):
@@ -578,7 +576,6 @@ class DatasetRunner:
                     f.write(f"# 问题 {i+1} 的理论性能分析报告\n\n")
                     f.write(f"## 问题描述\n\n{result.get('problem', '')}\n\n")
                     f.write(result["theoretical_report"])
-                print(f"问题 {i+1} 的理论性能报告已保存至: {theory_report_file}")
                 
         print(f"所有理论性能报告已保存至目录: {theory_dir}")
         
@@ -598,46 +595,17 @@ class DatasetRunner:
         返回:
             JSON文件路径
         """
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
+        os.makedirs(output_dir, exist_ok=True)
             
         if timestamp is None:
             timestamp = time.strftime("%Y%m%d_%H%M%S")
             
         json_file = os.path.join(output_dir, "dataset_results.json")
         
-        # 如果文件不存在，创建一个空的JSON数组
-        if not os.path.exists(json_file):
-            with open(json_file, 'w', encoding='utf-8') as f:
-                json.dump([], f)
-                
         # 准备JSON数据
         json_results = []
         
-        # 读取现有的JSON数据(如果文件存在)
-        try:
-            with open(json_file, 'r', encoding='utf-8') as f:
-                json_results = json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
-            # 文件不存在或为空，使用空列表
-            json_results = []
-            
-        # 将新结果添加到现有结果中
         for result in self.results:
-            # 检查该结果是否已经存在于json_results中
-            # 通过检查问题内容来判断是否为重复结果
-            problem = result.get("problem", "")
-            exists = False
-            for existing_result in json_results:
-                if existing_result.get("problem", "") == problem:
-                    exists = True
-                    break
-            
-            # 如果结果已存在，跳过添加
-            if exists:
-                continue
-                
-            # 创建一个可序列化的结果对象
             serializable_result = {
                 "problem": result.get("problem", ""),
                 "gold_solution": result.get("gold_solution", ""),
@@ -651,85 +619,94 @@ class DatasetRunner:
                 "avg_task_plan_tokens": result.get("avg_task_plan_tokens", 0)
             }
             
-            # 添加理论性能数据（如果存在）
-            if "theoretical_metrics" in result:
-                serializable_result["theoretical_metrics"] = result["theoretical_metrics"]
-            elif "theoretical_report" in result:
-                # 从理论报告中提取关键指标
-                theoretical_data = {}
-                
-                # 尝试提取理论时间指标
-                if isinstance(result.get("theoretical_metrics_raw"), dict):
-                    metrics_raw = result.get("theoretical_metrics_raw", {})
-                    theoretical_data = {
-                        "total_execution_time": metrics_raw.get("total_execution_time", 0),
-                        "planner_time": metrics_raw.get("planner_time", 0),
-                        "task_execution_time": metrics_raw.get("task_execution_time", 0),
-                        "sequential_time": metrics_raw.get("sequential_time", 0),
-                        "parallel_speedup": metrics_raw.get("parallel_speedup", 0)
-                    }
-                serializable_result["theoretical_metrics"] = theoretical_data
+            if "theoretical_metrics_raw" in result:
+                serializable_result["theoretical_metrics"] = result["theoretical_metrics_raw"]
             
-            # 添加任务计划和步骤结果（如果存在）
             if "tasks" in result:
-                # 将tasks字典转换为可序列化的对象
-                serializable_tasks = {}
-                for task_id, task_info in result["tasks"].items():
-                    serializable_task = {}
-                    for key, value in task_info.items():
-                        # 确保所有值都是可序列化的
-                        if key in ["Task", "Rely", "Token", "Difficulty", "Result"]:
-                            serializable_task[key] = value
-                    serializable_tasks[task_id] = serializable_task
-                
-                serializable_result["tasks"] = serializable_tasks
+                serializable_result["tasks"] = {k: v for k, v in result["tasks"].items()}
             
-            # 添加性能统计数据
             if result.get("stats"):
                 stats = result["stats"]
-                costs = stats.calculate_cost()
-                tokens_per_second = stats.calculate_tokens_per_second()
-                
                 serializable_result["stats"] = {
-                    "costs": costs,
-                    "tokens_per_second": tokens_per_second,
+                    "costs": stats.calculate_cost(),
+                    "tokens_per_second": stats.calculate_tokens_per_second(),
                     "token_usage": stats.token_usage,
                     "ttft_metrics": stats.ttft_metrics
                 }
             
-            # 添加到结果列表中
             json_results.append(serializable_result)
         
-        # 保存到JSON文件
         with open(json_file, 'w', encoding='utf-8') as f:
             json.dump(json_results, f, ensure_ascii=False, indent=2)
         
-        print(f"JSON结果已保存至: {json_file}")
-        
         return json_file
-    
-    # 可视化相关功能已移除
 
+def build_dataset(config, dataset_path, limit, workers, build_config, output_dir):
+    """处理从源文件构建数据集的逻辑"""
+    logger = get_logger()
+    try:
+        with open(dataset_path, 'r', encoding='utf-8') as f:
+            dataset = json.load(f)
+        if limit:
+            dataset = dataset[:limit]
+    except Exception as e:
+        logger.error(f"加载数据集构建失败: {e}", exc_info=True)
+        print(f"加载数据集错误 {dataset_path}: {e}")
+        return
 
-def run_dataset_evaluation(config, dataset_path, limit=None, workers=4):
-    """运行数据集评估
-    
-    参数:
-        config: 模型配置对象
-        dataset_path: 数据集文件路径
-        limit: 处理的最大问题数量
-        workers: 并行工作线程数
+    data_with_thinking = []
+    data_without_thinking = []
+
+    for item in tqdm(dataset, desc="构建数据集中"):
+        problem = item.get("problem", "")
+        solution = item.get("answer", "")
+
+        if not problem:
+            logger.warning("跳过'problem'字段为空的项。")
+            continue
+            
+        full_plan, plan_only, system_prompt = dataset_run_parallel_execution(
+            problem, solution, config, workers, build_config
+        )
+
+        if full_plan is None and plan_only is None:
+            logger.error(f"为问题生成计划失败: {problem[:100]}...")
+            continue
         
-    返回:
-        报告文件路径
-    """
-    print(f"开始数据集评估: {dataset_path}")
+        common_data = {
+            "instruction": problem,
+            "input": "",
+            "system": system_prompt.strip() if system_prompt else ""
+        }
+
+        if build_config.get('save_thinking', True) and full_plan:
+            entry_w_think = common_data.copy()
+            entry_w_think["output"] = full_plan
+            data_with_thinking.append(entry_w_think)
+
+        if plan_only:
+            entry_wo_think = common_data.copy()
+            entry_wo_think["output"] = plan_only
+            data_without_thinking.append(entry_wo_think)
     
-    # 创建统一的时间戳
+    file_wo_thinking_path = os.path.join(output_dir, "datasetTraining_wo_thinking.json")
+    with open(file_wo_thinking_path, 'w', encoding='utf-8') as f:
+        json.dump(data_without_thinking, f, ensure_ascii=False, indent=2)
+    logger.info(f"已将不带思考的数据集保存到 {file_wo_thinking_path}")
+    print(f"已保存 {file_wo_thinking_path}")
+
+    if build_config.get('save_thinking', True):
+        file_w_thinking_path = os.path.join(output_dir, "datasetTraining_w_thinking.json")
+        with open(file_w_thinking_path, 'w', encoding='utf-8') as f:
+            json.dump(data_with_thinking, f, ensure_ascii=False, indent=2)
+        logger.info(f"已将带思考的数据集保存到 {file_w_thinking_path}")
+        print(f"已保存 {file_w_thinking_path}")
+
+def run_dataset_evaluation(config, dataset_path, limit=None, workers=4, dataset_build_config=None):
+    """根据配置运行数据集评估或数据集构建"""
     timestamp = time.strftime("%Y%m%d_%H%M%S")
-    
-    # === 新增：设置日志 ===
     dataset_name = os.path.basename(dataset_path)
+    
     output_dir = build_report_path(
         base_dir="data_reports",
         is_dataset=True,
@@ -737,20 +714,37 @@ def run_dataset_evaluation(config, dataset_path, limit=None, workers=4):
         config=config,
         timestamp=timestamp
     )
+    
     setup_logger(output_dir)
     logger = get_logger()
-    logger.info("===== 数据集处理模式启动 =====")
-    logger.info(f"数据集: {dataset_path}")
-    log_separator()
-    # ========================
 
-    # 创建数据集处理器
-    runner = DatasetRunner(config, dataset_path, limit, workers)
-    enable_threshold = config.enable_threshold if hasattr(config, 'enable_threshold') else True
-    # 处理数据集
-    runner.process_dataset(enable_threshold=enable_threshold)
-    
-    # 保存最终报告，使用层次化的目录结构
-    report_file = runner.save_report(timestamp=timestamp)
-    
-    return report_file
+    # 根据构建配置确定执行模式
+    is_build_mode_enabled = dataset_build_config and dataset_build_config.get('enabled', False)
+    use_models_for_execution = dataset_build_config and dataset_build_config.get('use_models_for_execution', False)
+
+    # 如果启用了构建模式，则首先生成数据集文件
+    if is_build_mode_enabled:
+        logger.info("===== 数据集构建模式已激活 =====")
+        print(f"开始数据集构建: {dataset_path}")
+        build_dataset(config, dataset_path, limit, workers, dataset_build_config, output_dir)
+        print(f"数据集构建完成。文件保存在: {output_dir}")
+
+    # 决定是否运行评估
+    # 评估在以下情况下运行：
+    # 1. 未启用构建模式（标准评估运行）
+    # 2. 启用了构建模式并且 use_models_for_execution 为 true
+    if not is_build_mode_enabled or (is_build_mode_enabled and use_models_for_execution):
+        logger.info("===== 数据集评估模式 (完整执行) 已激活 =====")
+        print(f"开始数据集评估 (完整执行): {dataset_path}")
+        
+        runner = DatasetRunner(config, dataset_path, limit, workers)
+        # 'enable_threshold' 标志与评估逻辑相关
+        enable_threshold = config.enable_threshold if hasattr(config, 'enable_threshold') else True
+        runner.process_dataset(enable_threshold=enable_threshold)
+        report_file = runner.save_report(output_dir=output_dir, timestamp=timestamp)
+        return report_file
+    else:
+        # 这种情况是构建已启用但执行被禁用
+        # 我们已经构建了数据集，所以我们只返回路径
+        return output_dir
+

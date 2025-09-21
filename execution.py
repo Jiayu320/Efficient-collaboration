@@ -80,10 +80,14 @@ future_to_id = {}
 def initialize_clients(model_config):
     """预先初始化模型客户端"""
     global small_model_client, large_model_client, router_model_client
-    small_model_client = model_config.get_client(client_type="small")
-    large_model_client = model_config.get_client(client_type="large")
-    router_model_client = model_config.get_client(client_type="router")       
+    if small_model_client is None:
+        small_model_client = model_config.get_client(client_type="small")
+    if large_model_client is None:
+        large_model_client = model_config.get_client(client_type="large")
+    if router_model_client is None:
+        router_model_client = model_config.get_client(client_type="router")
     print("所有模型客户端已初始化")
+
 
 def parse_step_attributes(attr_str):
     """解析属性字符串为字典"""
@@ -595,42 +599,44 @@ def generate_task_dependency_report(tasks):
     
     return report
 
-def dataset_run_parallel_execution(query, solution, config, workers=4):
+def dataset_run_parallel_execution(query, solution, config, workers=4, dataset_build_config=None):
     """
-    生成数据集的流程，给定问题和参考答案，利用规划的模型来生成数据
-    
+    为构建数据集生成规划。
+    给定一个问题和参考答案，利用规划模型生成训练数据。
+
     参数:
         query: 要解决的问题
+        solution: 用于指导planner的参考答案
         config: 模型配置对象
-        workers: 并行工作线程数
+        workers: 并行工作线程数 (此函数中未使用)
+        dataset_build_config: 包含数据集构建设置的字典
+    
+    返回:
+        一个元组 (full_plan_with_thinking, plan_only, system_prompt)。
+        失败时返回 (None, None, None)。
     """
-    global xml_buffer, tasks, completed_steps, futures, router_model_client
+    global xml_buffer, tasks, router_model_client
     
-    # === 新增：获取日志记录器 ===
     logger = get_logger()
-    # ============================
 
-    # 创建性能统计跟踪器
-    stats_tracker = PerformanceTracker(config)
-    
-    # 初始化所有客户端
+    # 如果未提供，则使用默认构建配置
+    if dataset_build_config is None:
+        dataset_build_config = {
+            'use_ground_truth_to_guide_planner': True,
+            'save_thinking': True,
+        }
+
+    # 确保客户端已初始化
     initialize_clients(config)
     
-    # 重置全局状态
+    # 为此运行重置状态
     xml_buffer = ""
     tasks = defaultdict(dict)
-    completed_steps = set()
-    futures = {}
-    future_to_id = {}
     
-    # 创建线程池
-    executor = concurrent.futures.ThreadPoolExecutor(max_workers=workers)
-    
-    # 初始化变量跟踪解析进度
-    task_count = 0
-    print("开始处理问题：", query)
-    print("正在获取解决方案计划...")
+    print(f"正在为问题构建数据集: {query[:100]}...")
+    logger.info(f"正在为问题构建数据集: {query[:100]}...")
 
+    # 根据是本地还是远程路由模型定义系统提示
     if config.use_local_router:
         system_prompt = '''You are an assistant whose job is to generate a solution plan. Given a math problem, generate a solution plan less than 10 steps in XML format with the following constraints:
         1. Plan must contain EXACTLY 1-10 steps (never more than 10)
@@ -740,114 +746,69 @@ After the `<think>` block, generate a solution plan that is a direct, operationa
 </Plan>
 **Justification for why this is flawed**: This plan is **incomplete and invites error**. While it correctly separates some cases, Step 5 is too vague. A good plan would have separate, explicit steps to: (a) calculate the product of the remainders of the special cases (`9 * 99`), (b) calculate the product of the remainders of the general cases (`999^997`), and (c) multiply the results from (a) and (b) together modulo 1000. Lumping these into one step caused the model to forget one of the terms in the final calculation.
         '''
+    
+    # 根据是否使用真实答案构建用户查询
+    if dataset_build_config.get('use_ground_truth_to_guide_planner', True):
         user_query = f'''
             Question: {query}
             Solution: {solution}
             Please generate a solution plan for the question in XML format you can use the solution as a reference.
         '''
-    # === 新增：记录 Planner 的输入 ===
-    logger.info("===== Prompt 给 Planner (Router) =====")
+    else:
+        user_query = f'''
+            **Question**: {query}
+            **Plan**:
+        '''
+
+    logger.info("===== Prompt to Planner (Router) for Dataset Building =====")
     logger.info(f"System Prompt:\n{system_prompt}")
     logger.info(f"User Query:\n{user_query}")
     log_separator()
-    # ===============================
 
-    # 使用预初始化的路由模型客户端
+    full_completion = ""
     try:
-        # 记录路由模型开始生成计划的时间，用于计算首个令牌响应时间
-        router_start_time = time.time()
-        first_token_received = False
-        ttft = None
+        # 选择客户端和模型
+        client = router_model_client
+        model = config.local_router_model if config.use_local_router else config.router_model
         
-        # 根据配置决定是使用本地路由模型还是远程路由模型
-        if config.use_local_router:
-            response_stream = router_model_client.chat.completions.create(
-                model=config.local_router_model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_query}
-                ],
-                stream=True,
-                temperature=0.5,
-                top_p=0.95,
-                max_tokens=8192,
-                extra_body={"enable_thinking": False}
-            )
-        else:
-            response_stream = router_model_client.chat.completions.create(
-                model=config.router_model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_query}
-                ],
-                stream=True
-            )
-        
-        # 计算输入tokens (估计值，实际应该通过API返回)
-        prompt_tokens = len(system_prompt.split()) + len(query.split())
-        completion_tokens = 0
-        full_completion = "" # 用于收集完整的 router 输出
-        
+        # API 调用
+        response_stream = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_query}
+            ],
+            stream=True
+        )
+
         for chunk in response_stream:
             if hasattr(chunk.choices[0], 'delta') and hasattr(chunk.choices[0].delta, 'content'):
                 content = chunk.choices[0].delta.content
                 if content:
-                    # 记录首个token响应时间
-                    if not first_token_received:
-                        ttft = time.time() - router_start_time
-                        first_token_received = True
-                        if stats_tracker:
-                            stats_tracker.update_ttft("router_model", ttft)
-                    
-                    print(content, end="", flush=True)  # 实时输出
-                    full_completion += content # 累加内容
-                    
-                    # 使用deepseek_v3_tokenizer更新完成tokens计数
-                    completion_tokens += count_deepseek_tokens(content)
-                    
-                    # 添加到XML缓冲区
-                    xml_buffer += content
-                    
-                    # 尝试解析缓冲区中的完整标签
-                    parsed_count = 0
-                    while process_xml_buffer():
-                        parsed_count += 1
-                        task_count += 1
-                    
-                    # 只有在解析到新任务时才启动路由
-                    if parsed_count > 0:
-                        print(f"\n已解析 {task_count} 个任务，启动任务调度...")
-                        router(tasks, config, query, executor)
-        
-        # === 新增：记录 Planner 的完整输出 ===
-        logger.info("===== 来自 Planner (Router) 的输出 =====")
-        logger.info(full_completion)
-        log_separator()
-        # ==================================
-
-        # 更新router模型的token使用情况
-        if stats_tracker:
-            stats_tracker.update_token_usage("router_model", prompt_tokens, completion_tokens)
-                        
+                    full_completion += content
+    
     except Exception as e:
-        print(f"\n处理响应时出错: {e}")
-    
-    print(f"\n计划生成完成，共解析 {task_count} 个任务")
-    
-    # 继续处理可能的剩余XML标签
-    while process_xml_buffer():
-        pass
-    
-    # 处理所有剩余任务直到全部完成
-    print("\n\n开始执行所有任务...")
-    while tasks and any(step_id not in completed_steps for step_id in tasks):
-        if not router(tasks, config, query, executor, stats_tracker):
-            break
-    
-    # 关闭线程池
-    executor.shutdown()
-    
-    return tasks, stats_tracker
+        logger.error(f"Error during planner API call for dataset building: {e}", exc_info=True)
+        print(f"\nError during planner API call: {e}")
+        return None, None, None
+
+    logger.info("===== Full Output from Planner (Router) =====")
+    logger.info(full_completion)
+    log_separator()
+
+    # 根据 `save_thinking` 配置处理输出
+    plan_only = ""
+    plan_match = re.search(r'<Plan>.*</Plan>', full_completion, re.DOTALL)
+    if plan_match:
+        plan_only = plan_match.group(0)
+
+    # 如果输出中没有 <think> 标签，则带思考的完整输出就是只有 plan
+    if "<think>" not in full_completion:
+        full_completion_with_think = plan_only
+    else:
+        full_completion_with_think = full_completion
+
+    return full_completion_with_think, plan_only, system_prompt
 
 
 def run_parallel_execution(query, config, workers=4):
@@ -1069,7 +1030,7 @@ After the `<think>` block, generate a solution plan that is a direct, operationa
                     # 只有在解析到新任务时才启动路由
                     if parsed_count > 0:
                         print(f"\n已解析 {task_count} 个任务，启动任务调度...")
-                        router(tasks, config, query, executor)
+                        router(tasks, config, query, executor, stats_tracker)
         
         # === 新增：记录 Planner 的完整输出 ===
         logger.info("===== 来自 Planner (Router) 的输出 =====")
@@ -1080,6 +1041,7 @@ After the `<think>` block, generate a solution plan that is a direct, operationa
         # 更新router模型的token使用情况
         if stats_tracker:
             stats_tracker.update_token_usage("router_model", prompt_tokens, completion_tokens)
+            stats_tracker.save_planner_output(prompt_tokens, completion_tokens, ttft)
                         
     except Exception as e:
         print(f"\n处理响应时出错: {e}")
@@ -1094,10 +1056,15 @@ After the `<think>` block, generate a solution plan that is a direct, operationa
     print("\n\n开始执行所有任务...")
     while tasks and any(step_id not in completed_steps for step_id in tasks):
         if not router(tasks, config, query, executor, stats_tracker):
-            break
-    
+            # 如果没有新任务可以调度，并且仍有未完成的任务在运行，等待它们
+            if futures:
+                concurrent.futures.wait(list(futures.values()))
+            else:
+                # 如果没有正在运行的任务，但仍有未完成的任务（可能是依赖问题），则退出循环
+                break
+
     # 关闭线程池
-    executor.shutdown()
+    executor.shutdown(wait=True)
     
     return tasks, stats_tracker
 

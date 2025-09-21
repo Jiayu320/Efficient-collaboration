@@ -46,11 +46,15 @@ def main():
     # 获取判断相关配置
     enable_judge = yaml_config["system"].get("enable_judge", False)
     gold_answer = yaml_config["system"].get("gold_answer", "")
-    enable_threshold = yaml_config["system"].get("enable_threshold", False)
+    enable_threshold = yaml_config["models"].get("enable_threshold", False)
     if use_local_router:
         threshold = yaml_config["models"]["threshold"]
     else:
         threshold = yaml_config["models"]["threshold"]
+    
+    # 新增：获取数据集构建配置
+    dataset_build_config = yaml_config.get("dataset", {}).get("build", {})
+
 
     # 初始化模型配置
     config = ModelConfig(
@@ -76,7 +80,12 @@ def main():
     dataset_limit = args.dataset_limit or yaml_config.get("dataset", {}).get("limit", None)
 
     if dataset_enabled and dataset_path:
-        print("===== 数据集处理模式 =====")
+        # 根据配置决定是评估模式还是构建模式
+        if dataset_build_config.get("enabled", False):
+            print("===== 数据集构建模式 =====")
+        else:
+            print("===== 数据集评估模式 =====")
+
         print(f"使用小模型: {config.small_model}")
         print(f"使用大模型: {config.large_model}")
         if config.use_local_router:
@@ -90,8 +99,16 @@ def main():
             print(f"数据集限制: {dataset_limit} 条")
         
         try:
-            # 运行数据集评估
-            report_file = run_dataset_evaluation(config, dataset_path, dataset_limit, workers)
+            # 运行数据集评估或构建，并传入新配置
+            output_path = run_dataset_evaluation(config, dataset_path, dataset_limit, workers, dataset_build_config)
+            
+            # 如果是构建模式，直接结束
+            if dataset_build_config.get("enabled", False):
+                print(f"数据集构建完成，文件保存在: {output_path}")
+                return
+
+            # --- 以下为评估模式的逻辑 ---
+            report_file = output_path
             
             # 添加任务分配统计
             print("正在生成任务分配统计...")
