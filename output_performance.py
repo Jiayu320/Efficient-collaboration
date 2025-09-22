@@ -67,7 +67,9 @@ def get_model_performance(model_name: str) -> Dict[str, float]:
     # OpenAI模型性能
     elif "gpt-4o" in model_name_lower:
         return {"latency": calculate_average([0.50, 0.97]), "throughput": calculate_average([110.5, 178.5])}
-    
+    elif "gpt-5" in model_name_lower:
+        return {"latency": calculate_average([6.96, 7.03, 5.23]), "throughput": calculate_average([53.20, 53.43, 45.09])}
+
     # DeepSeek系列
     elif "deepseek-r1" in model_name_lower:
         return {"latency": calculate_average([2.37, 1.18, 0.88, 0.97, 0.51]), 
@@ -79,18 +81,29 @@ def get_model_performance(model_name: str) -> Dict[str, float]:
         return {"latency": calculate_average([2.37, 1.18, 0.88, 0.97, 0.51]), 
                 "throughput": calculate_average([44.26, 48.32, 65.32, 35.83, 38.71])}
 
+    # Grok系列
+    elif "grok-4" in model_name_lower:
+        return {"latency": 12.65, "throughput": 36.37}
+
     # Llama系列
     elif "llama3-8b" in model_name_lower or "llama-3-8b" in model_name_lower:
-        return {"latency": calculate_average([0.55, 0.69, 0.19, 0.86, 0.48]), 
-                "throughput": calculate_average([89.21, 94.59, 10000, 148.4, 15.58])}
+        return {"latency": calculate_average([0.55, 0.69, 0.86, 0.48]), 
+                "throughput": calculate_average([89.21, 94.59, 148.4, 15.58])}
     elif "llama-3.2-3b" in model_name_lower or "llama3.2-3b" in model_name_lower:
         return {"latency": 0.71, "throughput": 165.0}
+    elif "llama-3.3-70b" in model_name_lower or "llama3.3-70b" in model_name_lower:
+        return {"latency": calculate_average([0.55, 0.25, 0.72, 0.68, 0.57]), 
+                "throughput": calculate_average([57.97, 40.28, 51.03, 75.79, 41.67])}
     
     # Qwen系列
-    elif "qwen3-4b" in model_name_lower or "qwen-4b" in model_name_lower:
+    elif "qwen3-4b" in model_name_lower:
         return {"latency": 0.69, "throughput": 184.1}
-    elif "Qwen2.5-3B" in model_name_lower or "qwen2.5-3b" in model_name_lower:
+    elif "qwen2.5-3b" in model_name_lower:
         return {"latency": 0.69, "throughput": 64.53}
+    elif "qwen3-235b-a22b" in model_name_lower:
+        return {"latency": calculate_average([0.31, 1.34]), "throughput":calculate_average([52.82, 88.24])}
+
+
     # 本地模型
     elif "saves" in model_name_lower:
         return {"latency": 0.5, "throughput": 71.2}

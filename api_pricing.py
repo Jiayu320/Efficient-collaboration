@@ -32,6 +32,8 @@ def get_model_pricing(model_name: str) -> Dict[str, float]:
     # OpenAI模型价格
     elif "gpt-4o" in model_name_lower:
         return {"prompt": 2.5, "completion": 10.0}
+    elif "gpt-5" in model_name_lower:
+        return {"prompt": 1.25, "completion": 10.0}
     
     # DeepSeek系列
     elif "deepseek-r1" in model_name_lower:
@@ -41,11 +43,17 @@ def get_model_pricing(model_name: str) -> Dict[str, float]:
     elif "deepseek-reasoner" in model_name_lower:
         return {"prompt": 0.272, "completion": 0.272}
     
+    # Grok模型价格
+    elif "grok-4" in model_name_lower:
+        return {"prompt": 3.0, "completion": 15.0}
+    
     # Llama系列
     elif "llama3-8b" in model_name_lower or "llama-3-8b" in model_name_lower or "llama3.1-8b" in model_name_lower or "llama-3.1-8b" in model_name_lower:
         return {"prompt": 0.03, "completion": 0.06}
     elif "llama-3.2-3b" in model_name_lower or "llama3.2-3b" in model_name_lower:
         return {"prompt": 0.00, "completion": 0.00}
+    elif "llama-3.3-70b" in model_name_lower or "llama3.3-70b" in model_name_lower:
+        return {"prompt": 0.012, "completion": 0.036}
 
     # Qwen系列
     elif "qwen3-4b" in model_name_lower or "qwen-4b" in model_name_lower:
@@ -54,6 +62,9 @@ def get_model_pricing(model_name: str) -> Dict[str, float]:
         return {"prompt": 0.00, "completion": 0.00}
     elif "qwen3-1.7b" in model_name_lower:
         return {"prompt": 0.00, "completion": 0.00}
+    elif "qwen3-235b-a22b" in model_name_lower:
+        return {"prompt": 0.10, "completion": 0.10}
+
     # 本地模型
     elif "saves" in model_name_lower or "sft" in model_name_lower:
         return {"prompt": 0.0, "completion": 0.0}

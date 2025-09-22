@@ -52,8 +52,8 @@ class Evaluator:
             return None
         
         logger = get_logger()
-        logger.info("正在调用评估模型...")
-        logger.info(f"发送给评估模型的 Prompt:\nSystem: {system_prompt[:200]}...\nUser: {user_prompt[:200]}...\n")
+        logger.info("----------正在调用评估模型----------")
+        logger.info(f"发送给评估模型的 Prompt:\nSystem: {system_prompt}\nUser: {user_prompt}\n")
         
         try:
             response = self.client.chat.completions.create(
