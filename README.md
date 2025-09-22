@@ -156,13 +156,16 @@ We conducted extensive testing by using different state-of-the-art models as the
 
 This table shows how well different models perform at decomposing problems into logical plans.
 
-| Planner Model              | Plan Soundness | Dependency Structure | Task Clarity | Attribute Accuracy | Plan Relevance | **Overall Average** |
+| Planner Model              | Plan Soundness | Dependency Structure | Task Clarity | Attribute Accuracy | Plan Efficiency | **Overall Average** |
 | -------------------------- | :------------: | :------------------: | :----------: | :----------------: | :------------: | :-----------------: |
-| **gemini-2.5-flash-thinking** |      5.00      |         5.00         |     4.96     |        4.00        |      5.00      |      **4.79** |
-| **deepseek-reasoner** |      5.00      |         4.97         |     4.97     |        3.93        |      5.00      |      **4.77** |
-| **claude-3-5-sonnet-latest** |      4.60      |         4.80         |     4.90     |        3.77        |      4.60      |      **4.53** |
-| **claude-3-7-sonnet-latest** |      4.60      |         4.73         |     4.73     |        3.77        |      4.60      |      **4.49** |
-| **deepseek-chat** |      4.45      |         4.38         |     4.41     |        3.45        |      4.55      |      **4.25** |
+| **gemini-2.5-flash-thinking** | 5.00 | 5.00 | 4.96 | 4.00 | 5.00 | **4.79** |
+| **deepseek-reasoner** | 5.00 | 4.97 | 4.97 | 3.93 | 5.00 | **4.77** |
+| **gemini-2.5-pro** | 4.87 | 4.93 | 5.00 | 3.90 | 4.87 | **4.71** |
+| **gpt-5** | 5.00 | 4.80 | 4.64 | 3.84 | 4.84 | **4.62** |
+| **claude-3-5-sonnet-latest** | 4.60 | 4.80 | 4.90 | 3.77 | 4.60 | **4.53** |
+| **claude-3-7-sonnet-latest** | 4.60 | 4.73 | 4.73 | 3.77 | 4.60 | **4.49** |
+| **deepseek-chat** | 4.45 | 4.38 | 4.41 | 3.45 | 4.55 | **4.25** |
+| **llama-3-8b-instruct** | 2.37 | 3.60 | 3.73 | 2.57 | 2.53 | **2.96** |
 
 ### Executor Performance based on Planner Quality
 
@@ -170,16 +173,22 @@ This table shows the performance of the Executor models, demonstrating how the q
 
 | Planner Model              | Executor Model           | Instruction Following | Context Use | Correctness | Clarity | Conciseness | **Overall Average** |
 | -------------------------- | ------------------------ | :-------------------: | :---------: | :---------: | :-----: | :---------: | :-----------------: |
-| **deepseek-reasoner** | `gpt-4o`                 |         3.78          |    3.99     |    3.78     |  4.30   |    4.20     |      **4.01** |
-| **deepseek-chat** | `gpt-4o`                 |         3.86          |    3.83     |    3.73     |  4.14   |    4.04     |      **3.92** |
-|                            | `qwen2.5-3b-instruct`    |         3.22          |    3.68     |    3.62     |  3.88   |    3.65     |      **3.61** |
-| **deepseek-reasoner** | `qwen2.5-3b-instruct`    |         3.09          |    3.52     |    3.38     |  3.64   |    3.42     |      **3.41** |
-| **claude-3-7-sonnet-latest** | `qwen2.5-3b-instruct`    |         2.94          |    3.51     |    3.03     |  3.56   |    3.33     |      **3.27** |
-| **claude-3-5-sonnet-latest** | `qwen2.5-3b-instruct`    |         2.76          |    3.24     |    2.80     |  3.49   |    3.26     |      **3.11** |
-| **gemini-2.5-flash-thinking**| `qwen2.5-3b-instruct`    |         2.70          |    2.91     |    2.61     |  3.22   |    3.15     |      **2.92** |
-| **claude-3-5-sonnet-latest** | `gpt-4o`                 |         2.71          |    2.93     |    2.64     |  3.10   |    3.06     |      **2.89** |
-| **gemini-2.5-flash-thinking**| `gpt-4o`                 |         2.51          |    2.66     |    2.50     |  2.69   |    2.67     |      **2.61** |
-| **claude-3-7-sonnet-latest** | `gpt-4o`                 |         2.46          |    2.39     |    2.31     |  2.64   |    2.66     |      **2.49** |
+| **deepseek-reasoner** | `gpt-4o` | 3.78 | 3.99 | 3.78 | 4.30 | 4.20 | **4.01** |
+| **deepseek-chat** | `gpt-4o` | 3.86 | 3.83 | 3.73 | 4.14 | 4.04 | **3.92** |
+| **deepseek-chat** | `qwen2.5-3b-instruct` | 3.22 | 3.68 | 3.62 | 3.88 | 3.65 | **3.61** |
+| **deepseek-reasoner** | `qwen2.5-3b-instruct` | 3.09 | 3.52 | 3.38 | 3.64 | 3.42 | **3.41** |
+| **claude-3-7-sonnet-latest** | `qwen2.5-3b-instruct` | 2.94 | 3.51 | 3.03 | 3.56 | 3.33 | **3.27** |
+| **gpt-5** | `gpt-4o` | 3.17 | 3.19 | 3.08 | 3.32 | 3.28 | **3.21** |
+| **claude-3-5-sonnet-latest** | `qwen2.5-3b-instruct` | 2.76 | 3.24 | 2.80 | 3.49 | 3.26 | **3.11** |
+| **llama-3-8b-instruct** | `gpt-4o` | 2.67 | 2.88 | 2.48 | 3.39 | 3.24 | **2.93** |
+| **gemini-2.5-pro** | `qwen2.5-3b-instruct` | 2.62 | 3.15 | 2.77 | 3.09 | 3.02 | **2.93** |
+| **llama-3-8b-instruct** | `qwen2.5-3b-instruct` | 2.69 | 2.92 | 2.83 | 3.21 | 2.90 | **2.91** |
+| **gemini-2.5-flash-thinking**| `qwen2.5-3b-instruct` | 2.70 | 2.91 | 2.61 | 3.22 | 3.15 | **2.92** |
+| **gpt-5** | `qwen2.5-3b-instruct` | 2.49 | 3.00 | 2.81 | 3.16 | 2.79 | **2.85** |
+| **claude-3-5-sonnet-latest** | `gpt-4o` | 2.71 | 2.93 | 2.64 | 3.10 | 3.06 | **2.89** |
+| **gemini-2.5-pro** | `gpt-4o` | 2.49 | 2.65 | 2.43 | 2.73 | 2.80 | **2.62** |
+| **gemini-2.5-flash-thinking**| `gpt-4o` | 2.51 | 2.66 | 2.50 | 2.69 | 2.67 | **2.61** |
+| **claude-3-7-sonnet-latest** | `gpt-4o` | 2.46 | 2.39 | 2.31 | 2.64 | 2.66 | **2.49** |
 
 ## Model Training
 

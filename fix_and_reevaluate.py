@@ -95,7 +95,6 @@ No explanation is required.
 
 
 def get_api_key(file_path):
-    """从文件中获取API密钥"""
     if not os.path.exists(file_path):
         logger.error(f"API密钥文件 '{file_path}' 未找到")
         raise FileNotFoundError(f"API密钥文件 '{file_path}' 未找到")
@@ -103,7 +102,6 @@ def get_api_key(file_path):
         return f.read().strip()
 
 def get_openai_client(model_type):
-    """根据模型类型获取OpenAI客户端"""
     config = MODELS_CONFIG[model_type]
     return OpenAI(
         api_key=get_api_key(config['api_key_path']),
@@ -111,7 +109,6 @@ def get_openai_client(model_type):
     )
 
 def call_model(client, model_name, prompt, temperature=0.0, max_tokens=2048):
-    """调用LLM的通用函数，并记录详细日志"""
     logger.debug(f"\n--- PROMPT for {model_name} ---\n{prompt}\n------------------------------")
     
     try:
@@ -129,7 +126,6 @@ def call_model(client, model_name, prompt, temperature=0.0, max_tokens=2048):
         return None
 
 def construct_relied_results(tasks, current_step_id):
-    """构建依赖任务的结果字符串"""
     rely_ids_str = tasks[current_step_id].get('Rely', '')
     if not rely_ids_str:
         return ""
@@ -146,7 +142,6 @@ def construct_relied_results(tasks, current_step_id):
     return relied_results if len(relied_results) > len("\n**CONTEXT (Results from prior steps):**\n") else ""
 
 def find_target_files(root_dir):
-    """查找所有 dataset_results.json 文件"""
     target_files = []
     for dirpath, _, filenames in os.walk(root_dir):
         if 'dataset_results.json' in filenames:
@@ -154,7 +149,6 @@ def find_target_files(root_dir):
     return target_files
 
 def update_model_solution(model_solution, task_id, new_result):
-    """更新 model_solution 字符串中的特定步骤结果"""
     pattern = re.compile(rf"(### 步骤 {task_id}:.*?)\n(.*?)\n\n", re.DOTALL)
     match = pattern.search(model_solution)
     if match:
@@ -164,7 +158,6 @@ def update_model_solution(model_solution, task_id, new_result):
     return model_solution
 
 def reevaluate_task(problem_data, task_id, experiment_dir):
-    """重新评估指定的任务"""
     logger.info(f"正在为问题 #{problem_data.get('problem_id', 'N/A')} 的任务 {task_id} 进行重新评估...")
     
     eval_prompt_path = os.path.join("evaluationPrompt", "ExecutorEvaluation.txt")
@@ -219,7 +212,7 @@ def reevaluate_task(problem_data, task_id, experiment_dir):
 
 def update_summary_report(experiment_dir):
     """更新 dataset_report.md 文件"""
-    logger.info(f"正在更新总结报告: {os.path.join(experiment_dir, 'dataset_report.md')}")
+    logger.info(f"正在同步/更新总结报告: {os.path.join(experiment_dir, 'dataset_report.md')}")
     all_planner_scores = defaultdict(list)
     all_executor_scores = defaultdict(lambda: defaultdict(list))
     total_problems = 0
@@ -267,8 +260,8 @@ def update_summary_report(experiment_dir):
         
     with open(report_path, 'r', encoding='utf-8') as f: content = f.read()
 
-    content = re.sub(r'(正确数量: )\d+', f'\\1{correct_count}', content)
-    content = re.sub(r'(准确率: )\d+\.\d+%', f'\\1{accuracy:.2f}%', content)
+    content = re.sub(r'(正确数量: )\d+', f'\\g<1>{correct_count}', content)
+    content = re.sub(r'(准确率: )\d+\.\d+%', f'\\g<1>{accuracy:.2f}%', content)
 
     for dim, score in avg_planner_scores.items():
         dim_title = ' '.join(re.findall('[A-Z][^A-Z]*', dim)).title()
@@ -291,12 +284,17 @@ def update_summary_report(experiment_dir):
                 content = pattern.sub(f"\\1 {is_correct_symbol} |", content)
 
     with open(report_path, 'w', encoding='utf-8') as f: f.write(content)
-    logger.info("总结报告更新完毕。")
+    logger.info("总结报告同步/更新完毕。")
 
 
 def process_experiment_file(file_path):
     """处理单个 dataset_results.json 文件"""
     experiment_dir = os.path.dirname(file_path)
+    
+    # ★★★ 新增机制：运行前预检查和同步 ★★★
+    logger.info(f"运行前预检查: 为保证状态一致，首先同步 '{os.path.basename(experiment_dir)}' 的总结报告...")
+    update_summary_report(experiment_dir)
+    logger.info("预检查同步完成，开始处理空缺结果。")
     
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
@@ -367,9 +365,12 @@ def process_experiment_file(file_path):
             
             if new_final_answer:
                 problem_data['model_solution'] = re.sub(
-                    r"(## 最终答案\n)(.*)", f"\\1{new_final_answer}",
-                    problem_data['model_solution'], flags=re.DOTALL
+                    r"(## 最终答案\n)(.*)",
+                    lambda m: m.group(1) + new_final_answer,
+                    problem_data['model_solution'],
+                    flags=re.DOTALL
                 )
+                
                 logger.info(f"  已生成新的最终答案。正在重新判断正误...")
                 judger_client = get_openai_client('judger')
                 judge_prompt = PROMPT_TEMPLATE_JUDGE.format(
@@ -392,11 +393,10 @@ def process_experiment_file(file_path):
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
         logger.info(f"文件 {file_path} 已更新。")
+        # 在所有修改完成后，再次更新报告以反映最新状态
         update_summary_report(experiment_dir)
 
 def main():
-    # ★★★ 修改点：将根目录指定到您的目标文件夹 ★★★
-    # 使用 os.path.join 确保路径在不同操作系统上都能正确工作
     root_directory = os.path.join("data_reports", "dataset", "s1k_testPerformance")
     
     if not os.path.isdir(root_directory):

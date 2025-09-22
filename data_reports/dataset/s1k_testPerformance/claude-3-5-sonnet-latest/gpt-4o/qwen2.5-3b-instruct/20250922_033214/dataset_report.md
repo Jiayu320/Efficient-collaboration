@@ -12,8 +12,8 @@
 
 - 数据集: dataset/TestData/s1k_testPerformance.json
 - 问题总数: 30
-- 正确数量: 0
-- 准确率: 0.00%
+- 正确数量: 1
+- 准确率: 3.33%
 - 平均执行时间: 205.72 秒
 - 平均成本: $0.0314
 
@@ -34,20 +34,20 @@
 #### 模型: `gpt-4o`
 | 维度 | 平均分 (满分5分) |
 | --- | --- |
-| Clarity And Machine Usability | 3.10 |
-| Correctness And Factual Accuracy | 2.64 |
-| Effective Use Of Context | 2.93 |
-| Instruction Following And Adherence | 2.71 |
-| Relevance And Conciseness | 3.06 |
+| Clarity And Machine Usability | 4.43 |
+| Correctness And Factual Accuracy | 3.79 |
+| Effective Use Of Context | 4.09 |
+| Instruction Following And Adherence | 3.88 |
+| Relevance And Conciseness | 4.39 |
 
 #### 模型: `qwen2.5-3b-instruct`
 | 维度 | 平均分 (满分5分) |
 | --- | --- |
-| Clarity And Machine Usability | 3.49 |
-| Correctness And Factual Accuracy | 2.80 |
-| Effective Use Of Context | 3.24 |
-| Instruction Following And Adherence | 2.76 |
-| Relevance And Conciseness | 3.26 |
+| Clarity And Machine Usability | 4.22 |
+| Correctness And Factual Accuracy | 3.50 |
+| Effective Use Of Context | 4.03 |
+| Instruction Following And Adherence | 3.43 |
+| Relevance And Conciseness | 3.95 |
 ## 任务规划指标
 
 - 平均任务步骤数: 6.57
@@ -93,7 +93,7 @@
 | 12 | Suppose  $a,\,b,$  and  $c$  are three complex ... | ✗ | 216.22 | 0.0258 | 7 | 71.43% | 50.0 |
 | 13 | Prove that the function \[ f(\nu)= \int_1^{\fra... | ✗ | 212.71 | 0.0338 | 6 | 83.33% | 56.7 |
 | 14 | Joanie takes a $\$6,\!000$ loan to pay for her ... | ✗ | 129.73 | 0.0154 | 4 | 75.00% | 27.5 |
-| 15 | A function  $f:[0,\infty)\to[0,\infty)$  is int... | ✗ | 209.85 | 0.0474 | 7 | 71.43% | 57.1 |
+| 15 | A function  $f:[0,\infty)\to[0,\infty)$  is int... | ✓ | 209.85 | 0.0474 | 7 | 71.43% | 57.1 |
 | 16 | Let  $n\geq1$  be a positive integer.  $n$  lam... | ✗ | 192.29 | 0.0338 | 6 | 50.00% | 63.3 |
 | 17 | For her zeroth project at Magic School, Emilia ... | ✗ | 237.12 | 0.0271 | 7 | 100.00% | 45.7 |
 | 18 | In quantum mechanics, when calculating the inte... | ✗ | 223.46 | 0.0477 | 7 | 85.71% | 55.7 |

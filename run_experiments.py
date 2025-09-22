@@ -9,40 +9,16 @@ from tqdm import tqdm # <-- NEW: Import tqdm
 # --- 1. 配置区域 ---
 ROUTER_MODELS_TO_TEST = [
     {
-        'name': 'meta-llama/llama-3-8b-instruct',
-        'router_model': 'meta-llama/llama-3-8b-instruct',
-        'router_key_path': 'usage/openrouter',
-        'router_api_base_url': 'https://openrouter.ai/api/v1'
-    },
-    {
-        'name': 'gemini-2.5-flash-thinking',
-        'router_model': 'gemini-2.5-flash-thinking',
-        'router_key_path': 'usage/bianxie1',
-        'router_api_base_url': 'https://api.bianxie.ai/v1'
-    },
-    {
-        'name': 'gemini-2.5-pro',
-        'router_model': 'gemini-2.5-pro',
-        'router_key_path': 'usage/bianxie1',
-        'router_api_base_url': 'https://api.bianxie.ai/v1'
-    },
-    {
-        'name': 'openai/gpt-5',
-        'router_model': 'openai/gpt-5',
-        'router_key_path': 'usage/openrouter',
-        'router_api_base_url': 'https://openrouter.ai/api/v1'
-    },
-    {
         'name': 'grok-4',
         'router_model': 'grok-4',
         'router_key_path': 'usage/bianxie1',
         'router_api_base_url': 'https://api.bianxie.ai/v1'
     },
     {
-        'name': 'qwen/qwen3-235b-a22b-2507',
-        'router_model': 'qwen/qwen3-235b-a22b-2507',
-        'router_key_path': 'usage/openrouter',
-        'router_api_base_url': 'https://openrouter.ai/api/v1'
+        'name': 'qwen3-235b-a22b-thinking-2507',
+        'router_model': 'qwen3-235b-a22b-thinking-2507',
+        'router_key_path': 'usage/qwen',
+        'router_api_base_url': 'https://dashscope.aliyuncs.com/compatible-mode/v1'
     }
 ]
 
