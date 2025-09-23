@@ -12,8 +12,8 @@
 
 - 数据集: dataset/TestData/s1k_testPerformance.json
 - 问题总数: 30
-- 正确数量: 6
-- 准确率: 20.00%
+- 正确数量: 9
+- 准确率: 30.00%
 - 平均执行时间: 275.11 秒
 - 平均成本: $0.0191
 
@@ -34,20 +34,20 @@
 #### 模型: `gpt-4o`
 | 维度 | 平均分 (满分5分) |
 | --- | --- |
-| Clarity And Machine Usability | 3.32 |
-| Correctness And Factual Accuracy | 3.08 |
-| Effective Use Of Context | 3.19 |
-| Instruction Following And Adherence | 3.17 |
-| Relevance And Conciseness | 3.28 |
+| Clarity And Machine Usability | 4.86 |
+| Correctness And Factual Accuracy | 4.61 |
+| Effective Use Of Context | 4.69 |
+| Instruction Following And Adherence | 4.67 |
+| Relevance And Conciseness | 4.83 |
 
 #### 模型: `qwen2.5-3b-instruct`
 | 维度 | 平均分 (满分5分) |
 | --- | --- |
-| Clarity And Machine Usability | 3.16 |
-| Correctness And Factual Accuracy | 2.81 |
-| Effective Use Of Context | 3.00 |
-| Instruction Following And Adherence | 2.49 |
-| Relevance And Conciseness | 2.79 |
+| Clarity And Machine Usability | 4.86 |
+| Correctness And Factual Accuracy | 4.61 |
+| Effective Use Of Context | 4.69 |
+| Instruction Following And Adherence | 4.67 |
+| Relevance And Conciseness | 4.83 |
 ## 任务规划指标
 
 - 平均任务步骤数: 3.83
@@ -79,7 +79,7 @@
 
 | # | 问题 | 正确? | 执行时间(秒) | 成本($) | 步骤数 | 压缩比例 | 平均Token |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Given a rational number, write it as a fraction... | ✗ | 190.78 | 0.0131 | 5 | 80.00% | 40.0 |
+| 1 | Given a rational number, write it as a fraction... | ✓ | 190.78 | 0.0131 | 5 | 80.00% | 40.0 |
 | 2 | Let  $ \mathcal{H}$  be an infinite-dimensional... | ✗ | 359.42 | 0.0029 | 0 | 0.00% | 0.0 |
 | 3 | Find the remainder when $9 \times 99 \times 999... | ✓ | 215.01 | 0.0246 | 4 | 100.00% | 0.0 |
 | 4 | Compute the mean molecular speed v in the heavy... | ✗ | 169.44 | 0.0086 | 3 | 100.00% | 35.0 |
@@ -89,17 +89,17 @@
 | 8 | In a mathematics test number of participants is... | ✗ | 328.53 | 0.0393 | 5 | 80.00% | 0.0 |
 | 9 | Kathy has $5$ red cards and $5$ green cards. Sh... | ✗ | 365.24 | 0.0180 | 6 | 83.33% | 0.0 |
 | 10 | Square $AIME$ has sides of length $10$ units.  ... | ✓ | 196.24 | 0.0307 | 4 | 25.00% | 0.0 |
-| 11 | Consider the following two person game. A numbe... | ✗ | 223.83 | 0.0138 | 5 | 100.00% | 64.0 |
+| 11 | Consider the following two person game. A numbe... | ✓ | 223.83 | 0.0138 | 5 | 100.00% | 64.0 |
 | 12 | Suppose  $a,\,b,$  and  $c$  are three complex ... | ✗ | 377.26 | 0.0029 | 0 | 0.00% | 0.0 |
-| 13 | Prove that the function \[ f(\nu)= \int_1^{\fra... | ✓ | 259.69 | 0.0360 | 5 | 100.00% | 0.0 |
+| 13 | Prove that the function \[ f(\nu)= \int_1^{\fra... | ✗ | 259.69 | 0.0360 | 5 | 100.00% | 0.0 |
 | 14 | Joanie takes a $\$6,\!000$ loan to pay for her ... | ✗ | 205.42 | 0.0167 | 4 | 75.00% | 25.0 |
-| 15 | A function  $f:[0,\infty)\to[0,\infty)$  is int... | ✗ | 292.74 | 0.0159 | 5 | 100.00% | 0.0 |
+| 15 | A function  $f:[0,\infty)\to[0,\infty)$  is int... | ✓ | 292.74 | 0.0159 | 5 | 100.00% | 0.0 |
 | 16 | Let  $n\geq1$  be a positive integer.  $n$  lam... | ✗ | 413.46 | 0.0192 | 7 | 85.71% | 0.0 |
 | 17 | For her zeroth project at Magic School, Emilia ... | ✗ | 301.81 | 0.0338 | 5 | 100.00% | 0.0 |
 | 18 | In quantum mechanics, when calculating the inte... | ✗ | 223.03 | 0.0182 | 3 | 100.00% | 0.0 |
 | 19 | Consider the additive group  $\mathbb{Z}^{2}$ .... | ✓ | 214.21 | 0.0305 | 4 | 100.00% | 0.0 |
 | 20 | Find the sum of all positive integers $n$ such ... | ✗ | 266.97 | 0.0100 | 4 | 100.00% | 0.0 |
-| 21 | For any positive integer $a,$ $\sigma(a)$ denot... | ✗ | 253.74 | 0.0200 | 5 | 100.00% | 38.0 |
+| 21 | For any positive integer $a,$ $\sigma(a)$ denot... | ✓ | 253.74 | 0.0200 | 5 | 100.00% | 38.0 |
 | 22 | Carl chooses a *functional expression**  $E$  w... | ✗ | 310.70 | 0.0032 | 0 | 0.00% | 0.0 |
 | 23 | Compute the mean molecular speed v in the light... | ✗ | 289.01 | 0.0152 | 4 | 100.00% | 0.0 |
 | 24 | Imagine a radioactive nuclei X(Z,A) can decay i... | ✗ | 438.32 | 0.0284 | 5 | 100.00% | 0.0 |
@@ -108,4 +108,5 @@
 | 27 | 2 mol of $\mathrm{Hg}(g)$ is combusted in a fix... | ✗ | 331.34 | 0.0250 | 7 | 85.71% | 0.0 |
 | 28 | B.4 If $\Delta E_{r m s}=5.54 \times 10^{-17} \... | ✗ | 287.07 | 0.0131 | 5 | 80.00% | 0.0 |
 | 29 |  $(BEL 5)$  Let  $G$  be the centroid of the tr... | ✗ | 129.44 | 0.0028 | 0 | 0.00% | 0.0 |
-| 30 | 10) The handle of a gallon of milk is plugged b... | ✗ | 245.95 | 0.0168 | 4 | 100.00% | 40.0 |
+| 30 | 10) The handle of a gallon of milk is plugged b... | ✗ | 245.95 | 0.0168 | 4 | 100.00% |
+| **平均表现** | **4.73** |

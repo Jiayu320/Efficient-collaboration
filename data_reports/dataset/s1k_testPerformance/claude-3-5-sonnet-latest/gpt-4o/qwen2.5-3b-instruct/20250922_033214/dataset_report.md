@@ -43,11 +43,11 @@
 #### 模型: `qwen2.5-3b-instruct`
 | 维度 | 平均分 (满分5分) |
 | --- | --- |
-| Clarity And Machine Usability | 4.22 |
-| Correctness And Factual Accuracy | 3.50 |
-| Effective Use Of Context | 4.03 |
-| Instruction Following And Adherence | 3.43 |
-| Relevance And Conciseness | 3.95 |
+| Clarity And Machine Usability | 4.43 |
+| Correctness And Factual Accuracy | 3.79 |
+| Effective Use Of Context | 4.09 |
+| Instruction Following And Adherence | 3.88 |
+| Relevance And Conciseness | 4.39 |
 ## 任务规划指标
 
 - 平均任务步骤数: 6.57
@@ -108,4 +108,5 @@
 | 27 | 2 mol of $\mathrm{Hg}(g)$ is combusted in a fix... | ✗ | 205.27 | 0.0222 | 7 | 71.43% | 32.9 |
 | 28 | B.4 If $\Delta E_{r m s}=5.54 \times 10^{-17} \... | ✗ | 152.53 | 0.0273 | 4 | 100.00% | 37.5 |
 | 29 |  $(BEL 5)$  Let  $G$  be the centroid of the tr... | ✗ | 197.53 | 0.0409 | 6 | 66.67% | 65.0 |
-| 30 | 10) The handle of a gallon of milk is plugged b... | ✗ | 167.96 | 0.0202 | 5 | 100.00% | 34.0 |
+| 30 | 10) The handle of a gallon of milk is plugged b... | ✗ | 167.96 | 0.0202 | 5 | 100.00% |
+| **平均表现** | **4.12** |

@@ -12,8 +12,8 @@
 
 - 数据集: dataset/TestData/s1k_testPerformance.json
 - 问题总数: 30
-- 正确数量: 6
-- 准确率: 20.00%
+- 正确数量: 5
+- 准确率: 16.67%
 - 平均执行时间: 602.53 秒
 - 平均成本: $0.0110
 
@@ -34,20 +34,20 @@
 #### 模型: `gpt-4o`
 | 维度 | 平均分 (满分5分) |
 | --- | --- |
-| Clarity And Machine Usability | 4.30 |
-| Correctness And Factual Accuracy | 3.78 |
-| Effective Use Of Context | 3.99 |
-| Instruction Following And Adherence | 3.78 |
-| Relevance And Conciseness | 4.20 |
+| Clarity And Machine Usability | 4.53 |
+| Correctness And Factual Accuracy | 3.91 |
+| Effective Use Of Context | 4.11 |
+| Instruction Following And Adherence | 3.96 |
+| Relevance And Conciseness | 4.43 |
 
 #### 模型: `qwen2.5-3b-instruct`
 | 维度 | 平均分 (满分5分) |
 | --- | --- |
-| Clarity And Machine Usability | 3.64 |
-| Correctness And Factual Accuracy | 3.38 |
-| Effective Use Of Context | 3.52 |
-| Instruction Following And Adherence | 3.09 |
-| Relevance And Conciseness | 3.42 |
+| Clarity And Machine Usability | 4.10 |
+| Correctness And Factual Accuracy | 3.76 |
+| Effective Use Of Context | 3.92 |
+| Instruction Following And Adherence | 3.47 |
+| Relevance And Conciseness | 3.85 |
 ## 任务规划指标
 
 - 平均任务步骤数: 5.63
@@ -81,7 +81,7 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Given a rational number, write it as a fraction... | ✓ | 171.75 | 0.0026 | 3 | 100.00% | 33.3 |
 | 2 | Let  $ \mathcal{H}$  be an infinite-dimensional... | ✓ | 854.66 | 0.0175 | 5 | 100.00% | 56.0 |
-| 3 | Find the remainder when $9 \times 99 \times 999... | ✓ | 331.60 | 0.0026 | 6 | 83.33% | 18.3 |
+| 3 | Find the remainder when $9 \times 99 \times 999... | ✗ | 331.60 | 0.0026 | 6 | 83.33% | 18.3 |
 | 4 | Compute the mean molecular speed v in the heavy... | ✗ | 212.61 | 0.0040 | 5 | 60.00% | 31.0 |
 | 5 | Two capacitors with capacitance values $C_{1}=2... | ✗ | 395.25 | 0.0100 | 6 | 83.33% | 38.3 |
 | 6 | One base of a trapezoid is $100$ units longer t... | ✗ | 416.33 | 0.0079 | 6 | 100.00% | 28.3 |
@@ -93,11 +93,11 @@
 | 12 | Suppose  $a,\,b,$  and  $c$  are three complex ... | ✗ | 1030.66 | 0.0093 | 5 | 80.00% | 42.0 |
 | 13 | Prove that the function \[ f(\nu)= \int_1^{\fra... | ✗ | 885.26 | 0.0210 | 7 | 100.00% | 54.3 |
 | 14 | Joanie takes a $\$6,\!000$ loan to pay for her ... | ✗ | 226.97 | 0.0035 | 4 | 75.00% | 35.0 |
-| 15 | A function  $f:[0,\infty)\to[0,\infty)$  is int... | ✗ | 647.32 | 0.0130 | 8 | 75.00% | 47.5 |
+| 15 | A function  $f:[0,\infty)\to[0,\infty)$  is int... | ✓ | 647.32 | 0.0130 | 8 | 75.00% | 47.5 |
 | 16 | Let  $n\geq1$  be a positive integer.  $n$  lam... | ✗ | 608.36 | 0.0103 | 5 | 100.00% | 40.0 |
 | 17 | For her zeroth project at Magic School, Emilia ... | ✗ | 537.61 | 0.0197 | 5 | 100.00% | 54.0 |
 | 18 | In quantum mechanics, when calculating the inte... | ✗ | 561.48 | 0.0144 | 5 | 60.00% | 38.0 |
-| 19 | Consider the additive group  $\mathbb{Z}^{2}$ .... | ✓ | 448.30 | 0.0137 | 5 | 100.00% | 42.0 |
+| 19 | Consider the additive group  $\mathbb{Z}^{2}$ .... | ✗ | 448.30 | 0.0137 | 5 | 100.00% | 42.0 |
 | 20 | Find the sum of all positive integers $n$ such ... | ✓ | 639.69 | 0.0140 | 7 | 71.43% | 42.9 |
 | 21 | For any positive integer $a,$ $\sigma(a)$ denot... | ✗ | 471.65 | 0.0080 | 5 | 100.00% | 34.0 |
 | 22 | Carl chooses a *functional expression**  $E$  w... | ✗ | 1605.40 | 0.0007 | 0 | 0.00% | 0.0 |
@@ -108,4 +108,5 @@
 | 27 | 2 mol of $\mathrm{Hg}(g)$ is combusted in a fix... | ✗ | 380.60 | 0.0079 | 6 | 83.33% | 33.3 |
 | 28 | B.4 If $\Delta E_{r m s}=5.54 \times 10^{-17} \... | ✗ | 511.82 | 0.0033 | 5 | 80.00% | 32.0 |
 | 29 |  $(BEL 5)$  Let  $G$  be the centroid of the tr... | ✗ | 757.09 | 0.0231 | 7 | 85.71% | 54.3 |
-| 30 | 10) The handle of a gallon of milk is plugged b... | ✗ | 446.82 | 0.0008 | 3 | 100.00% | 33.3 |
+| 30 | 10) The handle of a gallon of milk is plugged b... | ✗ | 446.82 | 0.0008 | 3 | 100.00% |
+| **平均表现** | **3.82** |

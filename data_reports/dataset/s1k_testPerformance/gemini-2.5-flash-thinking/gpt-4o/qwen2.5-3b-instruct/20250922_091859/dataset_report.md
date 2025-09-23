@@ -12,8 +12,8 @@
 
 - 数据集: dataset/TestData/s1k_testPerformance.json
 - 问题总数: 30
-- 正确数量: 0
-- 准确率: 0.00%
+- 正确数量: 1
+- 准确率: 3.33%
 - 平均执行时间: 174.32 秒
 - 平均成本: $0.0081
 
@@ -34,20 +34,20 @@
 #### 模型: `gpt-4o`
 | 维度 | 平均分 (满分5分) |
 | --- | --- |
-| Clarity And Machine Usability | 2.69 |
-| Correctness And Factual Accuracy | 2.50 |
-| Effective Use Of Context | 2.66 |
-| Instruction Following And Adherence | 2.51 |
-| Relevance And Conciseness | 2.67 |
+| Clarity And Machine Usability | 4.71 |
+| Correctness And Factual Accuracy | 4.34 |
+| Effective Use Of Context | 4.57 |
+| Instruction Following And Adherence | 4.51 |
+| Relevance And Conciseness | 4.69 |
 
 #### 模型: `qwen2.5-3b-instruct`
 | 维度 | 平均分 (满分5分) |
 | --- | --- |
-| Clarity And Machine Usability | 3.22 |
-| Correctness And Factual Accuracy | 2.61 |
-| Effective Use Of Context | 2.91 |
-| Instruction Following And Adherence | 2.70 |
-| Relevance And Conciseness | 3.15 |
+| Clarity And Machine Usability | 4.71 |
+| Correctness And Factual Accuracy | 4.34 |
+| Effective Use Of Context | 4.57 |
+| Instruction Following And Adherence | 4.51 |
+| Relevance And Conciseness | 4.69 |
 ## 任务规划指标
 
 - 平均任务步骤数: 4.63
@@ -79,7 +79,7 @@
 
 | # | 问题 | 正确? | 执行时间(秒) | 成本($) | 步骤数 | 压缩比例 | 平均Token |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Given a rational number, write it as a fraction... | ✗ | 117.74 | 0.0028 | 4 | 100.00% | 45.0 |
+| 1 | Given a rational number, write it as a fraction... | ✓ | 117.74 | 0.0028 | 4 | 100.00% | 45.0 |
 | 2 | Let  $ \mathcal{H}$  be an infinite-dimensional... | ✗ | 367.18 | 0.0059 | 8 | 100.00% | 71.2 |
 | 3 | Find the remainder when $9 \times 99 \times 999... | ✗ | 158.33 | 0.0032 | 6 | 66.67% | 38.3 |
 | 4 | Compute the mean molecular speed v in the heavy... | ✗ | 130.28 | 0.0062 | 5 | 60.00% | 42.0 |
@@ -108,4 +108,5 @@
 | 27 | 2 mol of $\mathrm{Hg}(g)$ is combusted in a fix... | ✗ | 28.19 | 0.0000 | 0 | 0.00% | 0.0 |
 | 28 | B.4 If $\Delta E_{r m s}=5.54 \times 10^{-17} \... | ✗ | 27.01 | 0.0000 | 0 | 0.00% | 0.0 |
 | 29 |  $(BEL 5)$  Let  $G$  be the centroid of the tr... | ✗ | 28.24 | 0.0000 | 0 | 0.00% | 0.0 |
-| 30 | 10) The handle of a gallon of milk is plugged b... | ✗ | 27.14 | 0.0000 | 0 | 0.00% | 0.0 |
+| 30 | 10) The handle of a gallon of milk is plugged b... | ✗ | 27.14 | 0.0000 | 0 | 0.00% |
+| **平均表现** | **4.57** |

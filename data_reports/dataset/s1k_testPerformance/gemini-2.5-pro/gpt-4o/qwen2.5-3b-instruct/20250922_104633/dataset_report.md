@@ -12,8 +12,8 @@
 
 - 数据集: dataset/TestData/s1k_testPerformance.json
 - 问题总数: 30
-- 正确数量: 5
-- 准确率: 16.67%
+- 正确数量: 3
+- 准确率: 10.00%
 - 平均执行时间: 243.56 秒
 - 平均成本: $0.0264
 
@@ -34,20 +34,20 @@
 #### 模型: `gpt-4o`
 | 维度 | 平均分 (满分5分) |
 | --- | --- |
-| Clarity And Machine Usability | 2.73 |
-| Correctness And Factual Accuracy | 2.43 |
-| Effective Use Of Context | 2.65 |
-| Instruction Following And Adherence | 2.49 |
-| Relevance And Conciseness | 2.80 |
+| Clarity And Machine Usability | 4.58 |
+| Correctness And Factual Accuracy | 4.05 |
+| Effective Use Of Context | 4.38 |
+| Instruction Following And Adherence | 4.22 |
+| Relevance And Conciseness | 4.67 |
 
 #### 模型: `qwen2.5-3b-instruct`
 | 维度 | 平均分 (满分5分) |
 | --- | --- |
-| Clarity And Machine Usability | 3.09 |
-| Correctness And Factual Accuracy | 2.77 |
-| Effective Use Of Context | 3.15 |
-| Instruction Following And Adherence | 2.62 |
-| Relevance And Conciseness | 3.02 |
+| Clarity And Machine Usability | 4.58 |
+| Correctness And Factual Accuracy | 4.05 |
+| Effective Use Of Context | 4.38 |
+| Instruction Following And Adherence | 4.22 |
+| Relevance And Conciseness | 4.67 |
 ## 任务规划指标
 
 - 平均任务步骤数: 5.47
@@ -80,8 +80,8 @@
 | # | 问题 | 正确? | 执行时间(秒) | 成本($) | 步骤数 | 压缩比例 | 平均Token |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Given a rational number, write it as a fraction... | ✓ | 119.00 | 0.0127 | 3 | 100.00% | 46.7 |
-| 2 | Let  $ \mathcal{H}$  be an infinite-dimensional... | ✓ | 416.90 | 0.0434 | 6 | 100.00% | 113.3 |
-| 3 | Find the remainder when $9 \times 99 \times 999... | ✓ | 166.11 | 0.0192 | 5 | 80.00% | 36.0 |
+| 2 | Let  $ \mathcal{H}$  be an infinite-dimensional... | ✗ | 416.90 | 0.0434 | 6 | 100.00% | 113.3 |
+| 3 | Find the remainder when $9 \times 99 \times 999... | ✗ | 166.11 | 0.0192 | 5 | 80.00% | 36.0 |
 | 4 | Compute the mean molecular speed v in the heavy... | ✗ | 139.14 | 0.0179 | 4 | 75.00% | 45.0 |
 | 5 | Two capacitors with capacitance values $C_{1}=2... | ✗ | 203.90 | 0.0226 | 6 | 83.33% | 53.3 |
 | 6 | One base of a trapezoid is $100$ units longer t... | ✓ | 140.11 | 0.0236 | 3 | 100.00% | 100.0 |
@@ -108,4 +108,5 @@
 | 27 | 2 mol of $\mathrm{Hg}(g)$ is combusted in a fix... | ✗ | 218.95 | 0.0239 | 7 | 85.71% | 47.1 |
 | 28 | B.4 If $\Delta E_{r m s}=5.54 \times 10^{-17} \... | ✗ | 148.68 | 0.0153 | 4 | 100.00% | 70.0 |
 | 29 |  $(BEL 5)$  Let  $G$  be the centroid of the tr... | ✗ | 385.77 | 0.0504 | 7 | 57.14% | 125.7 |
-| 30 | 10) The handle of a gallon of milk is plugged b... | ✗ | 141.82 | 0.0116 | 4 | 75.00% | 45.0 |
+| 30 | 10) The handle of a gallon of milk is plugged b... | ✗ | 141.82 | 0.0116 | 4 | 75.00% |
+| **平均表现** | **4.38** |

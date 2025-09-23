@@ -12,8 +12,8 @@
 
 - 数据集: dataset/TestData/s1k_testPerformance.json
 - 问题总数: 30
-- 正确数量: 4
-- 准确率: 13.33%
+- 正确数量: 3
+- 准确率: 10.00%
 - 平均执行时间: 488.23 秒
 - 平均成本: $0.0257
 
@@ -34,20 +34,20 @@
 #### 模型: `gpt-4o`
 | 维度 | 平均分 (满分5分) |
 | --- | --- |
-| Clarity And Machine Usability | 3.48 |
-| Correctness And Factual Accuracy | 2.92 |
-| Effective Use Of Context | 3.22 |
-| Instruction Following And Adherence | 3.08 |
-| Relevance And Conciseness | 3.48 |
+| Clarity And Machine Usability | 4.66 |
+| Correctness And Factual Accuracy | 3.93 |
+| Effective Use Of Context | 4.22 |
+| Instruction Following And Adherence | 4.11 |
+| Relevance And Conciseness | 4.62 |
 
 #### 模型: `qwen2.5-3b-instruct`
 | 维度 | 平均分 (满分5分) |
 | --- | --- |
-| Clarity And Machine Usability | 3.15 |
-| Correctness And Factual Accuracy | 2.48 |
-| Effective Use Of Context | 3.18 |
-| Instruction Following And Adherence | 2.35 |
-| Relevance And Conciseness | 3.06 |
+| Clarity And Machine Usability | 4.23 |
+| Correctness And Factual Accuracy | 3.21 |
+| Effective Use Of Context | 4.15 |
+| Instruction Following And Adherence | 3.24 |
+| Relevance And Conciseness | 4.03 |
 ## 任务规划指标
 
 - 平均任务步骤数: 4.67
@@ -88,7 +88,7 @@
 | 7 | Let's say a language  $L \subseteq \{0,1\}^*$  ... | ✗ | 242.93 | 0.0603 | 6 | 33.33% | 63.3 |
 | 8 | In a mathematics test number of participants is... | ✗ | 382.64 | 0.0477 | 6 | 83.33% | 46.7 |
 | 9 | Kathy has $5$ red cards and $5$ green cards. Sh... | ✗ | 251.56 | 0.0301 | 3 | 100.00% | 50.0 |
-| 10 | Square $AIME$ has sides of length $10$ units.  ... | ✓ | 291.04 | 0.0199 | 3 | 100.00% | 46.7 |
+| 10 | Square $AIME$ has sides of length $10$ units.  ... | ✗ | 291.04 | 0.0199 | 3 | 100.00% | 46.7 |
 | 11 | Consider the following two person game. A numbe... | ✗ | 700.52 | 0.0355 | 10 | 100.00% | 47.0 |
 | 12 | Suppose  $a,\,b,$  and  $c$  are three complex ... | ✗ | 1008.36 | 0.0210 | 6 | 100.00% | 50.0 |
 | 13 | Prove that the function \[ f(\nu)= \int_1^{\fra... | ✓ | 715.67 | 0.0391 | 6 | 83.33% | 50.0 |
@@ -108,4 +108,5 @@
 | 27 | 2 mol of $\mathrm{Hg}(g)$ is combusted in a fix... | ✗ | 416.41 | 0.0277 | 5 | 80.00% | 36.0 |
 | 28 | B.4 If $\Delta E_{r m s}=5.54 \times 10^{-17} \... | ✗ | 696.00 | 0.0000 | 0 | 0.00% | 0.0 |
 | 29 |  $(BEL 5)$  Let  $G$  be the centroid of the tr... | ✗ | 582.04 | 0.0437 | 7 | 85.71% | 55.7 |
-| 30 | 10) The handle of a gallon of milk is plugged b... | ✗ | 531.94 | 0.0209 | 4 | 100.00% | 45.0 |
+| 30 | 10) The handle of a gallon of milk is plugged b... | ✗ | 531.94 | 0.0209 | 4 | 100.00% |
+| **平均表现** | **3.77** |

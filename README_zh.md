@@ -37,8 +37,6 @@
 
 与直接使用单一模型的方法相比，我们的协同推理方法在效率和解决方案质量上都表现出显著的改进。
 
-<image src="img/comparsion.jpg" title="方法对比" width="800"></image>
-
 -----
 
 ## 安装与设置
@@ -75,24 +73,21 @@
         ```
       - 编辑 `config.yaml` 文件，设置您的模型和 API 凭证。
       - 将您的 API 密钥放置在 `*_key_path` 变量指定的文件中（例如，在一个名为 `usage/` 的文件夹中）。
+        ```yaml
+        models:
+          small_model: qwen2.5-3b-instruct
+          large_model: gpt-4o
+          router_model: gemini-2.5-pro # 规划器模型
+          threshold: 4 # 难度低于 4 的任务使用小模型
 
-    <!-- end list -->
-
-    ```yaml
-    models:
-      small_model: qwen2.5-3b-instruct
-      large_model: gpt-4o
-      router_model: gemini-2.5-pro # 规划器模型
-      threshold: 4 # 难度低于 4 的任务使用小模型
-
-    api:
-      small_key_path: usage/qwen_key
-      large_key_path: usage/openai_key
-      router_key_path: usage/google_key
-      small_api_base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
-      large_api_base_url: https://api.openai.com/v1
-      router_api_base_url: https://api.generativeai.google.com/v1
-    ```
+        api:
+          small_key_path: usage/qwen_key
+          large_key_path: usage/openai_key
+          router_key_path: usage/google_key
+          small_api_base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+          large_api_base_url: https://api.openai.com/v1
+          router_api_base_url: https://api.generativeai.google.com/v1
+        ```
 
 -----
 
@@ -164,45 +159,44 @@ python main.py
 
 ## 性能基准测试
 
-我们通过使用不同的顶尖模型作为规划器，同时保持执行器模型（`qwen2.5-3b-instruct` 和 `gpt-4o`）不变，进行了广泛的测试。以下结果是在一个标准化的测试数据集上得到的平均分数（满分 5 分）。
+我们通过使用不同的顶尖模型作为 **规划器**，进行了广泛的测试。最终的 **准确率** 在一个标准化的测试数据集上进行评估，同时我们还提供了 **规划器性能分数**（满分5分）和关键的 **任务规划指标**。测试期间，执行器模型保持不变（`gpt-4o` 和 `qwen2.5-3b-instruct`）。
 
-### 规划器性能比较
+### 规划器性能与任务指标对比
 
-此表显示了不同模型在将问题分解为逻辑计划方面的表现。
+下表全面展示了每个规划器模型在最终准确率、生成计划的质量以及这些计划的结构特征方面的表现。
 
-| 规划器模型 | 计划合理性 | 依赖结构 | 任务清晰度 | 属性准确性 | 计划效率 | **平均总分** |
-| --- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **gemini-2.5-flash-thinking** | 5.00 | 5.00 | 4.96 | 4.00 | 5.00 | **4.79** |
-| **deepseek-reasoner** | 5.00 | 4.97 | 4.97 | 3.93 | 5.00 | **4.77** |
-| **gemini-2.5-pro** | 4.87 | 4.93 | 5.00 | 3.90 | 4.87 | **4.71** |
-| **gpt-5** | 5.00 | 4.80 | 4.64 | 3.84 | 4.84 | **4.62** |
-| **claude-3-5-sonnet-latest** | 4.60 | 4.80 | 4.90 | 3.77 | 4.60 | **4.53** |
-| **claude-3-7-sonnet-latest** | 4.60 | 4.73 | 4.73 | 3.77 | 4.60 | **4.49** |
-| **deepseek-chat** | 4.45 | 4.38 | 4.41 | 3.45 | 4.55 | **4.25** |
-| **llama-3-8b-instruct** | 2.37 | 3.60 | 3.73 | 2.57 | 2.53 | **2.96** |
+| 规划器模型 | 准确率 | 规划器分数 (平均) | 平均任务步骤 | 平均压缩率 | 平均每步Token数 |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **gpt-5** | **30.00%** | 4.62 | **3.83** | 70.27% | **10.00** |
+| **qwen3-235b-a22b-thinking** | 26.67% | 4.82 | 5.00 | 82.37% | 45.83 |
+| **deepseek-reasoner** | 16.67% | 4.77 | 5.63 | 79.42% | 39.08 |
+| **deepseek-chat** | 13.33% | 4.25 | 5.03 | 72.09% | 46.21 |
+| **gemini-2.5-pro** | 10.00% | 4.71 | 5.47 | 83.35% | 75.77 |
+| **grok-4** | 10.00% | 4.76 | 4.67 | 74.35% | 36.12 |
+| **claude-3-7-sonnet-latest** | 6.67% | 4.49 | 6.17 | 75.47% | 45.12 |
+| **claude-3-5-sonnet-latest** | 3.33% | 4.53 | 6.57 | 74.94% | 47.04 |
+| **gemini-2.5-flash-thinking** | 3.33% | **4.79** | 4.63 | **60.54%** | 47.52 |
+| **llama-3-8b-instruct** | 3.33% | 2.96 | 4.37 | 86.36% | 42.04 |
 
 ### 基于规划器质量的执行器性能
 
-此表显示了执行器模型的性能，展示了由规划器生成的计划质量如何影响它们正确解决子任务的能力。
+此表显示了执行器模型的性能，展示了由规划器生成的计划质量如何影响它们正确解决子任务的能力。分数是在所有数据集上的平均值。
 
 | 规划器模型 | 执行器模型 | 指令遵循 | 上下文利用 | 正确性 | 清晰度 | 简洁性 | **平均总分** |
-| --- | --- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **deepseek-reasoner** | `gpt-4o` | 3.78 | 3.99 | 3.78 | 4.30 | 4.20 | **4.01** |
-| **deepseek-chat** | `gpt-4o` | 3.86 | 3.83 | 3.73 | 4.14 | 4.04 | **3.92** |
-| **deepseek-chat** | `qwen2.5-3b-instruct` | 3.22 | 3.68 | 3.62 | 3.88 | 3.65 | **3.61** |
-| **deepseek-reasoner** | `qwen2.5-3b-instruct` | 3.09 | 3.52 | 3.38 | 3.64 | 3.42 | **3.41** |
-| **claude-3-7-sonnet-latest** | `qwen2.5-3b-instruct` | 2.94 | 3.51 | 3.03 | 3.56 | 3.33 | **3.27** |
-| **gpt-5** | `gpt-4o` | 3.17 | 3.19 | 3.08 | 3.32 | 3.28 | **3.21** |
-| **claude-3-5-sonnet-latest** | `qwen2.5-3b-instruct` | 2.76 | 3.24 | 2.80 | 3.49 | 3.26 | **3.11** |
-| **llama-3-8b-instruct** | `gpt-4o` | 2.67 | 2.88 | 2.48 | 3.39 | 3.24 | **2.93** |
-| **gemini-2.5-pro** | `qwen2.5-3b-instruct` | 2.62 | 3.15 | 2.77 | 3.09 | 3.02 | **2.93** |
-| **llama-3-8b-instruct** | `qwen2.5-3b-instruct` | 2.69 | 2.92 | 2.83 | 3.21 | 2.90 | **2.91** |
-| **gemini-2.5-flash-thinking**| `qwen2.5-3b-instruct` | 2.70 | 2.91 | 2.61 | 3.22 | 3.15 | **2.92** |
-| **gpt-5** | `qwen2.5-3b-instruct` | 2.49 | 3.00 | 2.81 | 3.16 | 2.79 | **2.85** |
-| **claude-3-5-sonnet-latest** | `gpt-4o` | 2.71 | 2.93 | 2.64 | 3.10 | 3.06 | **2.89** |
-| **gemini-2.5-pro** | `gpt-4o` | 2.49 | 2.65 | 2.43 | 2.73 | 2.80 | **2.62** |
-| **gemini-2.5-flash-thinking**| `gpt-4o` | 2.51 | 2.66 | 2.50 | 2.69 | 2.67 | **2.61** |
-| **claude-3-7-sonnet-latest** | `gpt-4o` | 2.46 | 2.39 | 2.31 | 2.64 | 2.66 | **2.49** |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **gpt-5** | `gpt-4o` / `qwen2.5-3b` | 4.67 | 4.69 | **4.61** | **4.86** | **4.83** | **4.73** |
+| **qwen3-235b-a22b-thinking** | `gpt-4o` / `qwen2.5-3b` | 4.53 | 4.51 | 4.37 | 4.72 | 4.69 | 4.56 |
+| **gemini-2.5-flash-thinking** | `gpt-4o` / `qwen2.5-3b` | 4.51 | 4.57 | 4.34 | 4.71 | 4.69 | 4.56 |
+| **claude-3-7-sonnet-latest** | `gpt-4o` / `qwen2.5-3b` | 4.38 | 4.15 | 3.85 | 4.64 | 4.67 | 4.34 |
+| **gemini-2.5-pro** | `gpt-4o` / `qwen2.5-3b` | 4.22 | 4.38 | 4.05 | 4.58 | 4.67 | 4.38 |
+| **deepseek-chat** | `gpt-4o` / `qwen2.5-3b` | 4.21 | 4.14 | 4.07 | 4.49 | 4.41 | 4.26 |
+| **claude-3-5-sonnet-latest** | `gpt-4o` / `qwen2.5-3b` | 3.88 | 4.09 | 3.79 | 4.43 | 4.39 | 4.12 |
+| **grok-4** | `gpt-4o` | 4.11 | 4.22 | 3.93 | 4.66 | 4.62 | 4.31 |
+| **deepseek-reasoner** | `gpt-4o` | 3.96 | 4.11 | 3.91 | 4.53 | 4.43 | 4.19 |
+| **grok-4** | `qwen2.5-3b-instruct` | 3.24 | 4.15 | 3.21 | 4.23 | 4.03 | 3.77 |
+| **llama-3-8b-instruct** | `gpt-4o` | 3.48 | 3.50 | 3.00 | 4.25 | 4.10 | 3.67 |
+| **deepseek-reasoner** | `qwen2.5-3b-instruct` | 3.47 | 3.92 | 3.76 | 4.10 | 3.85 | 3.82 |
+| **llama-3-8b-instruct** | `qwen2.5-3b-instruct` | 3.23 | 3.29 | 3.21 | 3.92 | 3.48 | 3.43 |
 
 -----
 

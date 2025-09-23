@@ -34,20 +34,20 @@
 #### 模型: `gpt-4o`
 | 维度 | 平均分 (满分5分) |
 | --- | --- |
-| Clarity And Machine Usability | 2.64 |
-| Correctness And Factual Accuracy | 2.31 |
-| Effective Use Of Context | 2.39 |
-| Instruction Following And Adherence | 2.46 |
-| Relevance And Conciseness | 2.66 |
+| Clarity And Machine Usability | 4.64 |
+| Correctness And Factual Accuracy | 3.85 |
+| Effective Use Of Context | 4.15 |
+| Instruction Following And Adherence | 4.38 |
+| Relevance And Conciseness | 4.67 |
 
 #### 模型: `qwen2.5-3b-instruct`
 | 维度 | 平均分 (满分5分) |
 | --- | --- |
-| Clarity And Machine Usability | 3.56 |
-| Correctness And Factual Accuracy | 3.03 |
-| Effective Use Of Context | 3.51 |
-| Instruction Following And Adherence | 2.94 |
-| Relevance And Conciseness | 3.33 |
+| Clarity And Machine Usability | 4.64 |
+| Correctness And Factual Accuracy | 3.85 |
+| Effective Use Of Context | 4.15 |
+| Instruction Following And Adherence | 4.38 |
+| Relevance And Conciseness | 4.67 |
 ## 任务规划指标
 
 - 平均任务步骤数: 6.17
@@ -108,4 +108,5 @@
 | 27 | 2 mol of $\mathrm{Hg}(g)$ is combusted in a fix... | ✗ | 224.55 | 0.0224 | 7 | 71.43% | 38.6 |
 | 28 | B.4 If $\Delta E_{r m s}=5.54 \times 10^{-17} \... | ✗ | 187.37 | 0.0334 | 5 | 60.00% | 42.0 |
 | 29 |  $(BEL 5)$  Let  $G$  be the centroid of the tr... | ✗ | 232.17 | 0.0339 | 7 | 85.71% | 50.0 |
-| 30 | 10) The handle of a gallon of milk is plugged b... | ✗ | 163.82 | 0.0218 | 5 | 80.00% | 30.0 |
+| 30 | 10) The handle of a gallon of milk is plugged b... | ✗ | 163.82 | 0.0218 | 5 | 80.00% |
+| **平均表现** | **4.34** |

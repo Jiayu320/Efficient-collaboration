@@ -12,8 +12,8 @@
 
 - 数据集: dataset/TestData/s1k_testPerformance.json
 - 问题总数: 30
-- 正确数量: 0
-- 准确率: 0.00%
+- 正确数量: 1
+- 准确率: 3.33%
 - 平均执行时间: 186.78 秒
 - 平均成本: $0.0071
 
@@ -34,20 +34,20 @@
 #### 模型: `gpt-4o`
 | 维度 | 平均分 (满分5分) |
 | --- | --- |
-| Clarity And Machine Usability | 3.39 |
-| Correctness And Factual Accuracy | 2.48 |
-| Effective Use Of Context | 2.88 |
-| Instruction Following And Adherence | 2.67 |
-| Relevance And Conciseness | 3.24 |
+| Clarity And Machine Usability | 4.25 |
+| Correctness And Factual Accuracy | 3.00 |
+| Effective Use Of Context | 3.50 |
+| Instruction Following And Adherence | 3.48 |
+| Relevance And Conciseness | 4.10 |
 
 #### 模型: `qwen2.5-3b-instruct`
 | 维度 | 平均分 (满分5分) |
 | --- | --- |
-| Clarity And Machine Usability | 3.21 |
-| Correctness And Factual Accuracy | 2.83 |
-| Effective Use Of Context | 2.92 |
-| Instruction Following And Adherence | 2.69 |
-| Relevance And Conciseness | 2.90 |
+| Clarity And Machine Usability | 3.92 |
+| Correctness And Factual Accuracy | 3.21 |
+| Effective Use Of Context | 3.29 |
+| Instruction Following And Adherence | 3.23 |
+| Relevance And Conciseness | 3.48 |
 ## 任务规划指标
 
 - 平均任务步骤数: 4.37
@@ -93,7 +93,7 @@
 | 12 | Suppose  $a,\,b,$  and  $c$  are three complex ... | ✗ | 179.51 | 0.0190 | 7 | 100.00% | 80.0 |
 | 13 | Prove that the function \[ f(\nu)= \int_1^{\fra... | ✗ | 98.32 | 0.0025 | 3 | 100.00% | 43.3 |
 | 14 | Joanie takes a $\$6,\!000$ loan to pay for her ... | ✗ | 121.81 | 0.0001 | 4 | 100.00% | 20.0 |
-| 15 | A function  $f:[0,\infty)\to[0,\infty)$  is int... | ✗ | 142.87 | 0.0044 | 3 | 100.00% | 50.0 |
+| 15 | A function  $f:[0,\infty)\to[0,\infty)$  is int... | ✓ | 142.87 | 0.0044 | 3 | 100.00% | 50.0 |
 | 16 | Let  $n\geq1$  be a positive integer.  $n$  lam... | ✗ | 180.86 | 0.0028 | 5 | 100.00% | 38.0 |
 | 17 | For her zeroth project at Magic School, Emilia ... | ✗ | 374.15 | 0.0053 | 5 | 60.00% | 34.0 |
 | 18 | In quantum mechanics, when calculating the inte... | ✗ | 122.23 | 0.0093 | 4 | 75.00% | 40.0 |
@@ -108,4 +108,5 @@
 | 27 | 2 mol of $\mathrm{Hg}(g)$ is combusted in a fix... | ✗ | 135.89 | 0.0130 | 4 | 100.00% | 47.5 |
 | 28 | B.4 If $\Delta E_{r m s}=5.54 \times 10^{-17} \... | ✗ | 120.49 | 0.0088 | 4 | 75.00% | 57.5 |
 | 29 |  $(BEL 5)$  Let  $G$  be the centroid of the tr... | ✗ | 99.88 | 0.0028 | 3 | 100.00% | 50.0 |
-| 30 | 10) The handle of a gallon of milk is plugged b... | ✗ | 102.89 | 0.0024 | 3 | 100.00% | 33.3 |
+| 30 | 10) The handle of a gallon of milk is plugged b... | ✗ | 102.89 | 0.0024 | 3 | 100.00% |
+| **平均表现** | **3.42** |
