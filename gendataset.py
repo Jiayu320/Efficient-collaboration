@@ -14,7 +14,6 @@ import itertools
 # 使用 tqdm 提供优雅的进度条
 from tqdm import tqdm
 
-# *** MODIFIED: 回归到使用 openai 库 ***
 try:
     from openai import OpenAI
 except ImportError:
@@ -23,12 +22,12 @@ except ImportError:
 
 
 # --- 1. 配置模块 ---
-ROUTER_MODEL = "qwen3-235b-a22b-thinking-2507"
+ROUTER_MODEL = "qwen3-235b-a22b" 
 ROUTER_KEY_PATHS = [
     "usage/qwen", "usage/qwen1", "usage/qwen2", "usage/qwen3", "usage/qwen4",
 ]
 ROUTER_API_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-# MAX_WORKERS 将被动态设置为Key的数量
+MAX_WORKERS = 5 # 并行数保持不变
 MAX_RETRIES = 3
 RETRY_DELAY = 5
 API_TIMEOUT = 300.0
@@ -64,7 +63,7 @@ def setup_logger() -> logging.Logger:
 logger = setup_logger()
 
 
-# --- 3. API 调用模块 (回归 openai) ---
+# --- 3. API 调用模块 (切换为流式) ---
 def get_api_key(path: str) -> Optional[str]:
     if not os.path.exists(path):
         logger.warning(f"API密钥文件 '{path}' 未找到，将跳过。")
@@ -77,23 +76,64 @@ def get_api_key(path: str) -> Optional[str]:
         return key
 
 def get_model_response(system_prompt: str, user_prompt: str, api_key: str):
-    """使用 openai 库调用API，返回完整的 completion 对象或 None。"""
+    """使用 openai 库以流式方式调用API，并处理数据流。"""
     try:
         client = OpenAI(
             api_key=api_key,
             base_url=ROUTER_API_BASE_URL,
             timeout=API_TIMEOUT,
         )
-        completion = client.chat.completions.create(
+        
+        # *** MODIFIED: 切换为流式调用 ***
+        stream = client.chat.completions.create(
             model=ROUTER_MODEL,
             messages=[
                 {'role': 'system', 'content': system_prompt},
                 {'role': 'user', 'content': user_prompt}
-            ]
+            ],
+            stream=True,
+            temperature=0.5, # 根据您的需要调整
+            extra_body={"enable_thinking": True} # 启用思考过程
         )
-        return completion
+
+        # 从流中提取数据
+        full_content_parts = []
+        reasoning_content = None
+        request_id = None
+        
+        # 从响应头中获取 request_id
+        if hasattr(stream, 'response') and hasattr(stream.response, 'headers'):
+            request_id = stream.response.headers.get('x-request-id')
+
+        for chunk in stream:
+            # 拼接内容
+            if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
+                full_content_parts.append(chunk.choices[0].delta.content)
+
+            # 尝试从非内容块中解析 reasoning_content
+            # 通常它存在于第一个或某个特殊的chunk中
+            if not reasoning_content:
+                try:
+                    chunk_dict = chunk.model_dump()
+                    if (choices := chunk_dict.get("choices")) and choices:
+                        # thinking/reasoning内容可能在 'message' 字段下
+                        if (message := choices[0].get("message")) and message:
+                             if reasoning := message.get("reasoning_content"):
+                                 reasoning_content = reasoning
+                except Exception:
+                    # 某些chunk可能没有这些字段，忽略解析错误
+                    pass
+        
+        final_text = "".join(full_content_parts)
+        
+        return {
+            "text": final_text,
+            "request_id": request_id,
+            "reasoning": reasoning_content
+        }
+
     except Exception as e:
-        logger.error(f"API 调用时发生异常 (Key: ...{api_key[-4:]}): {e}")
+        logger.error(f"API 流式调用时发生异常 (Key: ...{api_key[-4:]}): {e}")
         return None
 
 
@@ -138,7 +178,6 @@ def parse_model_output(text: str) -> Tuple[str, str]:
 
 # --- 5. 主逻辑模块 ---
 def generate_prompts(query: str) -> Tuple[str, str]:
-    # Prompt内容保持不变
     system_prompt = '''You are an expert **first-principles thinker and master strategist**. Your primary function is to deconstruct any complex problem into a clear, logical, and operational sequence of steps for a machine to execute.
 
 Given a problem, your output must consist of two parts, in this exact order:
@@ -221,6 +260,13 @@ After the `<think>` block, generate a solution plan that is a direct, operationa
 <Step ID="5" Task="What is the final remainder of the entire product?" Difficulty="4" Token="50" Rely="2,3,4"/>
 </Plan>
 **Justification for why this is flawed**: This plan is **incomplete and invites error**. While it correctly separates some cases, Step 5 is too vague. A good plan would have separate, explicit steps to: (a) calculate the product of the remainders of the special cases (`9 * 99`), (b) calculate the product of the remainders of the general cases (`999^997`), and (c) multiply the results from (a) and (b) together modulo 1000. Lumping these into one step caused the model to forget one of the terms in the final calculation.
+
+-----
+
+# FINAL INSTRUCTION: EXECUTE NOW
+
+Apply the entire framework described above to the problem provided below. Remember, your final output must ONLY be the `<think>` block followed by the `<Plan>` block, with no other text whatsoever.
+
 '''
     user_prompt = f'''
         **Question**: {query}
@@ -238,42 +284,27 @@ def process_single_item(item: Dict[str, Any], api_key: str):
     system_prompt, user_prompt = generate_prompts(problem_query)
     
     logger.info(f"正在为问题构建数据集: {problem_query[:80]}...")
-    logger.info("===== Prompt to Planner (openai) =====")
+    logger.info("===== Prompt to Planner (openai-stream) =====")
     logger.info(f"System Prompt: [Provided in definition]\nUser Prompt:\n{user_prompt}")
 
-    completion = get_model_response(system_prompt, user_prompt, api_key)
+    response_data = get_model_response(system_prompt, user_prompt, api_key)
     
-    if not completion:
+    if not response_data:
         logger.error(f"问题 '{problem_query[:80]}...' 的API调用失败或返回为空对象。")
         return
 
-    # 提取所需信息
-    request_id = None
-    response_text = ""
-    try:
-        # 从响应头中获取 request_id
-        if hasattr(completion, '_response') and hasattr(completion._response, 'headers'):
-            request_id = completion._response.headers.get('x-request-id')
+    # 从返回的字典中解包数据
+    response_text = response_data["text"]
+    request_id = response_data["request_id"]
+    reasoning_content = response_data["reasoning"]
 
-        if completion.choices:
-            response_text = completion.choices[0].message.content or ""
-        
-    except Exception as e:
-        logger.error(f"解析completion对象时出错: {e}")
-        return
-        
-    # 如果响应内容为空，记录详细的调试信息
-    if not response_text:
+    if not response_text or not response_text.strip():
         log_msg = (
-            f"问题 '{problem_query[:80]}...' 的模型响应内容为空，跳过此条目。 "
+            f"问题 '{problem_query[:80]}...' 的模型响应内容为空或仅含空白，跳过此条目。 "
             f"Request ID: {request_id or 'N/A'}"
         )
-        try:
-            # 记录包含reasoning_content的完整响应体
-            full_response_dump = completion.model_dump_json(indent=2)
-            log_msg += f"\n----- Full Server Response -----\n{full_response_dump}\n--------------------------"
-        except Exception as dump_error:
-            log_msg += f"\n无法转储完整的响应对象: {dump_error}"
+        if reasoning_content:
+            log_msg += f"\n----- Model Reasoning -----\n{reasoning_content}\n--------------------------"
         
         logger.error(log_msg)
         return
@@ -293,7 +324,7 @@ def process_single_item(item: Dict[str, Any], api_key: str):
 
 
 def main():
-    logger.info("===== 数据集生成脚本启动 (openai模式) =====")
+    logger.info("===== 数据集生成脚本启动 (openai-stream模式) =====")
     
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     logger.info(f"所有输出将被保存到: {OUTPUT_DIR}")
@@ -304,7 +335,6 @@ def main():
         return
     logger.info(f"成功加载 {len(api_keys)} 个API Keys。")
     
-    # *** NEW: 动态设置并行数为API Key的数量 ***
     max_workers = len(api_keys)
     logger.info(f"并行线程数将设置为: {max_workers}")
     
@@ -334,7 +364,7 @@ def main():
             current_api_key = next(key_cycler)
             futures.append(executor.submit(process_single_item, item, current_api_key))
         
-        for future in tqdm(as_completed(futures), total=len(futures), desc=f"生成数据集(openai, {max_workers}个线程)"):
+        for future in tqdm(as_completed(futures), total=len(futures), desc=f"生成数据集(stream, {max_workers}个线程)"):
             try:
                 future.result()
             except Exception as exc:
