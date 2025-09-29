@@ -86,27 +86,27 @@ def main():
     base_dir = "D:\\JIAYU\\Documents\\GitHub\\Efficient-collaboration"
     
     # 检查输入文件路径 - 优先使用JSON文件，如果不存在则使用parquet文件
-    test_json = os.path.join(base_dir, "dataset", "original_data", "MMLU-Pro_test.json")
-    validation_json = os.path.join(base_dir, "dataset", "original_data", "MMLU-Pro_validation.json")
+    test_json = os.path.join(base_dir, "dataset", "original_data", "MMLU-STEM.json")
+    # validation_json = os.path.join(base_dir, "dataset", "original_data", "MMLU-Pro_validation.json")
     
     test_parquet = os.path.join(base_dir, "dataset", "original_data", "MMLU-Pro", "test-00000-of-00001.parquet")
-    validation_parquet = os.path.join(base_dir, "dataset", "original_data", "MMLU-Pro", "validation-00000-of-00001.parquet")
+    # validation_parquet = os.path.join(base_dir, "dataset", "original_data", "MMLU-Pro", "validation-00000-of-00001.parquet")
     
     # 选择实际存在的文件
     test_file = test_json if os.path.exists(test_json) and os.path.getsize(test_json) > 0 else test_parquet
-    validation_file = validation_json if os.path.exists(validation_json) and os.path.getsize(validation_json) > 0 else validation_parquet
+    # validation_file = validation_json if os.path.exists(validation_json) and os.path.getsize(validation_json) > 0 else validation_parquet
     
     # 输出文件路径
-    test_output = os.path.join(base_dir, "dataset", "TestData", "MMLU-Pro_test.json")
-    validation_output = os.path.join(base_dir, "dataset", "TestData", "MMLU-Pro_validation.json")
+    test_output = os.path.join(base_dir, "dataset", "TestData", "MMLU-STEM.json")
+    # validation_output = os.path.join(base_dir, "dataset", "TestData", "MMLU-Pro_validation.json")
     
     # 转换测试集
     print(f"正在转换测试集... 使用文件: {test_file}")
     convert_mmlu_to_math_format(test_file, test_output)
     
     # 转换验证集
-    print(f"正在转换验证集... 使用文件: {validation_file}")
-    convert_mmlu_to_math_format(validation_file, validation_output)
+    # print(f"正在转换验证集... 使用文件: {validation_file}")
+    # convert_mmlu_to_math_format(validation_file, validation_output)
     
     print("转换完成!")
 

@@ -1,5 +1,5 @@
 from openai import OpenAI
-client = OpenAI(api_key="0", base_url="http://127.0.0.1:6006/v1")
+client = OpenAI(api_key="0", base_url="http://127.0.0.1:8000/v1")
 
 messages = [
     {"role": "system", "content": "Generate a solution plan that breaks down the problem into logical steps, identifying dependencies, difficulty levels and token usage."},
@@ -8,8 +8,10 @@ messages = [
 stream = client.chat.completions.create(
     messages=messages,
     # model="saves/Qwen3-1.7B-Instruct/full/sft",
-    model="Qwen/Qwen2.5-3B-Instruct",
-    stream=True  # 关键参数 [[9]]
+    model="saves/Qwen3-4B-Thinking/full/ep5",
+    stream=True,
+    temperature=0.6,
+    extra_body={"enable_thinking": True}  # 关键参数 [[9]]
 )
 
 # 逐块读取并输出

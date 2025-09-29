@@ -220,6 +220,7 @@ class DatasetRunner:
                     }
                 }
                 result["tasks"] = tasks
+                result["execution_time"] = time.time() - start_time
             else:
                 # 运行并行执行流程
                 tasks, stats_tracker, planner_output = run_parallel_execution(problem, self.config, self.workers)
@@ -228,7 +229,7 @@ class DatasetRunner:
                 model_solution = wait_for_completion_and_get_final_result(tasks, problem, self.config, stats_tracker)
                 result["model_solution"] = model_solution
                 result["tasks"] = tasks
-                
+                result["execution_time"] = time.time() - start_time
                 # 生成理论性能报告
                 from output_performance import generate_theoretical_performance_report
                 theoretical_report = generate_theoretical_performance_report(tasks, self.config, stats_tracker.planner_output)
@@ -311,7 +312,6 @@ class DatasetRunner:
             logger.error(f"处理问题 #{problem_index} 时发生错误: {e}", exc_info=True)
             log_separator()
         
-        result["execution_time"] = time.time() - start_time
         return result
     
     def generate_report(self):

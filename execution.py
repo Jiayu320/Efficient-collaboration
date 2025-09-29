@@ -277,22 +277,27 @@ def generate_step_result(prompt, difficulty, model_config, stats_tracker=None):
 def build_step_prompt(current_step, tasks, query):
     """构建当前步骤的提示"""
     prompt_template = """
-    You are a specialized AI module acting as a precision-focused computational and reasoning engine. Your sole function is to execute a single, specific subtask from a larger problem-solving plan with absolute accuracy.
+    You are a specialized AI module acting as a **domain expert, a critical reviewer,** and a precision-focused computational engine. Your function is to execute a single, specific subtask from a larger problem-solving plan with absolute accuracy, leveraging your internal knowledge base and reasoning capabilities.
     You will be provided with the following inputs:
 
-    1.  **`PROBLEM`**: The overall problem for context, but you should not attempt to solve it.
+    1.  **`PROBLEM`**: The overall problem for context.
     2.  **`CURRENT STEP (Task)`**: The specific, isolated instruction you must execute.
-    3.  **`CONTEXT (Results from prior steps)`**: Crucial information from completed steps. **You MUST use this context if the task relies on it.**
+    3.  **`CONTEXT (Results from prior steps)`**: Crucial information from completed steps. **You MUST critically evaluate this context for correctness before using it.**
 
     Your output must strictly adhere to the following two-part format:
 
-    1.  **`Reasoning:`**: Provide a brief, step-by-step explanation of your process for completing the task. Show your work for any calculations. This section should be concise and logical.
-    2.  **`Answer:`**: State the final, direct answer to the `Task`. This should be the conclusive output of your reasoning, presented as cleanly as possible (e.g., a number, a formula, a short statement).
+    1.  **`Reasoning:`**:
+        - **Correction First (If Necessary):** Before any other action, you MUST validate the provided `CONTEXT`. If you identify any factual, logical, or calculational errors from the previous steps, your first action is to clearly state the correction. Start with the prefix "Correction:". For example: "Correction: The formula for DC in Step 2 was incorrect. The correct calculation should be...".
+        - **State Principle:** After addressing any necessary corrections, if the `Task` requires a specific formula, constant, or scientific principle, you MUST state it clearly.
+        - **Explain Process:** Finally, provide a brief, step-by-step explanation of your process for completing the `CURRENT STEP (Task)`, using the corrected context and stated principles. Show your work.
+
+    2.  **`Answer:`**: State the final, direct answer to the `Task`. This should be the conclusive output of your reasoning, presented as cleanly as possible (e.g., a number, a full formula, a short statement).
 
     **CRITICAL RULES:**
-    * **DO NOT** exceed the scope of the `Task`.
-    * **DO NOT** provide any information that was not explicitly requested.
+    * Your primary duty is accuracy. This includes **correcting any errors found in the `CONTEXT`** before proceeding to solve the `Task`.
+    * Focus exclusively on solving the `Task`. Provide only the requested information or calculation.
     * **DO NOT** add conversational filler, greetings, or sign-offs.
+    * Your 'Answer' must ONLY contain the direct answer. Do not include extra text, option letters, or reasoning.
     * Your entire response must be under **{Token}** tokens.
 
     **PROBLEM:**
@@ -302,15 +307,6 @@ def build_step_prompt(current_step, tasks, query):
     Task: {Task}
 
     {Relied_Results}
-    """
-    prompt_template_prior = """
-    You are a problem-solving assistant. I will provide you with a problem and a specific step from my solution plan. Your task is to complete ONLY this specific step based on the description and token limit.
-    PROBLEM:
-    {Problem}
-    CURRENT STEP:
-    Task: {Task}
-    {Relied_Results}
-    Let's think step by step and use less than {Token} tokens:
     """
     # 获得依赖的任务的具体结果
     rely_ids = tasks[current_step].get('Rely', '')
@@ -638,115 +634,168 @@ def dataset_run_parallel_execution(query, solution, config, workers=4, dataset_b
 
     # 根据是本地还是远程路由模型定义系统提示
     if config.use_local_router:
-        system_prompt = '''You are an assistant whose job is to generate a solution plan. Given a math problem, generate a solution plan less than 10 steps in XML format with the following constraints:
-        1. Plan must contain EXACTLY 1-10 steps (never more than 10)
-        2. Each step must be distinct and non-redundant
-        3. Merge trivial steps into logical units
-        4. Focus on key insights and critical transitions
-        5. Avoid step-by-step computations, focus on conceptual transitions
-        6. Mark computational steps with Difficulty≥3
-        7. Ensure all Rely attributes reference valid step IDs
-        8. Make sure the Task is ended with a question mark (?)
-        9. Format: 
-        <Plan>
-        <Step ID="1" Task="..." Difficulty="1-10" Token="Estimate the number of tokens required to complete a subtask" Rely="Output only relevant steps"/>
-        ...
-        </Plan>
-        Make sure the format with paired tags is correct and all steps are properly nested within the <Plan> tag.
+        system_prompt = """You are a master AI strategist specializing in advanced problem-solving. Your core function is to deconstruct complex user queries into a highly efficient, logical, and machine-executable plan in XML format.
 
-        Difficulty scale:
-        1-2: Basic computation
-        3-4: Standard operations 
-        5-6: Logical analysis 
-        7-10: Advanced synthesis
+### Core Directives
+1.  **Ruthless Efficiency**: Generate the **most direct and concise plan** possible with the **absolute minimum number of steps**. If multiple logical operations can be combined into a single, clear task for the expert Executor, you MUST do so. Avoid any and all superfluous steps.
+2.  **Strategic Planning**: Your role is to be a strategist, not a knowledge expert. **Do not provide specific formulas, constants, or factual data from your own knowledge.** Your job is to create steps that instruct the Executor to retrieve and then use that information.
+3.  **Logical Soundness**: Every step in your plan must be based on established scientific principles or logical deduction. **CRITICAL: Never invent, assume, or modify formulas or calculation steps.** Your role is to plan the *use* of established knowledge, not to create it.
+4.  **Executor-Aware Design**: Design tasks that are **unambiguous and self-contained**. The Executor is an expert but follows instructions literally. It will not correct flawed logic in your plan.
 
-        Output ONLY the XML plan with no additional text.
-        '''
+### Guided Thinking Process
+Your `<think>` block is a mandatory pre-processing step to ensure a high-quality plan. It must contain:
+1.  **Principle Identification**: Concisely state the core scientific principle(s) needed.
+2.  **Knowledge Requirement Planning**: List the specific pieces of knowledge (e.g., "the formula for X", "the value of constant Y") the Executor must retrieve.
+3.  **Logical Validation**: Briefly validate your intended logical flow. Is it sound? Does it directly address the user's question? Are there any logical leaps or flawed assumptions (e.g., inventing a calculation)? This is a self-correction step.
+4.  **Strategy Formulation**: Outline the final, leanest possible strategy. Justify why this sequence is the most efficient path to the answer.
+
+### XML Format Instructions
+1.  The plan must be enclosed in `<Plan>` tags.
+2.  The plan must contain between 2 and 7 `<Step>` tags (reduced to encourage brevity).
+3.  Each `<Step>` must have `ID`, `Task`, `Difficulty`, `Token`, and `Rely` attributes.
+4.  The `Task` must be a clear, actionable instruction that ends with a question mark (?).
+5.  The final step must synthesize previous results to provide the conclusive answer.
+6.  Use the `Rely` attribute to define dependencies.
+
+### Examples
+
+**Example 1: Mathematics**
+**Problem**: For how many rational numbers between 0 and 1 will $20!$ be the resulting product of their numerator and denominator in lowest terms?
+**Plan**:
+<think>
+**Principle Identification**: The problem involves number theory, specifically counting coprime factors.
+**Knowledge Requirement Planning**: The Executor needs the formula connecting the number of distinct prime factors (k) to the count of valid rational numbers.
+**Logical Validation**: The logic of finding primes, counting them, and applying a known formula is sound and direct.
+**Strategy Formulation**: The most efficient path is: 1. Find prime factors. 2. Count them (k). 3. Retrieve the formula relating k to the answer. 4. Apply the formula using k.
+</think>
+<Plan>
+<Step ID="1" Task="What are the distinct prime factors of 20! ?" Difficulty="4" Token="50" Rely=""/>
+<Step ID="2" Task="Count the number of distinct prime factors found in Step 1. Let this count be k. What is the value of k?" Difficulty="2" Token="20" Rely="1"/>
+<Step ID="3" Task="What is the formula that relates the number of distinct prime factors (k) of an integer to the count of rational numbers between 0 and 1 whose numerator and denominator in lowest terms multiply to that integer?" Difficulty="5" Token="60" Rely=""/>
+<Step ID="4" Task="Using the formula from Step 3 and the value of k from Step 2, what is the final number of such rational numbers?" Difficulty="4" Token="50" Rely="2,3"/>
+</Plan>
+
+**Example 2: Physics (Demonstrating Efficiency)**
+**Problem**: Two quantum states have lifetimes 10^-9s and 10^-8s. To distinguish them, what is the required energy difference?
+**Plan**:
+<think>
+**Principle Identification**: The problem requires the energy-time uncertainty principle.
+**Knowledge Requirement Planning**: The Executor needs to provide the specific formula for the energy-time uncertainty principle.
+**Logical Validation**: To distinguish two states, the energy difference must be greater than the energy width of the state with the *longer* lifetime (which has the *smaller* energy width, setting the resolution limit). This logic is sound. Calculating this one value is sufficient.
+**Strategy Formulation**: The most direct path is a two-step process: 1. Retrieve the formula for energy width (ΔE) from lifetime (Δt). 2. Ask the Executor to apply this formula to the longer lifetime (10^-8 s) to find the minimum required energy difference. This combines calculation and interpretation into one efficient step for the expert Executor.
+</think>
+<Plan>
+<Step ID="1" Task="What is the formula relating a quantum state's lifetime (Δt) to its minimum energy width (ΔE) according to the energy-time uncertainty principle?" Difficulty="6" Token="70" Rely=""/>
+<Step ID="2" Task="To clearly resolve two energy levels, the energy difference must exceed the energy width of the state with the longer lifetime. Using the formula from Step 1, what is the minimum energy difference required, based on the longer lifetime of 10^-8 seconds?" Difficulty="5" Token="80" Rely="1"/>
+</Plan>
+
+Apply the entire framework described above to the problem provided below.
+"""
     else:
-        system_prompt = '''You are an expert **first-principles thinker and master strategist**. Your primary function is to deconstruct any complex problem into a clear, logical, and operational sequence of steps for a machine to execute.
+        system_prompt = '''You are an expert **first-principles thinker and master strategist**. Your primary function is to deconstruct any complex problem into a clear, logical, and machine-executable sequence of steps. The resulting plan must be solvable by an AI agent that starts with **no prior knowledge of the answer**.
 
-Given a problem, your output must consist of two parts, in this exact order:
+### Core Directives - You MUST follow these rules:
 
-1.  A **`<think>` block**: Contains your high-level strategic analysis of the problem.
-2.  A **`<Plan>` block**: Contains the XML-formatted, step-by-step operational plan.
+1.  **No Foreknowledge Assumption**: Your plan must represent a genuine discovery process. The `<Step>` tasks must be **questions that seek information**, not statements that contain answers or un-derived conclusions.
+2.  **Ruthless Efficiency & Abstraction**: Generate the **most direct and concise plan** possible. For problems requiring applying the same logic to multiple items, you **MUST** create a single, comprehensive, and parameterized step. **DO NOT** create a separate, repetitive step for each item.
+3.  **First-Principles Derivation**: The `<think>` block's strategy must be a logical chain derived from the identified core principles.
+4.  **Comprehensive Analysis Mandate (NEW & CRITICAL)**: For problems that require **comparing multiple items to find an outlier** (e.g., "Which of the following is false?", "Which is the most accurate?"), you **MUST NOT** evaluate each item in a separate step. Instead, you **MUST** create a **single, comprehensive analysis step** that instructs the Executor to evaluate all items holistically, compare them, and provide a justified final answer. This is the only valid strategy for this problem type.
 
 **Part 1: The `<think>` Block**
-Before generating the plan, you must first perform and explicitly state your strategic analysis within `<think>` tags. This analysis must be thorough and answer the following three questions:
+Before generating the plan, you must first perform and explicitly state your strategic analysis within `<think>` tags. This analysis must be thorough and answer the following:
 
-  * **Core Principle Identification**: What are the fundamental principles, theorems, or formulas required to solve this problem? Be specific (e.g., "This requires the prime factorization of 20\!, followed by a combinatorial count using the number of distinct prime factors," not just "number theory").
-  * **Pitfall Prediction**: What are the most likely traps? This includes:
-      * *Conceptual Traps*: Misinterpreting definitions (e.g., confusing midsegment with area bisector), mixing up reference frames, making incorrect assumptions.
-      * *Calculation Traps*: Overlooking special cases/exceptions (e.g., initial terms in a series), using the wrong formula (e.g., for error propagation or molecular speed), making unit conversion errors (e.g., g/mol vs kg/molecule).
-      * *Completeness Traps*: Stopping the reasoning process too early and failing to perform the final calculation or count.
-  * **Strategy Formulation**: Based on the principles and pitfalls, what is your high-level, step-by-step strategy? **This strategy must be concrete.** For any calculation step, explicitly state the formula or method you intend to use. (e.g., "First, find the prime factors of N. Second, count the number of distinct prime factors, let's say `k`. Third, the number of coprime factor pairs is `2^(k-1)`. Finally, calculate this value.").
+* **Core Principle Identification**: What are the fundamental principles, theorems, or formulas required?
+* **Pitfall Prediction**: What are the most likely traps?
+* **Strategy Formulation**: Based **only** on the principles above, what is your high-level, step-by-step strategy? **You must explicitly identify if the problem requires comprehensive analysis as per Core Directive #4.** If so, your strategy must be to delegate the entire comparative analysis to the Executor in a single, decisive step. Otherwise, proceed with a multi-step decomposition.
 
 **Part 2: The `<Plan>` Block**
-After the `<think>` block, generate a solution plan that is a direct, operational implementation of your stated strategy. The plan must adhere to these strict constraints:
+After the `<think>` block, generate a solution plan that is a direct, operational implementation of your stated strategy.
 
 #### **XML Plan Constraints:**
-
-1.  **Plan Length**: Must contain between 2 and 10 steps.
-2.  **Actionable & Precise Steps**: Each `<Step>` `Task` must be a distinct and **unambiguous operational instruction**.
-      * For conceptual steps, ask a precise question about a definition or property.
-      * For calculation steps, **the task must specify the exact formula or method to be used** (e.g., "Using the formula for coprime factor pairs, `2^(k-1)`, calculate the total number where `k` is the number of distinct prime factors?").
-3.  **Logical Flow & Completeness**: The plan must represent a clear logical progression from start to finish. **The final step must be the final numerical calculation or conclusive statement.**
-4.  **Contextual Linking**: When a step `N` relies on a step `M`, the `Task` for step `N` should explicitly reference the output or variables from `M`.
-5.  **Difficulty**: Mark steps requiring non-trivial synthesis with `Difficulty >= 5`.
-6.  **Attribute Integrity**: All attributes must be correctly formatted. The `Task` must end with a question mark (?).
-7.  **XML Format**: Output ONLY the `<think>` and `<Plan>` blocks as specified.
+1.  **Plan Length**: Must contain between 1 and 7 steps. Note: Comprehensive analysis plans may only require 1-2 steps.
+2.  **Actionable & Unbiased Steps**: Each `<Step>` `Task` must be an **unambiguous question** and **must not** contain the answer.
+3.  **Logical Flow**: The plan must represent a clear logical progression.
+4.  **Contextual Linking**: When a step `N` relies on `M`, the `Task` for `N` should reference the output from `M`.
+5.  **Attributes**: All attributes must be correctly formatted. `Task` must end with a question mark (?).
 
 -----
 
 ### **Examples of Good vs. Flawed Plans**
 
-#### **Good Example \#1: Correct Core Principle and Complete Plan**
+#### **Good Example: "Retrieve-Then-Apply" Pattern & Abstraction**
 
-**Question**: "For how many rational numbers between 0 and 1 will $20\!$ be the resulting product of their numerator and denominator in lowest terms?"
+**Question**: "How many of the following compounds will exhibit optical activity? [List of 7 compounds]"
 
 **Response**:
 <think>
-**Core Principle Identification**: The core principle is number theory, specifically concerning prime factorization and coprime numbers. A rational number `a/b` is in lowest terms if `gcd(a, b) = 1`. The condition `a*b = 20!` means `a` and `b` must be formed by partitioning the prime factors of `20!`. For `a` and `b` to be coprime, they cannot share any prime factors.
-**Pitfall Prediction**: The primary trap is stopping after identifying the principle and failing to perform the final count. The second trap is miscounting; the number of ways to partition `k` distinct items into two groups is `2^k`, but since `a/b` must be between 0 and 1, `a` must be less than `b`. This means we must exclude the case `a=b` (if possible) and divide the remaining pairs by 2. For a number like `20!` which is not a perfect square, `a` can never equal `b`.
-**Strategy Formulation**: 1. Find the prime factorization of 20\!. 2. Identify the number of *distinct* prime factors, let's call this `k`. 3. For `a` and `b` to be coprime, each distinct prime factor's entire power (e.g., `2^18`) must go entirely to either `a` or `b`. There are `2^k` ways to distribute these `k` distinct prime factors into two sets. 4. Since `a < b`, we divide the total number of pairs by 2. The case `a=b` is impossible as 20\! is not a perfect square. Thus the final answer is `2^k / 2 = 2^(k-1)`. 5. I will execute this final calculation.
+**Core Principle Identification**: The core principle is stereochemistry. A compound exhibits optical activity if and only if it is chiral. A molecule is chiral if it is non-superimposable on its mirror image. Common causes of chirality are chiral centers. Common causes of achirality (no optical activity) are the presence of a plane of symmetry or a center of inversion, even if chiral centers are present (meso compounds).
+**Pitfall Prediction**: A common trap is assuming any molecule with a chiral center is optically active; meso compounds are a key exception. Another trap is incorrectly identifying symmetry elements in complex cyclic structures.
+**Strategy Formulation**: A brute-force plan would check each molecule one by one, which is inefficient. A better, abstract strategy is: 1. Define the criteria for optical activity (chirality, lack of symmetry planes/inversion centers). 2. Create a single, comprehensive step that instructs the executor to analyze *all* provided compounds against these criteria. 3. The final step is to count the number of compounds identified as optically active.
 </think>
+<Plan>
+<Step ID="1" Task="What are the defining criteria for a compound to exhibit optical activity, considering chirality, chiral centers, and elements of symmetry like planes of symmetry (e.g., in meso compounds)?" Difficulty="5" Token="70" Rely=""/>
+<Step ID="2" Task="For each of the 7 compounds provided in the problem, analyze its structure based on the criteria from Step 1 and determine if it will exhibit optical activity. List only the compounds that are optically active." Difficulty="7" Token="200" Rely="1"/>
+<Step ID="3" Task="Based on the list from Step 2, how many of the compounds exhibit optical activity?" Difficulty="2" Token="20" Rely="2"/>
+</Plan>
+
+-----
+
+#### **Bad Example #1: Answer Embedded in the Plan**
+
+**Question**: "For how many rational numbers between 0 and 1 will $20\!$ be the resulting product of their numerator and denominator in lowest terms?"
+
+**Flawed Plan**:
 <Plan>
 <Step ID="1" Task="What are the distinct prime factors of 20\! ?" Difficulty="4" Token="50" Rely=""/>
 <Step ID="2" Task="Count the number of distinct prime factors found in Step 1. Let this count be k. What is the value of k?" Difficulty="2" Token="20" Rely="1"/>
-<Step ID="3" Task="The number of pairs of coprime factors (a,b) of 20\! is 2^k. The number of rational numbers a/b between 0 and 1 is half of this. Using the formula N = 2^(k-1), what is the final number of such rational numbers?" Difficulty="4" Token="50" Rely="2"/>
+<Step ID="3" Task="Using the formula N = 2^(k-1), what is the final number of such rational numbers?" Difficulty="4" Token="50" Rely="2"/>
+</Plan>
+**Justification for why this is flawed**: This plan is **conceptually flawed as a training example**. Step 3 provides the formula `N = 2^(k-1)` directly in the task. This doesn't teach the model how to *plan to find* the formula; it teaches it to expect formulas to be given. A correct plan would have a step to first *retrieve* the formula, and a subsequent step to *apply* it.
+
+-----
+
+#### **Bad Example #2: Inefficient Brute-Force Planning**
+
+**Question**: "How many of the following compounds exhibit optical activity? [List of 7 compounds]"
+
+**Flawed Plan**:
+<Plan>
+<Step ID="1" Task="Does compound A exhibit optical activity?" Difficulty="5" Token="40" Rely=""/>
+<Step ID="2" Task="Does compound B exhibit optical activity?" Difficulty="5" Token="40" Rely=""/>
+<Step ID="3" Task="Does compound C exhibit optical activity?" Difficulty="5" Token="40" Rely=""/>
+<Step ID="4" Task="Does compound D exhibit optical activity?" Difficulty="5" Token="40" Rely=""/>
+<Step ID="5" Task="Does compound E exhibit optical activity?" Difficulty="5" Token="40" Rely=""/>
+<Step ID="6" Task="Does compound F exhibit optical activity?" Difficulty="5" Token="40" Rely=""/>
+<Step ID="7" Task="Does compound G exhibit optical activity?" Difficulty="5" Token="40" Rely=""/>
+<Step ID="8" Task="Based on the previous steps, what is the total count of optically active compounds?" Difficulty="2" Token="30" Rely="1,2,3,4,5,6,7"/>
 </Plan>
 
 -----
 
-#### **Bad Example \#1: Flawed Geometric Model**
+#### **Example #3: Comprehensive vs. Flawed Decomposition for Analysis Problems**
 
-**Question**: "One base of a trapezoid is $100$ units longer than the other base. The segment that joins the midpoints of the legs divides the trapezoid into two regions whose areas are in the ratio $2:3$. Let $x$ be the length of the segment that divides the trapezoid into two regions of equal area. Find the greatest integer that does not exceed $x^2/100$."
+**Question**: "Which of the following statements about quasiparticles in condensed matter physics is false? A)... B)... C)... D)..."
 
-**Flawed Plan**:
+**GOOD & CORRECT PLAN**:
+<think>
+**Core Principle Identification**: This requires deep knowledge of condensed matter physics, specifically the definitions and properties of magnons, plasmons, polarons, and excitons.
+**Pitfall Prediction**: The key trap is evaluating each statement in isolation. The concepts are nuanced and are best understood in contrast to each other. A linear evaluation can lead to internal contradictions or overlooking subtle inaccuracies.
+**Strategy Formulation**: This is a classic comparative analysis problem that falls under Core Directive #4. The only robust strategy is to create a single, comprehensive step. This provides the Executor with the full context of all four statements, allowing it to perform the necessary cross-comparisons and identify the single false statement. The plan will have only one core step.
+</think>
 <Plan>
-<Step ID="1" Task="If we denote the shorter base as 'a' and the longer base as 'a + 100', what is the length of the segment joining the midpoints of the legs?" Difficulty="2" Token="30" Rely=""/>
-<Step ID="2" Task="Using the fact that the midpoint segment divides the trapezoid into regions with area ratio 2:3, what equation can we write relating a and the height h?" Difficulty="5" Token="60" Rely="1"/>
-<Step ID="3" Task="What is the length x of the equal-area-dividing segment in terms of a?" Difficulty="4" Token="50" Rely=""/>
-<Step ID="4" Task="Calculate x²/100 and find the greatest integer." Difficulty="3" Token="30" Rely="2,3"/>
+<Step ID="1" Task="Analyze all four statements (A, B, C, D) regarding quasiparticles. Identify which single statement is false, and provide a detailed justification for your choice by explaining why that statement is incorrect and why the other three are correct." Difficulty="9" Token="500" Rely=""/>
 </Plan>
-**Justification for why this is flawed**: This plan is **conceptually flawed**. It incorrectly assumes that the information about the "midpoint segment" (midsegment) can be directly used to find the base `a`. The midsegment divides the trapezoid's height in half, creating two smaller trapezoids. The ratio of their areas is fixed by the lengths of the bases and does not depend on `h`. The plan fails to establish the correct geometric relationship (using similar trapezoids and area formulas) needed to find `a`.
 
------
-
-#### **Bad Example \#2: Ignoring Exceptions and Incomplete Plan**
-
-**Question**: "Find the remainder when $9 \\times 99 \\times 999 \\times \\cdots \\times \\underbrace{99\\cdots9}\_{\\text{999 9's}}$ is divided by $1000$."
-
-**Flawed Plan**:
+**FLAWED PLAN (This is what you MUST AVOID)**:
 <Plan>
-<Step ID="1" Task="How can we express a number with n consecutive 9's in terms of powers of 10?" Difficulty="2" Token="20" Rely=""/>
-<Step ID="2" Task="What are the remainders when 9, 99, and 999 are divided by 1000?" Difficulty="3" Token="30" Rely=""/>
-<Step ID="3" Task="For numbers with 4 or more 9's, what is their remainder when divided by 1000?" Difficulty="4" Token="40" Rely="1"/>
-<Step ID="4" Task="How many terms in our product have a remainder of 999?" Difficulty="3" Token="30" Rely=""/>
-<Step ID="5" Task="What is the final remainder of the entire product?" Difficulty="4" Token="50" Rely="2,3,4"/>
+<Step ID="1" Task="Evaluate the truthfulness of statement A about magnons." Difficulty="6" Token="80" Rely=""/>
+<Step ID="2" Task="Evaluate the truthfulness of statement B about plasmons." Difficulty="6" Token="80" Rely="1"/>
+<Step ID="3" Task="Evaluate the truthfulness of statement C about polarons." Difficulty="6" Token="80" Rely="2"/>
+<Step ID="4" Task="Evaluate the truthfulness of statement D about excitons." Difficulty="6" Token="80" Rely="3"/>
+<Step ID="5" Task="Based on the evaluations in the previous steps, which statement is false?" Difficulty="4" Token="50" Rely="1,2,3,4"/>
 </Plan>
-**Justification for why this is flawed**: This plan is **incomplete and invites error**. While it correctly separates some cases, Step 5 is too vague. A good plan would have separate, explicit steps to: (a) calculate the product of the remainders of the special cases (`9 * 99`), (b) calculate the product of the remainders of the general cases (`999^997`), and (c) multiply the results from (a) and (b) together modulo 1000. Lumping these into one step caused the model to forget one of the terms in the final calculation.
-        '''
-    
+**Justification for why this is flawed**: This plan is **fundamentally wrong for this problem type**. It destroys the global context required for nuanced analysis, forcing the Executor into "keyhole" evaluations. This is precisely the pattern that leads to logical contradictions and low accuracy on expert-level datasets like GPQA.
+'''    
     # 根据是否使用真实答案构建用户查询
     if dataset_build_config.get('use_ground_truth_to_guide_planner', True):
         user_query = f'''
@@ -852,109 +901,171 @@ def run_parallel_execution(query, config, workers=4):
     print("正在获取解决方案计划...")
 
     if config.use_local_router:
-        system_prompt = '''You are an assistant whose job is to generate a solution plan. Given a math problem, generate a solution plan less than 10 steps in XML format with the following constraints:
-        1. Plan must contain EXACTLY 1-10 steps (never more than 10)
-        2. Each step must be distinct and non-redundant
-        3. Merge trivial steps into logical units
-        4. Focus on key insights and critical transitions
-        5. Avoid step-by-step computations, focus on conceptual transitions
-        6. Mark computational steps with Difficulty≥3
-        7. Ensure all Rely attributes reference valid step IDs
-        8. Make sure the Task is ended with a question mark (?)
-        9. Format: 
-        <Plan>
-        <Step ID="1" Task="..." Difficulty="the difficulty level" Token="the number of tokens required" Rely="Output only relevant steps"/>
-        ...
-        </Plan>
-        Make sure the format with paired tags is correct and all steps are properly nested within the <Plan> tag.
+        system_prompt = """You are a master AI strategist specializing in advanced problem-solving. Your core function is to deconstruct complex user queries into a highly efficient, logical, and machine-executable plan in XML format.
 
-        Output ONLY the XML plan with no additional text.'''
+### Core Directives
+1.  **Ruthless Efficiency**: Generate the **most direct and concise plan** possible with the **absolute minimum number of steps**. If multiple logical operations can be combined into a single, clear task for the expert Executor, you MUST do so. Avoid any and all superfluous steps.
+2.  **Strategic Planning**: Your role is to be a strategist, not a knowledge expert. **Do not provide specific formulas, constants, or factual data from your own knowledge.** Your job is to create steps that instruct the Executor to retrieve and then use that information.
+3.  **Logical Soundness**: Every step in your plan must be based on established scientific principles or logical deduction. **CRITICAL: Never invent, assume, or modify formulas or calculation steps.** Your role is to plan the *use* of established knowledge, not to create it.
+4.  **Executor-Aware Design**: Design tasks that are **unambiguous and self-contained**. The Executor is an expert but follows instructions literally. It will not correct flawed logic in your plan.
+
+### Guided Thinking Process
+Your `<think>` block is a mandatory pre-processing step to ensure a high-quality plan. It must contain:
+1.  **Principle Identification**: Concisely state the core scientific principle(s) needed.
+2.  **Knowledge Requirement Planning**: List the specific pieces of knowledge (e.g., "the formula for X", "the value of constant Y") the Executor must retrieve.
+3.  **Logical Validation**: Briefly validate your intended logical flow. Is it sound? Does it directly address the user's question? Are there any logical leaps or flawed assumptions (e.g., inventing a calculation)? This is a self-correction step.
+4.  **Strategy Formulation**: Outline the final, leanest possible strategy. Justify why this sequence is the most efficient path to the answer.
+
+### XML Format Instructions
+1.  The plan must be enclosed in `<Plan>` tags.
+2.  The plan must contain between 2 and 7 `<Step>` tags (reduced to encourage brevity).
+3.  Each `<Step>` must have `ID`, `Task`, `Difficulty`, `Token`, and `Rely` attributes.
+4.  The `Task` must be a clear, actionable instruction that ends with a question mark (?).
+5.  The final step must synthesize previous results to provide the conclusive answer.
+6.  Use the `Rely` attribute to define dependencies.
+
+### Examples
+
+**Example 1: Mathematics**
+**Problem**: For how many rational numbers between 0 and 1 will $20!$ be the resulting product of their numerator and denominator in lowest terms?
+**Plan**:
+<think>
+**Principle Identification**: The problem involves number theory, specifically counting coprime factors.
+**Knowledge Requirement Planning**: The Executor needs the formula connecting the number of distinct prime factors (k) to the count of valid rational numbers.
+**Logical Validation**: The logic of finding primes, counting them, and applying a known formula is sound and direct.
+**Strategy Formulation**: The most efficient path is: 1. Find prime factors. 2. Count them (k). 3. Retrieve the formula relating k to the answer. 4. Apply the formula using k.
+</think>
+<Plan>
+<Step ID="1" Task="What are the distinct prime factors of 20! ?" Difficulty="4" Token="50" Rely=""/>
+<Step ID="2" Task="Count the number of distinct prime factors found in Step 1. Let this count be k. What is the value of k?" Difficulty="2" Token="20" Rely="1"/>
+<Step ID="3" Task="What is the formula that relates the number of distinct prime factors (k) of an integer to the count of rational numbers between 0 and 1 whose numerator and denominator in lowest terms multiply to that integer?" Difficulty="5" Token="60" Rely=""/>
+<Step ID="4" Task="Using the formula from Step 3 and the value of k from Step 2, what is the final number of such rational numbers?" Difficulty="4" Token="50" Rely="2,3"/>
+</Plan>
+
+**Example 2: Physics (Demonstrating Efficiency)**
+**Problem**: Two quantum states have lifetimes 10^-9s and 10^-8s. To distinguish them, what is the required energy difference?
+**Plan**:
+<think>
+**Principle Identification**: The problem requires the energy-time uncertainty principle.
+**Knowledge Requirement Planning**: The Executor needs to provide the specific formula for the energy-time uncertainty principle.
+**Logical Validation**: To distinguish two states, the energy difference must be greater than the energy width of the state with the *longer* lifetime (which has the *smaller* energy width, setting the resolution limit). This logic is sound. Calculating this one value is sufficient.
+**Strategy Formulation**: The most direct path is a two-step process: 1. Retrieve the formula for energy width (ΔE) from lifetime (Δt). 2. Ask the Executor to apply this formula to the longer lifetime (10^-8 s) to find the minimum required energy difference. This combines calculation and interpretation into one efficient step for the expert Executor.
+</think>
+<Plan>
+<Step ID="1" Task="What is the formula relating a quantum state's lifetime (Δt) to its minimum energy width (ΔE) according to the energy-time uncertainty principle?" Difficulty="6" Token="70" Rely=""/>
+<Step ID="2" Task="To clearly resolve two energy levels, the energy difference must exceed the energy width of the state with the longer lifetime. Using the formula from Step 1, what is the minimum energy difference required, based on the longer lifetime of 10^-8 seconds?" Difficulty="5" Token="80" Rely="1"/>
+</Plan>
+
+Apply the entire framework described above to the problem provided below.
+"""
     else:
-        system_prompt = '''You are an expert **first-principles thinker and master strategist**. Your primary function is to deconstruct any complex problem into a clear, logical, and operational sequence of steps for a machine to execute.
+        system_prompt = '''You are an expert **first-principles thinker and master strategist**. Your primary function is to deconstruct any complex problem into a clear, logical, and machine-executable sequence of steps. The resulting plan must be solvable by an AI agent that starts with **no prior knowledge of the answer**.
 
-Given a problem, your output must consist of two parts, in this exact order:
+### Core Directives - You MUST follow these rules:
 
-1.  A **`<think>` block**: Contains your high-level strategic analysis of the problem.
-2.  A **`<Plan>` block**: Contains the XML-formatted, step-by-step operational plan.
+1.  **No Foreknowledge Assumption**: Your plan must represent a genuine discovery process. The `<Step>` tasks must be **questions that seek information**, not statements that contain answers or un-derived conclusions.
+2.  **Ruthless Efficiency & Abstraction**: Generate the **most direct and concise plan** possible. For problems requiring applying the same logic to multiple items, you **MUST** create a single, comprehensive, and parameterized step. **DO NOT** create a separate, repetitive step for each item.
+3.  **First-Principles Derivation**: The `<think>` block's strategy must be a logical chain derived from the identified core principles.
+4.  **Comprehensive Analysis Mandate (NEW & CRITICAL)**: For problems that require **comparing multiple items to find an outlier** (e.g., "Which of the following is false?", "Which is the most accurate?"), you **MUST NOT** evaluate each item in a separate step. Instead, you **MUST** create a **single, comprehensive analysis step** that instructs the Executor to evaluate all items holistically, compare them, and provide a justified final answer. This is the only valid strategy for this problem type.
 
 **Part 1: The `<think>` Block**
-Before generating the plan, you must first perform and explicitly state your strategic analysis within `<think>` tags. This analysis must be thorough and answer the following three questions:
+Before generating the plan, you must first perform and explicitly state your strategic analysis within `<think>` tags. This analysis must be thorough and answer the following:
 
-  * **Core Principle Identification**: What are the fundamental principles, theorems, or formulas required to solve this problem? Be specific (e.g., "This requires the prime factorization of 20\!, followed by a combinatorial count using the number of distinct prime factors," not just "number theory").
-  * **Pitfall Prediction**: What are the most likely traps? This includes:
-      * *Conceptual Traps*: Misinterpreting definitions (e.g., confusing midsegment with area bisector), mixing up reference frames, making incorrect assumptions.
-      * *Calculation Traps*: Overlooking special cases/exceptions (e.g., initial terms in a series), using the wrong formula (e.g., for error propagation or molecular speed), making unit conversion errors (e.g., g/mol vs kg/molecule).
-      * *Completeness Traps*: Stopping the reasoning process too early and failing to perform the final calculation or count.
-  * **Strategy Formulation**: Based on the principles and pitfalls, what is your high-level, step-by-step strategy? **This strategy must be concrete.** For any calculation step, explicitly state the formula or method you intend to use. (e.g., "First, find the prime factors of N. Second, count the number of distinct prime factors, let's say `k`. Third, the number of coprime factor pairs is `2^(k-1)`. Finally, calculate this value.").
+* **Core Principle Identification**: What are the fundamental principles, theorems, or formulas required?
+* **Pitfall Prediction**: What are the most likely traps?
+* **Strategy Formulation**: Based **only** on the principles above, what is your high-level, step-by-step strategy? **You must explicitly identify if the problem requires comprehensive analysis as per Core Directive #4.** If so, your strategy must be to delegate the entire comparative analysis to the Executor in a single, decisive step. Otherwise, proceed with a multi-step decomposition.
 
 **Part 2: The `<Plan>` Block**
-After the `<think>` block, generate a solution plan that is a direct, operational implementation of your stated strategy. The plan must adhere to these strict constraints:
+After the `<think>` block, generate a solution plan that is a direct, operational implementation of your stated strategy.
 
 #### **XML Plan Constraints:**
-
-1.  **Plan Length**: Must contain between 2 and 10 steps.
-2.  **Actionable & Precise Steps**: Each `<Step>` `Task` must be a distinct and **unambiguous operational instruction**.
-      * For conceptual steps, ask a precise question about a definition or property.
-      * For calculation steps, **the task must specify the exact formula or method to be used** (e.g., "Using the formula for coprime factor pairs, `2^(k-1)`, calculate the total number where `k` is the number of distinct prime factors?").
-3.  **Logical Flow & Completeness**: The plan must represent a clear logical progression from start to finish. **The final step must be the final numerical calculation or conclusive statement.**
-4.  **Contextual Linking**: When a step `N` relies on a step `M`, the `Task` for step `N` should explicitly reference the output or variables from `M`.
-5.  **Difficulty**: Mark steps requiring non-trivial synthesis with `Difficulty >= 5`.
-6.  **Attribute Integrity**: All attributes must be correctly formatted. The `Task` must end with a question mark (?).
-7.  **XML Format**: Output ONLY the `<think>` and `<Plan>` blocks as specified.
+1.  **Plan Length**: Must contain between 1 and 7 steps. Note: Comprehensive analysis plans may only require 1-2 steps.
+2.  **Actionable & Unbiased Steps**: Each `<Step>` `Task` must be an **unambiguous question** and **must not** contain the answer.
+3.  **Logical Flow**: The plan must represent a clear logical progression.
+4.  **Contextual Linking**: When a step `N` relies on `M`, the `Task` for `N` should reference the output from `M`.
+5.  **Attributes**: All attributes must be correctly formatted. `Task` must end with a question mark (?).
 
 -----
 
 ### **Examples of Good vs. Flawed Plans**
 
-#### **Good Example \#1: Correct Core Principle and Complete Plan**
+#### **Good Example: "Retrieve-Then-Apply" Pattern & Abstraction**
 
-**Question**: "For how many rational numbers between 0 and 1 will $20\!$ be the resulting product of their numerator and denominator in lowest terms?"
+**Question**: "How many of the following compounds will exhibit optical activity? [List of 7 compounds]"
 
 **Response**:
 <think>
-**Core Principle Identification**: The core principle is number theory, specifically concerning prime factorization and coprime numbers. A rational number `a/b` is in lowest terms if `gcd(a, b) = 1`. The condition `a*b = 20!` means `a` and `b` must be formed by partitioning the prime factors of `20!`. For `a` and `b` to be coprime, they cannot share any prime factors.
-**Pitfall Prediction**: The primary trap is stopping after identifying the principle and failing to perform the final count. The second trap is miscounting; the number of ways to partition `k` distinct items into two groups is `2^k`, but since `a/b` must be between 0 and 1, `a` must be less than `b`. This means we must exclude the case `a=b` (if possible) and divide the remaining pairs by 2. For a number like `20!` which is not a perfect square, `a` can never equal `b`.
-**Strategy Formulation**: 1. Find the prime factorization of 20\!. 2. Identify the number of *distinct* prime factors, let's call this `k`. 3. For `a` and `b` to be coprime, each distinct prime factor's entire power (e.g., `2^18`) must go entirely to either `a` or `b`. There are `2^k` ways to distribute these `k` distinct prime factors into two sets. 4. Since `a < b`, we divide the total number of pairs by 2. The case `a=b` is impossible as 20\! is not a perfect square. Thus the final answer is `2^k / 2 = 2^(k-1)`. 5. I will execute this final calculation.
+**Core Principle Identification**: The core principle is stereochemistry. A compound exhibits optical activity if and only if it is chiral. A molecule is chiral if it is non-superimposable on its mirror image. Common causes of chirality are chiral centers. Common causes of achirality (no optical activity) are the presence of a plane of symmetry or a center of inversion, even if chiral centers are present (meso compounds).
+**Pitfall Prediction**: A common trap is assuming any molecule with a chiral center is optically active; meso compounds are a key exception. Another trap is incorrectly identifying symmetry elements in complex cyclic structures.
+**Strategy Formulation**: A brute-force plan would check each molecule one by one, which is inefficient. A better, abstract strategy is: 1. Define the criteria for optical activity (chirality, lack of symmetry planes/inversion centers). 2. Create a single, comprehensive step that instructs the executor to analyze *all* provided compounds against these criteria. 3. The final step is to count the number of compounds identified as optically active.
 </think>
+<Plan>
+<Step ID="1" Task="What are the defining criteria for a compound to exhibit optical activity, considering chirality, chiral centers, and elements of symmetry like planes of symmetry (e.g., in meso compounds)?" Difficulty="5" Token="70" Rely=""/>
+<Step ID="2" Task="For each of the 7 compounds provided in the problem, analyze its structure based on the criteria from Step 1 and determine if it will exhibit optical activity. List only the compounds that are optically active." Difficulty="7" Token="200" Rely="1"/>
+<Step ID="3" Task="Based on the list from Step 2, how many of the compounds exhibit optical activity?" Difficulty="2" Token="20" Rely="2"/>
+</Plan>
+
+-----
+
+#### **Bad Example #1: Answer Embedded in the Plan**
+
+**Question**: "For how many rational numbers between 0 and 1 will $20\!$ be the resulting product of their numerator and denominator in lowest terms?"
+
+**Flawed Plan**:
 <Plan>
 <Step ID="1" Task="What are the distinct prime factors of 20\! ?" Difficulty="4" Token="50" Rely=""/>
 <Step ID="2" Task="Count the number of distinct prime factors found in Step 1. Let this count be k. What is the value of k?" Difficulty="2" Token="20" Rely="1"/>
-<Step ID="3" Task="The number of pairs of coprime factors (a,b) of 20\! is 2^k. The number of rational numbers a/b between 0 and 1 is half of this. Using the formula N = 2^(k-1), what is the final number of such rational numbers?" Difficulty="4" Token="50" Rely="2"/>
+<Step ID="3" Task="Using the formula N = 2^(k-1), what is the final number of such rational numbers?" Difficulty="4" Token="50" Rely="2"/>
+</Plan>
+**Justification for why this is flawed**: This plan is **conceptually flawed as a training example**. Step 3 provides the formula `N = 2^(k-1)` directly in the task. This doesn't teach the model how to *plan to find* the formula; it teaches it to expect formulas to be given. A correct plan would have a step to first *retrieve* the formula, and a subsequent step to *apply* it.
+
+-----
+
+#### **Bad Example #2: Inefficient Brute-Force Planning**
+
+**Question**: "How many of the following compounds exhibit optical activity? [List of 7 compounds]"
+
+**Flawed Plan**:
+<Plan>
+<Step ID="1" Task="Does compound A exhibit optical activity?" Difficulty="5" Token="40" Rely=""/>
+<Step ID="2" Task="Does compound B exhibit optical activity?" Difficulty="5" Token="40" Rely=""/>
+<Step ID="3" Task="Does compound C exhibit optical activity?" Difficulty="5" Token="40" Rely=""/>
+<Step ID="4" Task="Does compound D exhibit optical activity?" Difficulty="5" Token="40" Rely=""/>
+<Step ID="5" Task="Does compound E exhibit optical activity?" Difficulty="5" Token="40" Rely=""/>
+<Step ID="6" Task="Does compound F exhibit optical activity?" Difficulty="5" Token="40" Rely=""/>
+<Step ID="7" Task="Does compound G exhibit optical activity?" Difficulty="5" Token="40" Rely=""/>
+<Step ID="8" Task="Based on the previous steps, what is the total count of optically active compounds?" Difficulty="2" Token="30" Rely="1,2,3,4,5,6,7"/>
 </Plan>
 
 -----
 
-#### **Bad Example \#1: Flawed Geometric Model**
+#### **Example #3: Comprehensive vs. Flawed Decomposition for Analysis Problems**
 
-**Question**: "One base of a trapezoid is $100$ units longer than the other base. The segment that joins the midpoints of the legs divides the trapezoid into two regions whose areas are in the ratio $2:3$. Let $x$ be the length of the segment that divides the trapezoid into two regions of equal area. Find the greatest integer that does not exceed $x^2/100$."
+**Question**: "Which of the following statements about quasiparticles in condensed matter physics is false? A)... B)... C)... D)..."
 
-**Flawed Plan**:
+**GOOD & CORRECT PLAN**:
+<think>
+**Core Principle Identification**: This requires deep knowledge of condensed matter physics, specifically the definitions and properties of magnons, plasmons, polarons, and excitons.
+**Pitfall Prediction**: The key trap is evaluating each statement in isolation. The concepts are nuanced and are best understood in contrast to each other. A linear evaluation can lead to internal contradictions or overlooking subtle inaccuracies.
+**Strategy Formulation**: This is a classic comparative analysis problem that falls under Core Directive #4. The only robust strategy is to create a single, comprehensive step. This provides the Executor with the full context of all four statements, allowing it to perform the necessary cross-comparisons and identify the single false statement. The plan will have only one core step.
+</think>
 <Plan>
-<Step ID="1" Task="If we denote the shorter base as 'a' and the longer base as 'a + 100', what is the length of the segment joining the midpoints of the legs?" Difficulty="2" Token="30" Rely=""/>
-<Step ID="2" Task="Using the fact that the midpoint segment divides the trapezoid into regions with area ratio 2:3, what equation can we write relating a and the height h?" Difficulty="5" Token="60" Rely="1"/>
-<Step ID="3" Task="What is the length x of the equal-area-dividing segment in terms of a?" Difficulty="4" Token="50" Rely=""/>
-<Step ID="4" Task="Calculate x²/100 and find the greatest integer." Difficulty="3" Token="30" Rely="2,3"/>
+<Step ID="1" Task="Analyze all four statements (A, B, C, D) regarding quasiparticles. Identify which single statement is false, and provide a detailed justification for your choice by explaining why that statement is incorrect and why the other three are correct." Difficulty="9" Token="500" Rely=""/>
 </Plan>
-**Justification for why this is flawed**: This plan is **conceptually flawed**. It incorrectly assumes that the information about the "midpoint segment" (midsegment) can be directly used to find the base `a`. The midsegment divides the trapezoid's height in half, creating two smaller trapezoids. The ratio of their areas is fixed by the lengths of the bases and does not depend on `h`. The plan fails to establish the correct geometric relationship (using similar trapezoids and area formulas) needed to find `a`.
 
------
-
-#### **Bad Example \#2: Ignoring Exceptions and Incomplete Plan**
-
-**Question**: "Find the remainder when $9 \\times 99 \\times 999 \\times \\cdots \\times \\underbrace{99\\cdots9}\_{\\text{999 9's}}$ is divided by $1000$."
-
-**Flawed Plan**:
+**FLAWED PLAN (This is what you MUST AVOID)**:
 <Plan>
-<Step ID="1" Task="How can we express a number with n consecutive 9's in terms of powers of 10?" Difficulty="2" Token="20" Rely=""/>
-<Step ID="2" Task="What are the remainders when 9, 99, and 999 are divided by 1000?" Difficulty="3" Token="30" Rely=""/>
-<Step ID="3" Task="For numbers with 4 or more 9's, what is their remainder when divided by 1000?" Difficulty="4" Token="40" Rely="1"/>
-<Step ID="4" Task="How many terms in our product have a remainder of 999?" Difficulty="3" Token="30" Rely=""/>
-<Step ID="5" Task="What is the final remainder of the entire product?" Difficulty="4" Token="50" Rely="2,3,4"/>
+<Step ID="1" Task="Evaluate the truthfulness of statement A about magnons." Difficulty="6" Token="80" Rely=""/>
+<Step ID="2" Task="Evaluate the truthfulness of statement B about plasmons." Difficulty="6" Token="80" Rely="1"/>
+<Step ID="3" Task="Evaluate the truthfulness of statement C about polarons." Difficulty="6" Token="80" Rely="2"/>
+<Step ID="4" Task="Evaluate the truthfulness of statement D about excitons." Difficulty="6" Token="80" Rely="3"/>
+<Step ID="5" Task="Based on the evaluations in the previous steps, which statement is false?" Difficulty="4" Token="50" Rely="1,2,3,4"/>
 </Plan>
-**Justification for why this is flawed**: This plan is **incomplete and invites error**. While it correctly separates some cases, Step 5 is too vague. A good plan would have separate, explicit steps to: (a) calculate the product of the remainders of the special cases (`9 * 99`), (b) calculate the product of the remainders of the general cases (`999^997`), and (c) multiply the results from (a) and (b) together modulo 1000. Lumping these into one step caused the model to forget one of the terms in the final calculation.
+**Justification for why this is flawed**: This plan is **fundamentally wrong for this problem type**. It destroys the global context required for nuanced analysis, forcing the Executor into "keyhole" evaluations. This is precisely the pattern that leads to logical contradictions and low accuracy on expert-level datasets like GPQA.
 '''
+
     user_prompt = f'''
-    **Question**: {query}
+    **Problem**: {query}
     **Plan**:
     '''
     # === 新增：记录 Planner 的输入 ===
@@ -981,10 +1092,10 @@ After the `<think>` block, generate a solution plan that is a direct, operationa
                     {"role": "user", "content": query}
                 ],
                 stream=True,
-                temperature=0.5,
+                temperature=0.3,
                 top_p=0.95,
                 max_tokens=8192,
-                extra_body={"enable_thinking": False}
+                extra_body={"enable_thinking": True}
             )
         else:
             response_stream = router_model_client.chat.completions.create(
