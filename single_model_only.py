@@ -218,7 +218,7 @@ class SingleModelDatasetRunner:
         # 使用tqdm显示进度
         for i, problem_data in enumerate(tqdm(self.dataset, desc="处理数据集")):
             problem = problem_data.get("problem", "")
-            solution = problem_data.get("solution", "")
+            solution = problem_data.get("answer", "")
             
             # 每个问题的性能统计，添加超时参数
             result = self.process_single_problem(problem, solution, timeout=timeout)

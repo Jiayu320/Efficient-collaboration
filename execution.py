@@ -277,6 +277,16 @@ def generate_step_result(prompt, difficulty, model_config, stats_tracker=None):
 def build_step_prompt(current_step, tasks, query):
     """构建当前步骤的提示"""
     prompt_template = """
+    You are a problem-solving assistant. I will provide you with a problem and a specific step from my solution plan. Your task is to complete ONLY this specific step based on the description.
+    PROBLEM:
+    {Problem}
+    CURRENT STEP:
+    Task: {Task}
+    {Relied_Results}
+    """
+
+    '''
+    prompt_template = """
     You are a specialized AI module acting as a **domain expert, a critical reviewer,** and a precision-focused computational engine. Your function is to execute a single, specific subtask from a larger problem-solving plan with absolute accuracy, leveraging your internal knowledge base and reasoning capabilities.
     You will be provided with the following inputs:
 
@@ -298,7 +308,6 @@ def build_step_prompt(current_step, tasks, query):
     * Focus exclusively on solving the `Task`. Provide only the requested information or calculation.
     * **DO NOT** add conversational filler, greetings, or sign-offs.
     * Your 'Answer' must ONLY contain the direct answer. Do not include extra text, option letters, or reasoning.
-    * Your entire response must be under **{Token}** tokens.
 
     **PROBLEM:**
     {Problem}
@@ -308,6 +317,7 @@ def build_step_prompt(current_step, tasks, query):
 
     {Relied_Results}
     """
+    '''
     # 获得依赖的任务的具体结果
     rely_ids = tasks[current_step].get('Rely', '')
     if rely_ids != '':
@@ -322,7 +332,6 @@ def build_step_prompt(current_step, tasks, query):
     return prompt_template.format(
         Problem=query,
         Task=tasks[current_step].get('Task', ''),
-        Token=tasks[current_step].get('Token', ''),
         Relied_Results=relied_results
     ), tasks[current_step].get('Difficulty', '')
 
@@ -692,110 +701,70 @@ Your `<think>` block is a mandatory pre-processing step to ensure a high-quality
 Apply the entire framework described above to the problem provided below.
 """
     else:
-        system_prompt = '''You are an expert **first-principles thinker and master strategist**. Your primary function is to deconstruct any complex problem into a clear, logical, and machine-executable sequence of steps. The resulting plan must be solvable by an AI agent that starts with **no prior knowledge of the answer**.
+        system_prompt = """You are an expert problem-solving strategist and a master educator. Your mission is to deconstruct complex, graduate-level questions into a structured, machine-executable plan in XML format.
 
-### Core Directives - You MUST follow these rules:
+This plan serves two purposes:
+1.  It guides a system of AI agents to solve the problem step-by-step.
+2.  Its internal logic (`<think>` block) is used to teach smaller models how to reason by example.
 
-1.  **No Foreknowledge Assumption**: Your plan must represent a genuine discovery process. The `<Step>` tasks must be **questions that seek information**, not statements that contain answers or un-derived conclusions.
-2.  **Ruthless Efficiency & Abstraction**: Generate the **most direct and concise plan** possible. For problems requiring applying the same logic to multiple items, you **MUST** create a single, comprehensive, and parameterized step. **DO NOT** create a separate, repetitive step for each item.
-3.  **First-Principles Derivation**: The `<think>` block's strategy must be a logical chain derived from the identified core principles.
-4.  **Comprehensive Analysis Mandate (NEW & CRITICAL)**: For problems that require **comparing multiple items to find an outlier** (e.g., "Which of the following is false?", "Which is the most accurate?"), you **MUST NOT** evaluate each item in a separate step. Instead, you **MUST** create a **single, comprehensive analysis step** that instructs the Executor to evaluate all items holistically, compare them, and provide a justified final answer. This is the only valid strategy for this problem type.
+Therefore, your output must be exceptionally clear, logical, and pedagogically sound.
 
-**Part 1: The `<think>` Block**
-Before generating the plan, you must first perform and explicitly state your strategic analysis within `<think>` tags. This analysis must be thorough and answer the following:
+### Process Overview
 
-* **Core Principle Identification**: What are the fundamental principles, theorems, or formulas required?
-* **Pitfall Prediction**: What are the most likely traps?
-* **Strategy Formulation**: Based **only** on the principles above, what is your high-level, step-by-step strategy? **You must explicitly identify if the problem requires comprehensive analysis as per Core Directive #4.** If so, your strategy must be to delegate the entire comparative analysis to the Executor in a single, decisive step. Otherwise, proceed with a multi-step decomposition.
+**Part 1: Coherent Thought Process (`<think>` Block)**
+Before creating the plan, you MUST articulate your strategic analysis as a continuous and logical internal monologue within `<think>` tags. This paragraph should read like an expert thinking aloud, seamlessly covering the following points:
 
-**Part 2: The `<Plan>` Block**
-After the `<think>` block, generate a solution plan that is a direct, operational implementation of your stated strategy.
+* **Initial Diagnosis**: Start by identifying the specific academic or scientific domain of the problem.
+* **Problem Classification**: Classify the fundamental type of the question (e.g., is it a calculation, a comparative analysis, a process to be traced?).
+* **Strategic Formulation**: Conclude with a high-level, step-by-step strategy for how you will approach the solution. This should flow naturally from your diagnosis and classification.
 
-#### **XML Plan Constraints:**
-1.  **Plan Length**: Must contain between 1 and 7 steps. Note: Comprehensive analysis plans may only require 1-2 steps.
-2.  **Actionable & Unbiased Steps**: Each `<Step>` `Task` must be an **unambiguous question** and **must not** contain the answer.
-3.  **Logical Flow**: The plan must represent a clear logical progression.
-4.  **Contextual Linking**: When a step `N` relies on `M`, the `Task` for `N` should reference the output from `M`.
-5.  **Attributes**: All attributes must be correctly formatted. `Task` must end with a question mark (?).
+**Part 2: The XML Plan (`<Plan>` Block)**
+Translate your formulated strategy into a formal XML plan.
 
------
+#### XML Constraints:
+1.  **Format**: The plan must be enclosed in `<Plan>` tags, with each step in a `<Step>` tag.
+2.  **Attributes**: Each `<Step>` must have these attributes:
+    * `ID`: A unique integer for the step (e.g., "1").
+    * `Task`: The specific question the executor AI must answer. It must be a clear, self-contained instruction ending with a question mark (?).
+    * `Difficulty`: An integer from 1 to 9 estimating the complexity of the task.
+        * **1-4 (Small Model)**: Tasks involving simple retrieval, basic calculations, or definition lookups.
+        * **5-9 (Large Model)**: Tasks requiring complex reasoning, multi-step calculations, deep analysis, or synthesis of information.
+    * `Rely`: The `ID`(s) of prerequisite steps, comma-separated if multiple (e.g., "1,2"). Leave empty if none.
+3.  **Guiding Principles for Plan Design**:
+    * **Start with the Basics**: Good plans often start with foundational steps, like defining key terms or stating relevant formulas.
+    * **Logical Flow**: Ensure a true dependency structure. A step should only rely on another if it directly uses its output.
+    * **Efficiency**: Avoid redundant steps. If the same logic applies to multiple items, group them into a single, comprehensive task.
 
-### **Examples of Good vs. Flawed Plans**
+---
+### Example 1: Astronomy Calculation & Comparison
 
-#### **Good Example: "Retrieve-Then-Apply" Pattern & Abstraction**
-
-**Question**: "How many of the following compounds will exhibit optical activity? [List of 7 compounds]"
+**Question**: "Which of the following stars or stellar systems will appear the brightest in V magnitude when observed from Earth? Assume there is no extinction. [List of 6 options with apparent/absolute magnitudes and distances]"
 
 **Response**:
-<think>
-**Core Principle Identification**: The core principle is stereochemistry. A compound exhibits optical activity if and only if it is chiral. A molecule is chiral if it is non-superimposable on its mirror image. Common causes of chirality are chiral centers. Common causes of achirality (no optical activity) are the presence of a plane of symmetry or a center of inversion, even if chiral centers are present (meso compounds).
-**Pitfall Prediction**: A common trap is assuming any molecule with a chiral center is optically active; meso compounds are a key exception. Another trap is incorrectly identifying symmetry elements in complex cyclic structures.
-**Strategy Formulation**: A brute-force plan would check each molecule one by one, which is inefficient. A better, abstract strategy is: 1. Define the criteria for optical activity (chirality, lack of symmetry planes/inversion centers). 2. Create a single, comprehensive step that instructs the executor to analyze *all* provided compounds against these criteria. 3. The final step is to count the number of compounds identified as optically active.
-</think>
+<think>This problem is from the domain of observational astronomy and astrophysics. It's a comparative analysis and calculation problem. The core task is to find the object with the lowest apparent magnitude, as a smaller magnitude means a brighter object. For each option, I need to determine its final apparent V magnitude as seen from Earth. Some options provide the apparent magnitude directly, while others give the absolute magnitude, which I'll need to convert using the distance modulus formula. For systems with multiple stars, I'll need to calculate their combined magnitude. My strategy is to systematically process each of the six options to find its apparent magnitude, and then compare all the final values to identify the minimum one.</think>
 <Plan>
-<Step ID="1" Task="What are the defining criteria for a compound to exhibit optical activity, considering chirality, chiral centers, and elements of symmetry like planes of symmetry (e.g., in meso compounds)?" Difficulty="5" Token="70" Rely=""/>
-<Step ID="2" Task="For each of the 7 compounds provided in the problem, analyze its structure based on the criteria from Step 1 and determine if it will exhibit optical activity. List only the compounds that are optically active." Difficulty="7" Token="200" Rely="1"/>
-<Step ID="3" Task="Based on the list from Step 2, how many of the compounds exhibit optical activity?" Difficulty="2" Token="20" Rely="2"/>
+<Step ID="1" Task="What is the formula for calculating the combined apparent magnitude of a multi-star system from the individual apparent magnitudes of its components?" Difficulty="2" Rely=""/>
+<Step ID="2" Task="What is the distance modulus formula that relates a star's apparent magnitude (m), its absolute magnitude (M), and its distance in parsecs (d)?" Difficulty="2" Rely=""/>
+<Step ID="3" Task="For each of the six options (a-f) provided in the problem, calculate its final apparent V magnitude as observed from Earth. Use the formulas from Step 1 and 2 where necessary. List the final apparent magnitude for each option." Difficulty="6" Rely="1,2"/>
+<Step ID="4" Task="Based on the six apparent magnitude values calculated in Step 3, which star or stellar system is the brightest (i.e., has the numerically lowest magnitude value)?" Difficulty="2" Rely="3"/>
 </Plan>
 
------
+---
+### Example 2: Organic Chemistry Structure Elucidation
 
-#### **Bad Example #1: Answer Embedded in the Plan**
+**Question**: "Identify the compound C9H11NO2 using the given data. IR: medium to strong intensity bands at 3420 cm-1, 3325 cm-1; strong band at 1720 cm-1. 1H NMR: 1.20 ppm (t, 3H); 4.0 ppm (bs, 2H); 4.5 ppm (q, 2H); 7.0 ppm (d, 2H), 8.0 ppm (d, 2H)."
 
-**Question**: "For how many rational numbers between 0 and 1 will $20\!$ be the resulting product of their numerator and denominator in lowest terms?"
-
-**Flawed Plan**:
+**Response**:
+<think>This is a classic structure elucidation problem in organic chemistry, requiring the interpretation of spectroscopic data (IR and 1H NMR) to identify an unknown molecule. The task is a deductive reasoning process. My strategy will be to analyze each piece of data to identify key functional groups and structural fragments. I'll start with the IR spectrum to identify major functional groups like N-H and C=O. Then, I'll analyze each signal in the 1H NMR spectrum to determine the types of protons and their connectivity (e.g., identifying an ethyl group and a para-substituted benzene ring). Finally, I will assemble these fragments, check if the proposed structure is consistent with the molecular formula C9H11NO2, and identify the correct compound from the given choices.</think>
 <Plan>
-<Step ID="1" Task="What are the distinct prime factors of 20\! ?" Difficulty="4" Token="50" Rely=""/>
-<Step ID="2" Task="Count the number of distinct prime factors found in Step 1. Let this count be k. What is the value of k?" Difficulty="2" Token="20" Rely="1"/>
-<Step ID="3" Task="Using the formula N = 2^(k-1), what is the final number of such rational numbers?" Difficulty="4" Token="50" Rely="2"/>
+<Step ID="1" Task="What functional group(s) are indicated by the IR absorption bands at 3420, 3325, and 1720 cm-1?" Difficulty="4" Rely=""/>
+<Step ID="2" Task="In the 1H NMR spectrum, what structural fragment is suggested by the combination of a triplet signal at 1.20 ppm (3H) and a quartet signal at 4.5 ppm (2H)?" Difficulty="4" Rely=""/>
+<Step ID="3" Task="In the 1H NMR spectrum, what structural feature is suggested by the presence of two distinct doublet signals at 7.0 ppm (2H) and 8.0 ppm (2H) in the aromatic region?" Difficulty="5" Rely=""/>
+<Step ID="4" Task="What does the broad singlet signal at 4.0 ppm (2H) in the 1H NMR spectrum, combined with the IR data from Step 1, suggest about the functional group present?" Difficulty="5" Rely="1"/>
+<Step ID="5" Task="Based on the fragments identified in the previous steps (a para-substituted aromatic ring, an ethyl group, and an amine/ester/amide functional group), assemble a complete molecular structure that matches the formula C9H11NO2." Difficulty="7" Rely="1,2,3,4"/>
+<Step ID="6" Task="Compare the structure deduced in Step 5 with the provided options to identify the correct compound name." Difficulty="2" Rely="5"/>
 </Plan>
-**Justification for why this is flawed**: This plan is **conceptually flawed as a training example**. Step 3 provides the formula `N = 2^(k-1)` directly in the task. This doesn't teach the model how to *plan to find* the formula; it teaches it to expect formulas to be given. A correct plan would have a step to first *retrieve* the formula, and a subsequent step to *apply* it.
-
------
-
-#### **Bad Example #2: Inefficient Brute-Force Planning**
-
-**Question**: "How many of the following compounds exhibit optical activity? [List of 7 compounds]"
-
-**Flawed Plan**:
-<Plan>
-<Step ID="1" Task="Does compound A exhibit optical activity?" Difficulty="5" Token="40" Rely=""/>
-<Step ID="2" Task="Does compound B exhibit optical activity?" Difficulty="5" Token="40" Rely=""/>
-<Step ID="3" Task="Does compound C exhibit optical activity?" Difficulty="5" Token="40" Rely=""/>
-<Step ID="4" Task="Does compound D exhibit optical activity?" Difficulty="5" Token="40" Rely=""/>
-<Step ID="5" Task="Does compound E exhibit optical activity?" Difficulty="5" Token="40" Rely=""/>
-<Step ID="6" Task="Does compound F exhibit optical activity?" Difficulty="5" Token="40" Rely=""/>
-<Step ID="7" Task="Does compound G exhibit optical activity?" Difficulty="5" Token="40" Rely=""/>
-<Step ID="8" Task="Based on the previous steps, what is the total count of optically active compounds?" Difficulty="2" Token="30" Rely="1,2,3,4,5,6,7"/>
-</Plan>
-
------
-
-#### **Example #3: Comprehensive vs. Flawed Decomposition for Analysis Problems**
-
-**Question**: "Which of the following statements about quasiparticles in condensed matter physics is false? A)... B)... C)... D)..."
-
-**GOOD & CORRECT PLAN**:
-<think>
-**Core Principle Identification**: This requires deep knowledge of condensed matter physics, specifically the definitions and properties of magnons, plasmons, polarons, and excitons.
-**Pitfall Prediction**: The key trap is evaluating each statement in isolation. The concepts are nuanced and are best understood in contrast to each other. A linear evaluation can lead to internal contradictions or overlooking subtle inaccuracies.
-**Strategy Formulation**: This is a classic comparative analysis problem that falls under Core Directive #4. The only robust strategy is to create a single, comprehensive step. This provides the Executor with the full context of all four statements, allowing it to perform the necessary cross-comparisons and identify the single false statement. The plan will have only one core step.
-</think>
-<Plan>
-<Step ID="1" Task="Analyze all four statements (A, B, C, D) regarding quasiparticles. Identify which single statement is false, and provide a detailed justification for your choice by explaining why that statement is incorrect and why the other three are correct." Difficulty="9" Token="500" Rely=""/>
-</Plan>
-
-**FLAWED PLAN (This is what you MUST AVOID)**:
-<Plan>
-<Step ID="1" Task="Evaluate the truthfulness of statement A about magnons." Difficulty="6" Token="80" Rely=""/>
-<Step ID="2" Task="Evaluate the truthfulness of statement B about plasmons." Difficulty="6" Token="80" Rely="1"/>
-<Step ID="3" Task="Evaluate the truthfulness of statement C about polarons." Difficulty="6" Token="80" Rely="2"/>
-<Step ID="4" Task="Evaluate the truthfulness of statement D about excitons." Difficulty="6" Token="80" Rely="3"/>
-<Step ID="5" Task="Based on the evaluations in the previous steps, which statement is false?" Difficulty="4" Token="50" Rely="1,2,3,4"/>
-</Plan>
-**Justification for why this is flawed**: This plan is **fundamentally wrong for this problem type**. It destroys the global context required for nuanced analysis, forcing the Executor into "keyhole" evaluations. This is precisely the pattern that leads to logical contradictions and low accuracy on expert-level datasets like GPQA.
-'''    
+"""   
     # 根据是否使用真实答案构建用户查询
     if dataset_build_config.get('use_ground_truth_to_guide_planner', True):
         user_query = f'''
@@ -860,7 +829,7 @@ After the `<think>` block, generate a solution plan that is a direct, operationa
     return full_completion_with_think, plan_only, system_prompt
 
 
-def run_parallel_execution(query, config, workers=4):
+def run_parallel_execution(query, config, workers=4, process=None):
     """运行并行执行流程
     
     参数:
@@ -959,115 +928,167 @@ Your `<think>` block is a mandatory pre-processing step to ensure a high-quality
 Apply the entire framework described above to the problem provided below.
 """
     else:
-        system_prompt = '''You are an expert **first-principles thinker and master strategist**. Your primary function is to deconstruct any complex problem into a clear, logical, and machine-executable sequence of steps. The resulting plan must be solvable by an AI agent that starts with **no prior knowledge of the answer**.
+        system_prompt = """You are an expert problem-solving strategist and a master educator. Your mission is to deconstruct complex, graduate-level questions into a structured, machine-executable plan in XML format.
 
-### Core Directives - You MUST follow these rules:
+This plan serves two purposes:
+1.  It guides a system of AI agents to solve the problem step-by-step.
+2.  Its internal logic (`<think>` block) is used to teach smaller models how to reason by example.
 
-1.  **No Foreknowledge Assumption**: Your plan must represent a genuine discovery process. The `<Step>` tasks must be **questions that seek information**, not statements that contain answers or un-derived conclusions.
-2.  **Ruthless Efficiency & Abstraction**: Generate the **most direct and concise plan** possible. For problems requiring applying the same logic to multiple items, you **MUST** create a single, comprehensive, and parameterized step. **DO NOT** create a separate, repetitive step for each item.
-3.  **First-Principles Derivation**: The `<think>` block's strategy must be a logical chain derived from the identified core principles.
-4.  **Comprehensive Analysis Mandate (NEW & CRITICAL)**: For problems that require **comparing multiple items to find an outlier** (e.g., "Which of the following is false?", "Which is the most accurate?"), you **MUST NOT** evaluate each item in a separate step. Instead, you **MUST** create a **single, comprehensive analysis step** that instructs the Executor to evaluate all items holistically, compare them, and provide a justified final answer. This is the only valid strategy for this problem type.
+Therefore, your output must be exceptionally clear, logical, and pedagogically sound.
 
-**Part 1: The `<think>` Block**
-Before generating the plan, you must first perform and explicitly state your strategic analysis within `<think>` tags. This analysis must be thorough and answer the following:
+### Process Overview
 
-* **Core Principle Identification**: What are the fundamental principles, theorems, or formulas required?
-* **Pitfall Prediction**: What are the most likely traps?
-* **Strategy Formulation**: Based **only** on the principles above, what is your high-level, step-by-step strategy? **You must explicitly identify if the problem requires comprehensive analysis as per Core Directive #4.** If so, your strategy must be to delegate the entire comparative analysis to the Executor in a single, decisive step. Otherwise, proceed with a multi-step decomposition.
+**Part 1: Coherent Thought Process (`<think>` Block)**
+Before creating the plan, you MUST articulate your strategic analysis as a continuous and logical internal monologue within `<think>` tags. This paragraph should read like an expert thinking aloud, seamlessly covering the following points:
 
-**Part 2: The `<Plan>` Block**
-After the `<think>` block, generate a solution plan that is a direct, operational implementation of your stated strategy.
+* **Initial Diagnosis**: Start by identifying the specific academic or scientific domain of the problem.
+* **Problem Classification**: Classify the fundamental type of the question (e.g., is it a calculation, a comparative analysis, a process to be traced?).
+* **Strategic Formulation**: Conclude with a high-level, step-by-step strategy for how you will approach the solution. This should flow naturally from your diagnosis and classification.
 
-#### **XML Plan Constraints:**
-1.  **Plan Length**: Must contain between 1 and 7 steps. Note: Comprehensive analysis plans may only require 1-2 steps.
-2.  **Actionable & Unbiased Steps**: Each `<Step>` `Task` must be an **unambiguous question** and **must not** contain the answer.
-3.  **Logical Flow**: The plan must represent a clear logical progression.
-4.  **Contextual Linking**: When a step `N` relies on `M`, the `Task` for `N` should reference the output from `M`.
-5.  **Attributes**: All attributes must be correctly formatted. `Task` must end with a question mark (?).
+**Part 2: The XML Plan (`<Plan>` Block)**
+Translate your formulated strategy into a formal XML plan.
 
------
+#### XML Constraints:
+1.  **Format**: The plan must be enclosed in `<Plan>` tags, with each step in a `<Step>` tag.
+2.  **Attributes**: Each `<Step>` must have these attributes:
+    * `ID`: A unique integer for the step (e.g., "1").
+    * `Task`: The specific question the executor AI must answer. It must be a clear, self-contained instruction ending with a question mark (?).
+    * `Difficulty`: An integer from 1 to 9 estimating the complexity of the task.
+        * **1-4 (Small Model)**: Simple retrieval, basic calculation, definition lookup.
+        * **5-9 (Medium/Large Model)**: Multi-step calculation, application of a concept, simple comparison.
+        * **7-9 (Large Model)**: Deep analysis, complex comparison, synthesis of multiple sources of information.
+    * `Rely`: The `ID`(s) of prerequisite steps, comma-separated if multiple (e.g., "1,2"). Leave empty if none.
+3.  **Guiding Principles for Plan Design**:
+    * **Start with the Basics**: Good plans often start with foundational steps, like defining key terms or stating relevant formulas.
+    * **Logical Flow**: Ensure a true dependency structure. A step should only rely on another if it directly uses its output.
+    * **Efficiency**: Avoid redundant steps. If the same logic applies to multiple items, group them into a single, comprehensive task.
 
-### **Examples of Good vs. Flawed Plans**
+---
+### Example 1: Astronomy Calculation & Comparison
 
-#### **Good Example: "Retrieve-Then-Apply" Pattern & Abstraction**
-
-**Question**: "How many of the following compounds will exhibit optical activity? [List of 7 compounds]"
+**Question**: "Which of the following stars or stellar systems will appear the brightest in V magnitude when observed from Earth? Assume there is no extinction. [List of 6 options with apparent/absolute magnitudes and distances]"
 
 **Response**:
-<think>
-**Core Principle Identification**: The core principle is stereochemistry. A compound exhibits optical activity if and only if it is chiral. A molecule is chiral if it is non-superimposable on its mirror image. Common causes of chirality are chiral centers. Common causes of achirality (no optical activity) are the presence of a plane of symmetry or a center of inversion, even if chiral centers are present (meso compounds).
-**Pitfall Prediction**: A common trap is assuming any molecule with a chiral center is optically active; meso compounds are a key exception. Another trap is incorrectly identifying symmetry elements in complex cyclic structures.
-**Strategy Formulation**: A brute-force plan would check each molecule one by one, which is inefficient. A better, abstract strategy is: 1. Define the criteria for optical activity (chirality, lack of symmetry planes/inversion centers). 2. Create a single, comprehensive step that instructs the executor to analyze *all* provided compounds against these criteria. 3. The final step is to count the number of compounds identified as optically active.
-</think>
+<think>This problem is from the domain of observational astronomy and astrophysics. It's a comparative analysis and calculation problem. The core task is to find the object with the lowest apparent magnitude, as a smaller magnitude means a brighter object. For each option, I need to determine its final apparent V magnitude as seen from Earth. Some options provide the apparent magnitude directly, while others give the absolute magnitude, which I'll need to convert using the distance modulus formula. For systems with multiple stars, I'll need to calculate their combined magnitude. My strategy is to systematically process each of the six options to find its apparent magnitude, and then compare all the final values to identify the minimum one.</think>
 <Plan>
-<Step ID="1" Task="What are the defining criteria for a compound to exhibit optical activity, considering chirality, chiral centers, and elements of symmetry like planes of symmetry (e.g., in meso compounds)?" Difficulty="5" Token="70" Rely=""/>
-<Step ID="2" Task="For each of the 7 compounds provided in the problem, analyze its structure based on the criteria from Step 1 and determine if it will exhibit optical activity. List only the compounds that are optically active." Difficulty="7" Token="200" Rely="1"/>
-<Step ID="3" Task="Based on the list from Step 2, how many of the compounds exhibit optical activity?" Difficulty="2" Token="20" Rely="2"/>
+<Step ID="1" Task="What is the formula for calculating the combined apparent magnitude of a multi-star system from the individual apparent magnitudes of its components?" Difficulty="2" Rely=""/>
+<Step ID="2" Task="What is the distance modulus formula that relates a star's apparent magnitude (m), its absolute magnitude (M), and its distance in parsecs (d)?" Difficulty="2" Rely=""/>
+<Step ID="3" Task="For each of the six options (a-f) provided in the problem, calculate its final apparent V magnitude as observed from Earth. Use the formulas from Step 1 and 2 where necessary. List the final apparent magnitude for each option." Difficulty="6" Rely="1,2"/>
+<Step ID="4" Task="Based on the six apparent magnitude values calculated in Step 3, which star or stellar system is the brightest (i.e., has the numerically lowest magnitude value)?" Difficulty="2" Rely="3"/>
 </Plan>
 
------
+---
+### Example 2: Organic Chemistry Structure Elucidation
 
-#### **Bad Example #1: Answer Embedded in the Plan**
+**Question**: "Identify the compound C9H11NO2 using the given data. IR: medium to strong intensity bands at 3420 cm-1, 3325 cm-1; strong band at 1720 cm-1. 1H NMR: 1.20 ppm (t, 3H); 4.0 ppm (bs, 2H); 4.5 ppm (q, 2H); 7.0 ppm (d, 2H), 8.0 ppm (d, 2H)."
 
-**Question**: "For how many rational numbers between 0 and 1 will $20\!$ be the resulting product of their numerator and denominator in lowest terms?"
-
-**Flawed Plan**:
+**Response**:
+<think>This is a classic structure elucidation problem in organic chemistry, requiring the interpretation of spectroscopic data (IR and 1H NMR) to identify an unknown molecule. The task is a deductive reasoning process. My strategy will be to analyze each piece of data to identify key functional groups and structural fragments. I'll start with the IR spectrum to identify major functional groups like N-H and C=O. Then, I'll analyze each signal in the 1H NMR spectrum to determine the types of protons and their connectivity (e.g., identifying an ethyl group and a para-substituted benzene ring). Finally, I will assemble these fragments, check if the proposed structure is consistent with the molecular formula C9H11NO2, and identify the correct compound from the given choices.</think>
 <Plan>
-<Step ID="1" Task="What are the distinct prime factors of 20\! ?" Difficulty="4" Token="50" Rely=""/>
-<Step ID="2" Task="Count the number of distinct prime factors found in Step 1. Let this count be k. What is the value of k?" Difficulty="2" Token="20" Rely="1"/>
-<Step ID="3" Task="Using the formula N = 2^(k-1), what is the final number of such rational numbers?" Difficulty="4" Token="50" Rely="2"/>
+<Step ID="1" Task="What functional group(s) are indicated by the IR absorption bands at 3420, 3325, and 1720 cm-1?" Difficulty="4" Rely=""/>
+<Step ID="2" Task="In the 1H NMR spectrum, what structural fragment is suggested by the combination of a triplet signal at 1.20 ppm (3H) and a quartet signal at 4.5 ppm (2H)?" Difficulty="4" Rely=""/>
+<Step ID="3" Task="In the 1H NMR spectrum, what structural feature is suggested by the presence of two distinct doublet signals at 7.0 ppm (2H) and 8.0 ppm (2H) in the aromatic region?" Difficulty="5" Rely=""/>
+<Step ID="4" Task="What does the broad singlet signal at 4.0 ppm (2H) in the 1H NMR spectrum, combined with the IR data from Step 1, suggest about the functional group present?" Difficulty="5" Rely="1"/>
+<Step ID="5" Task="Based on the fragments identified in the previous steps (a para-substituted aromatic ring, an ethyl group, and an amine/ester/amide functional group), assemble a complete molecular structure that matches the formula C9H11NO2." Difficulty="7" Rely="1,2,3,4"/>
+<Step ID="6" Task="Compare the structure deduced in Step 5 with the provided options to identify the correct compound name." Difficulty="2" Rely="5"/>
 </Plan>
-**Justification for why this is flawed**: This plan is **conceptually flawed as a training example**. Step 3 provides the formula `N = 2^(k-1)` directly in the task. This doesn't teach the model how to *plan to find* the formula; it teaches it to expect formulas to be given. A correct plan would have a step to first *retrieve* the formula, and a subsequent step to *apply* it.
-
------
-
-#### **Bad Example #2: Inefficient Brute-Force Planning**
-
-**Question**: "How many of the following compounds exhibit optical activity? [List of 7 compounds]"
-
-**Flawed Plan**:
-<Plan>
-<Step ID="1" Task="Does compound A exhibit optical activity?" Difficulty="5" Token="40" Rely=""/>
-<Step ID="2" Task="Does compound B exhibit optical activity?" Difficulty="5" Token="40" Rely=""/>
-<Step ID="3" Task="Does compound C exhibit optical activity?" Difficulty="5" Token="40" Rely=""/>
-<Step ID="4" Task="Does compound D exhibit optical activity?" Difficulty="5" Token="40" Rely=""/>
-<Step ID="5" Task="Does compound E exhibit optical activity?" Difficulty="5" Token="40" Rely=""/>
-<Step ID="6" Task="Does compound F exhibit optical activity?" Difficulty="5" Token="40" Rely=""/>
-<Step ID="7" Task="Does compound G exhibit optical activity?" Difficulty="5" Token="40" Rely=""/>
-<Step ID="8" Task="Based on the previous steps, what is the total count of optically active compounds?" Difficulty="2" Token="30" Rely="1,2,3,4,5,6,7"/>
-</Plan>
-
------
-
-#### **Example #3: Comprehensive vs. Flawed Decomposition for Analysis Problems**
-
-**Question**: "Which of the following statements about quasiparticles in condensed matter physics is false? A)... B)... C)... D)..."
-
-**GOOD & CORRECT PLAN**:
-<think>
-**Core Principle Identification**: This requires deep knowledge of condensed matter physics, specifically the definitions and properties of magnons, plasmons, polarons, and excitons.
-**Pitfall Prediction**: The key trap is evaluating each statement in isolation. The concepts are nuanced and are best understood in contrast to each other. A linear evaluation can lead to internal contradictions or overlooking subtle inaccuracies.
-**Strategy Formulation**: This is a classic comparative analysis problem that falls under Core Directive #4. The only robust strategy is to create a single, comprehensive step. This provides the Executor with the full context of all four statements, allowing it to perform the necessary cross-comparisons and identify the single false statement. The plan will have only one core step.
-</think>
-<Plan>
-<Step ID="1" Task="Analyze all four statements (A, B, C, D) regarding quasiparticles. Identify which single statement is false, and provide a detailed justification for your choice by explaining why that statement is incorrect and why the other three are correct." Difficulty="9" Token="500" Rely=""/>
-</Plan>
-
-**FLAWED PLAN (This is what you MUST AVOID)**:
-<Plan>
-<Step ID="1" Task="Evaluate the truthfulness of statement A about magnons." Difficulty="6" Token="80" Rely=""/>
-<Step ID="2" Task="Evaluate the truthfulness of statement B about plasmons." Difficulty="6" Token="80" Rely="1"/>
-<Step ID="3" Task="Evaluate the truthfulness of statement C about polarons." Difficulty="6" Token="80" Rely="2"/>
-<Step ID="4" Task="Evaluate the truthfulness of statement D about excitons." Difficulty="6" Token="80" Rely="3"/>
-<Step ID="5" Task="Based on the evaluations in the previous steps, which statement is false?" Difficulty="4" Token="50" Rely="1,2,3,4"/>
-</Plan>
-**Justification for why this is flawed**: This plan is **fundamentally wrong for this problem type**. It destroys the global context required for nuanced analysis, forcing the Executor into "keyhole" evaluations. This is precisely the pattern that leads to logical contradictions and low accuracy on expert-level datasets like GPQA.
-'''
+"""
 
     user_prompt = f'''
     **Problem**: {query}
     **Plan**:
     '''
+    
+    if process != None:
+        system_prompt = """
+You are an expert AI cognitive scientist and systems architect. Your mission is to reverse-engineer an existing, detailed scientific problem-solving process (Chain of Thought, or CoT) into a structured, step-by-step XML reasoning plan. **Your primary goal is to create high-level, strategic plans that are suitable for distillation.**
+
+This plan will be executed by a multi-threaded AI system using two distinct models: a nimble Small Model and a powerful Large Model. Your task decomposition and difficulty assignments must leverage their unique capabilities.
+
+### **Executor Model Profiles**
+
+You will be assigning tasks to two available models. Use their profiles below to accurately estimate the `Difficulty` for each step:
+
+  * **Small Model (Qwen2.5-3B):** A highly capable small model, excelling at code, standard math, multilingual tasks, and following clear instructions. It is fast and efficient for well-defined, procedural, or knowledge-retrieval tasks. Its main limitations are in deep, complex reasoning and ensuring high factual accuracy on obscure topics.
+  * **Large Model (GPT-4o):** A powerful large model with a vast knowledge base. It excels at deep scientific reasoning (e.g., GPQA), multi-faceted analysis, and understanding nuanced, open-ended problems. It is the preferred choice for tasks requiring synthesis, deep analysis, and broad world knowledge. Note: its primary weakness is in highly specialized, formal reasoning like competition-level math or agentic tasks requiring tool use.
+
+### **Core Directives**
+
+1.  **Analyze the Logical Flow**: Carefully read the provided `problem` and `solution`. Identify the major logical stages of the solution.
+2.  **Focus on Strategic Milestones**: Your plan should represent a **high-level, strategic approach**, not a low-level, detailed proof. Avoid creating steps that require deep, abstract mathematical reasoning to even formulate (e.g., do not create a task like "Use the Riesz representation theorem..."). Instead, focus on the intuitive, conceptual milestones of the solution.
+3.  **Delegate Knowledge Retrieval**: If a specific formula, theorem, or principle is required, your task is to create a step that **asks for that formula or principle** (e.g., "What is the formula for...?"). Delegate the retrieval of specific knowledge to the Executor.
+4.  **Maximize Parallelism**: Decompose the problem into as many independent sub-tasks as possible. For instance, if four different items need to be analyzed, create a separate, non-interdependent step for each one.
+5.  **Reverse-Engineer Questions**:
+      * **Do Not Leak Answers**: The `Task` attribute must NEVER contain the answer to the step or the final result.
+      * **Simulate Discovery**: The questions should simulate a genuine discovery process. Ensure the dependency graph (defined by the `Rely` attribute) accurately reflects the true logical sequence of thought.
+6.  **Construct the XML Plan**:
+      * `ID`: A unique integer for the step.
+      * `Task`: A clear, unambiguous, and self-contained question for the executor AI to answer, ending with a question mark (?).
+      * `Difficulty`: An integer from 1 to 9, assigned based on the model profiles above:
+          * **1-4 (Assign to Small Model):** Tasks that are procedural, involve basic calculations, or apply a *previously stated* formula. These align with the Small Model's strengths.
+          * **5-9 (Assign to Large Model):** Tasks requiring complex reasoning, deep analysis, or synthesis of concepts. This also includes the critical **principle/formula retrieval** tasks (as per Directive 3), where absolute accuracy is paramount and leverages the Large Model's superior knowledge base.
+      * `Rely`: The `ID`(s) of prerequisite steps. **Only establish a dependency when it is strictly necessary.**
+7.  **Use Aggregation Steps**: After all parallel analysis is complete, you will typically need one or more "aggregation" steps to synthesize the information and draw a final conclusion.
+8.  **Control Step Count**: The final plan should contain between 2 and 10 steps.
+9.  **Handle Ambiguity**: If the provided Process is illogical, inefficient, or contains errors, your primary duty is to create the most logical and efficient plan to solve the Problem. Do not blindly copy the flawed structure of the Process. Prioritize correctness and strategic clarity over faithful reverse-engineering of a poor solution.
+
+-----
+
+### **Example 1: High Parallelism**
+
+**Input:**
+
+  * **Problem**:
+    > "Among the following stars, which one will appear redder..."
+  * **Process**:
+    > *(CoT analyzing interstellar reddening, Teff, etc.)*
+
+**Plan (The Plan you should generate):**
+
+```xml
+<Plan>
+<Step ID="1" Task="To determine if a star 'appears redder', what are the two primary factors that contribute to its observed color: one related to the star's intrinsic properties and one related to its external environment? Please explain both." Difficulty="5" Rely=""/>
+<Step ID="2" Task="A star's intrinsic color is primarily determined by which physical parameter? What is the relationship between this parameter and its color (red/blue)?" Difficulty="3" Rely="1"/>
+<Step ID="3" Task="What astronomical phenomenon causes a star's 'apparent color' to be redder than its 'intrinsic color'? Which positional parameter in the galaxy is most closely associated with this effect?" Difficulty="4" Rely="1"/>
+<Step ID="4" Task="Applying the principles from Steps 2 and 3, independently analyze 'star1' for its intrinsic color and its potential for reddening due to its location." Difficulty="5" Rely="2,3"/>
+<Step ID="5" Task="Applying the principles from Steps 2 and 3, independently analyze 'star2' for its intrinsic color and its potential for reddening due to its location." Difficulty="5" Rely="2,3"/>
+<Step ID="6" Task="Applying the principles from Steps 2 and 3, independently analyze 'star3' for its intrinsic color and its potential for reddening due to its location." Difficulty="5" Rely="2,3"/>
+<Step ID="7" Task="Applying the principles from Steps 2 and 3, independently analyze 'star4' for its intrinsic color and its potential for reddening due to its location." Difficulty="5" Rely="2,3"/>
+<Step ID="8" Task="Synthesizing the analysis results for all four stars, which star best fits the condition of 'appearing redder than if it were located next to the Sun'? Justify your final conclusion." Difficulty="6" Rely="4,5,6,7"/>
+</Plan>
+```
+
+-----
+
+### **Example 2: Strategic Decomposition (Avoiding Abstraction)**
+
+**Input:**
+
+  * **Problem**:
+    > "Let 𝓗 be an infinite-dimensional Hilbert space... Show that there is a point y∈𝓗 such that { (√2/d)(x−y) : x∈S } is an orthonormal system..."
+  * **Process**:
+    > *(The detailed mathematical proof using abstract concepts.)*
+
+**Plan (The Plan you should generate):**
+
+```xml
+<Plan>
+<Step ID="1" Task="What are the two mathematical definitions that a set of vectors must satisfy to be called an 'orthonormal system'?" Difficulty="5" Rely=""/>
+<Step ID="2" Task="Using the vector definition v_x = (√2/d)(x-y), translate the two conditions from Step 1 into two separate equations involving the vectors x, y, their norms, and inner products." Difficulty="4" Rely="1"/>
+<Step ID="3" Task="To simplify the problem, consider the special case where y is the zero vector (y=0). What do the two equations from Step 2 become under this simplification?" Difficulty="3" Rely="2"/>
+<Step ID="4" Task="Verify if the simplified conditions from Step 3 are consistent with the problem's given premise that the distance between any two distinct points in S is 'd'. Show the calculation." Difficulty="6" Rely="3"/>
+<Step ID="5" Task="Based on the verification in Step 4, does the choice of y=0 provide a valid solution to the problem, and can a set S with the required properties be constructed?" Difficulty="5" Rely="4"/>
+</Plan>
+```
+
+**Now, based on the following `Problem` and `Process`, generate a high-parallelism XML plan that meets all the requirements above.**
+"""
+        user_prompt = f'''
+        **Problem**: {query}
+        **Process**: {process}
+        **Plan**:
+        '''
+    
     # === 新增：记录 Planner 的输入 ===
     logger.info("===== Prompt 给 Planner (Router) =====")
     logger.info(f"System Prompt:\n{system_prompt}")
@@ -1206,7 +1227,7 @@ def judge_correct(question, gold_answer, final_answer, model_config):
     """
     
     # 使用全局预初始化的客户端，而不是每次创建新客户端
-    client = OpenAI(api_key=get_api_key('usage/deepseek'), base_url="https://api.deepseek.com")
+    client = OpenAI(api_key=get_api_key('usage/deepseek2'), base_url="https://api.deepseek.com")
     
     try:
         response = client.chat.completions.create(
@@ -1238,7 +1259,7 @@ def LLM_judge(question, final_answer, model_config):
         是否正确的布尔值和判断结果文本
     """
     model_name = "deepseek-chat"
-    client = OpenAI(api_key=get_api_key('usage/deepseek'), base_url="https://api.deepseek.com")
+    client = OpenAI(api_key=get_api_key('usage/deepseek2'), base_url="https://api.deepseek.com")
     print(f"--------------------------调用{model_name}判断答案正确性（没有真实答案）--------------------------")
     prompt = f"""Here is a math problem and a student's solution. Please help me determine if the student's solution is correct. If the numerical value are same, then it is correct.
                                

@@ -2,7 +2,7 @@ import json
 import os
 
 # 定义文件路径
-input_file_path = r"D:\JIAYU\Documents\GitHub\Efficient-collaboration\data_reports\dataset\gpqa_main\gpt-5\gpt-4o\qwen2.5-3b-instruct\20250929_114620\dataset_results.json"
+input_file_path = r"D:\JIAYU\Documents\GitHub\Efficient-collaboration\data_reports\dataset\s1k1_data\gemini-2.5-pro\gpt-4o\qwen2.5-3b-instruct\20251001_142732\dataset_results.json"
 output_file_path = os.path.join(os.path.dirname(input_file_path), "analysis_results.json")
 
 # 读取原始JSON文件

@@ -137,10 +137,11 @@ class DatasetRunner:
         for i, problem_data in enumerate(tqdm(self.dataset, desc="处理数据集")):
             problem = problem_data.get("problem", "")
             solution = problem_data.get("answer", "")
+            process = problem_data.get("solution", None)
             logger = get_logger()
             try:
                 # 每个问题的性能统计
-                result = self.process_single_problem(problem, solution, enable_threshold, i + 1)
+                result = self.process_single_problem(problem, solution, enable_threshold, i + 1, process)
                 self.results.append(result)
                 
                 # 每处理完一个问题就保存一次结果
@@ -155,8 +156,8 @@ class DatasetRunner:
                 logger.error(f"处理问题时出错: {e}", exc_info=True)
             
         return self.results
-    
-    def process_single_problem(self, problem, solution, enable_threshold, problem_index):
+
+    def process_single_problem(self, problem, solution, enable_threshold, problem_index, process=None):
         """处理单个问题
         
         参数:
@@ -223,7 +224,7 @@ class DatasetRunner:
                 result["execution_time"] = time.time() - start_time
             else:
                 # 运行并行执行流程
-                tasks, stats_tracker, planner_output = run_parallel_execution(problem, self.config, self.workers)
+                tasks, stats_tracker, planner_output = run_parallel_execution(problem, self.config, self.workers, process)
                 
                 # 获取最终结果
                 model_solution = wait_for_completion_and_get_final_result(tasks, problem, self.config, stats_tracker)
