@@ -1,0 +1,61 @@
+# 问题 76 的理论性能分析报告
+
+## 问题描述
+
+What is the parallax (in milliarcseconds) of a star that has a measured color B-V = 0.7 mag and an intrinsic color of 0.5 mag? Note that the total absorption in the V band is related to the color excess in B-V with a coefficient equal to 3.1. Additionally, it is known that the star has an apparent V magnitude of 3 and its absolute magnitude in the same band is 5 mag.
+
+# 理论性能模型分析
+
+## 模型性能参数
+
+| 模型 | 延迟 (秒) | 吞吐量 (tokens/s) |
+| --- | --- | --- |
+| 小模型 (gpt-4o) | 0.735 | 144.50 |
+| 大模型 (gpt-4o) | 0.735 | 144.50 |
+| 路由模型 (gpt-4o) | 0.735 | 144.50 |
+
+## 执行流程理论时间
+
+| 阶段 | 理论时间 (秒) | 百分比 |
+| --- | --- | --- |
+| 规划阶段总时间 (Planner) | 1.683 | 100% |
+| 规划过程中启动的任务数 | 1 / 4 | 25.0% |
+| 规划与执行重叠的任务数 | 1 / 4 | 25.0% |
+| 第一个任务规划完成时间 | 0.956 | - |
+| 最后一个任务规划完成时间 | 1.662 | - |
+| 最后一个任务执行完成时间 | 31.578 | - |
+| 任务总执行时间(累计) | 30.622 | - |
+| 流水线加速比 | 1.03x | - |
+| 并行效率 | 97.0% | - |
+
+## 任务类型理论时间
+
+| 模型类型 | 任务数 | 顺序执行时间 (秒) | 并行加速比 |
+| --- | --- | --- | --- |
+| 小模型任务 | 0 | 0.000 | - |
+| 大模型任务 | 4 | 30.622 | - |
+| 规划模型 | 1 | 1.939 | - |
+| 顺序总时间 | - | 32.561 | - |
+| 并行总时间 | - | 31.578 | 1.03x |
+
+## 任务执行明细
+
+| 步骤ID | 任务描述 | 使用模型 | 理论开始时间 (秒) | 理论结束时间 (秒) | 理论执行时间 (秒) | 工作线程 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | What is the color excess of the star? | 大模型 | 0.956 | 8.612 | 7.655 | 2 |
+| 2 | What is the total absorption in the V band? | 大模型 | 8.612 | 16.267 | 7.655 | 3 |
+| 3 | What is the distance to the star using apparent and absolute magnitudes? | 大模型 | 16.267 | 23.923 | 7.655 | 4 |
+| 4 | What is the parallax corresponding to this distance? | 大模型 | 23.923 | 31.578 | 7.655 | 5 |
+
+## 理论执行甘特图
+
+```
+时间轴:
+0                                                            30.62s
++------------------------------------------------------------+
+步骤 1 |##############                                              | 0.96s - 8.61s
+步骤 2 |              ###############                               | 8.61s - 16.27s
+步骤 3 |                             ###############                | 16.27s - 23.92s
+步骤 4 |                                            ############### | 23.92s - 31.58s
+```
+

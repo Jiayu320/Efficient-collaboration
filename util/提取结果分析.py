@@ -2,7 +2,7 @@ import json
 import os
 
 # 定义文件路径
-input_file_path = r"D:\JIAYU\Documents\GitHub\Efficient-collaboration\data_reports\dataset\s1k1_data\gemini-2.5-pro\gpt-4o\qwen2.5-3b-instruct\20251001_142732\dataset_results.json"
+input_file_path = r"D:\JIAYU\Documents\GitHub\Efficient-collaboration\data_reports\dataset\gpqa_main\gpt-4o\gpt-4o\gpt-4o\20251002_145122\dataset_results.json"
 output_file_path = os.path.join(os.path.dirname(input_file_path), "analysis_results.json")
 
 # 读取原始JSON文件
@@ -17,7 +17,8 @@ for item in data:
         "gold_solution": item.get("gold_solution"),
         "model_solution": item.get("model_solution"),
         "difficulty": item.get("difficulty"),
-        "is_correct": item.get("is_correct")
+        "is_correct": item.get("is_correct"),
+        "tasks": item.get("tasks")
     }
     extracted_data.append(extracted_item)
 

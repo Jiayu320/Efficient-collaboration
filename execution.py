@@ -27,20 +27,6 @@ def get_api_key(file_path):
         logger = get_logger()
         logger.error(f"API密钥文件 '{file_path}' 未找到")
         raise FileNotFoundError(f"API密钥文件 '{file_path}' 未找到")
-    
-# 正则表达式函数，用于去除ASY绘图代码
-def remove_asy_tags(text):
-    """
-    移除文本中的[asy]...[/asy]标签及其内容
-    
-    参数:
-        text: 包含可能的[asy]标签的文本
-        
-    返回:
-        清理后的文本
-    """
-    # 使用非贪婪模式匹配[asy]和[/asy]之间的所有内容（包括换行符）
-    return re.sub(r'\[asy\].*?\[/asy\]', '', text, flags=re.DOTALL)
 
 # 全局客户端对象，预先初始化
 small_model_client = None
@@ -124,14 +110,24 @@ def process_xml_buffer():
     
     # 添加到任务字典
     step_id = attrs['ID']
+    if step_id == 1 and 'Rely' not in attrs:
+        attrs['Rely'] = ''
+    if attrs['ID'] != 1 and 'Rely' not in attrs:
+        attrs['Rely'] = ','.join(str(i) for i in range(1, int(attrs['ID'])))
+        if attrs['Rely'] == '0':
+            attrs['Rely'] = ''
+    if 'Difficulty' not in attrs:
+        attrs['Difficulty'] = '5'
+
     tasks[step_id] = attrs
     tasks[step_id]['Result'] = None  # 添加Result字段
     
+    print(f"{step_id}的步骤是，解析出步骤 {step_id}: {attrs}")
     # 设置当前步骤（用于后续结果收集）
     current_step = step_id
     return True
 
-def generate_step_result(prompt, difficulty, model_config, stats_tracker=None):
+def generate_step_result(prompt, difficulty, model_config, stats_tracker=None, system_prompt=None):
     """生成步骤结果
     
     参数:
@@ -158,26 +154,54 @@ def generate_step_result(prompt, difficulty, model_config, stats_tracker=None):
         
         # 使用流式API来测量首个令牌响应时间
         try:
-            response_stream = client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "user", "content": prompt}
-                ],
-                stream=True
-            )
+            if system_prompt == None:
+                response_stream = client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "user", "content": prompt}
+                    ],
+                    stream=True
+                )
+            else:
+                response_stream = client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": prompt}
+                    ],
+                    stream=True
+                )
+            logger = get_logger()
+            logger.info("================= 使用流式API =================")
+            logger.info(f"{model}模型API调用成功，开始接收流式响应")
         except Exception as e:
             # 如果流式API调用失败，尝试使用非流式API
             print(f"流式API调用失败，尝试使用非流式API: {e}")
-            response = client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "user", "content": prompt}
-                ],
-                stream=False
-            )
+            logger = get_logger()
+            logger.error(f"{model}模型流式API调用失败，尝试使用非流式API: {e}，无法测量TTFT")
+            if system_prompt == None:
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "user", "content": prompt}
+                    ],
+                    stream=False
+                )
+            else:
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": prompt}
+                    ],
+                    stream=False
+                )
             used_time = time.time() - start_time
             # 在这种情况下我们无法测量TTFT
             ttft = None
+            logger.info("================= 使用非流式API =================")
+            logger.info(f"{model}模型API调用成功，使用时间: {used_time:.2f}秒")
+            logger.info(f"模型输出：\n{response.choices[0].message.content}")
             return response.choices[0].message.content
         
         # 收集完整响应
@@ -227,24 +251,12 @@ def generate_step_result(prompt, difficulty, model_config, stats_tracker=None):
                 
         # 使用收集的内容创建模拟响应
         response = MockResponse(collected_content, model)
-        
+        used_time = time.time() - start_time
         # 如果没有收集到内容，可能是API调用有问题
         if not collected_content:
             print("警告: 流式API未返回任何内容")
-            # 尝试非流式调用作为后备
-            try:
-                backup_response = client.chat.completions.create(
-                    model=model,
-                    messages=[
-                        {"role": "user", "content": prompt}
-                    ],
-                    stream=False
-                )
-                return backup_response.choices[0].message.content
-            except Exception as backup_error:
-                print(f"备份调用也失败: {backup_error}")
-                return f"错误: API调用未返回内容"
-        used_time = time.time() - start_time
+            logger = get_logger()
+            logger.error(f"{model}模型流式API未返回任何内容")
         model_name = model_config.small_model if model == model_config.small_model else model_config.large_model
         model_type = "small_model" if model == model_config.small_model else "large_model"
         
@@ -276,56 +288,29 @@ def generate_step_result(prompt, difficulty, model_config, stats_tracker=None):
 
 def build_step_prompt(current_step, tasks, query):
     """构建当前步骤的提示"""
+    system_prompt = """
+    There is a multiple-choice problem. I need you to solve it and give an answer.
+Here is the problem:\n{Problem}
+
+I have broken this problem down into a series of smaller problems. I will assign you sub-problems one by one, and provide the results of the previous sub-problems as a reference for your reasoning.
+Please solve the problem and respond according to logic.
+"""
+
     prompt_template = """
-    You are a problem-solving assistant. I will provide you with a problem and a specific step from my solution plan. Your task is to complete ONLY this specific step based on the description.
-    PROBLEM:
-    {Problem}
-    CURRENT STEP:
-    Task: {Task}
+    The sub-problem to solve now is: {Task}
+    Based on the information above, please provide a concise and clear answer
     {Relied_Results}
     """
-
-    '''
-    prompt_template = """
-    You are a specialized AI module acting as a **domain expert, a critical reviewer,** and a precision-focused computational engine. Your function is to execute a single, specific subtask from a larger problem-solving plan with absolute accuracy, leveraging your internal knowledge base and reasoning capabilities.
-    You will be provided with the following inputs:
-
-    1.  **`PROBLEM`**: The overall problem for context.
-    2.  **`CURRENT STEP (Task)`**: The specific, isolated instruction you must execute.
-    3.  **`CONTEXT (Results from prior steps)`**: Crucial information from completed steps. **You MUST critically evaluate this context for correctness before using it.**
-
-    Your output must strictly adhere to the following two-part format:
-
-    1.  **`Reasoning:`**:
-        - **Correction First (If Necessary):** Before any other action, you MUST validate the provided `CONTEXT`. If you identify any factual, logical, or calculational errors from the previous steps, your first action is to clearly state the correction. Start with the prefix "Correction:". For example: "Correction: The formula for DC in Step 2 was incorrect. The correct calculation should be...".
-        - **State Principle:** After addressing any necessary corrections, if the `Task` requires a specific formula, constant, or scientific principle, you MUST state it clearly.
-        - **Explain Process:** Finally, provide a brief, step-by-step explanation of your process for completing the `CURRENT STEP (Task)`, using the corrected context and stated principles. Show your work.
-
-    2.  **`Answer:`**: State the final, direct answer to the `Task`. This should be the conclusive output of your reasoning, presented as cleanly as possible (e.g., a number, a full formula, a short statement).
-
-    **CRITICAL RULES:**
-    * Your primary duty is accuracy. This includes **correcting any errors found in the `CONTEXT`** before proceeding to solve the `Task`.
-    * Focus exclusively on solving the `Task`. Provide only the requested information or calculation.
-    * **DO NOT** add conversational filler, greetings, or sign-offs.
-    * Your 'Answer' must ONLY contain the direct answer. Do not include extra text, option letters, or reasoning.
-
-    **PROBLEM:**
-    {Problem}
-
-    **CURRENT STEP:**
-    Task: {Task}
-
-    {Relied_Results}
-    """
-    '''
     # 获得依赖的任务的具体结果
     rely_ids = tasks[current_step].get('Rely', '')
     if rely_ids != '':
-        relied_results = "\n    **CONTEXT (Results from prior steps):**\n"
+        relied_results = "\nSo far, the answers to the resolved sub-problems are as follows:"
+        relied_results += "\n**CONTEXT (Results from prior steps):**\n"
         # 遍历每个依赖的步骤ID
         for step_id in rely_ids.split(','):
             if step_id in tasks and 'Result' in tasks[step_id] and tasks[step_id]['Result']:
-                relied_results += f"\n    Task {step_id}: {tasks[step_id].get('Task', '')} ; Result: {tasks[step_id]['Result']}"
+                relied_results += f"Task {step_id}: {tasks[step_id].get('Task', '')} ; \nResult: {tasks[step_id]['Result']} \n"
+        relied_results += "\nThey are directly related to this sub-problem, so please pay special attention to them."
     else:
         relied_results = ""
     
@@ -333,7 +318,9 @@ def build_step_prompt(current_step, tasks, query):
         Problem=query,
         Task=tasks[current_step].get('Task', ''),
         Relied_Results=relied_results
-    ), tasks[current_step].get('Difficulty', '')
+    ), tasks[current_step].get('Difficulty', ''), system_prompt.format(
+        Problem=query
+    )
 
 def is_step_ready(step_id, tasks):
     """Check if a step is ready to be processed (dependencies completed or none)"""
@@ -360,17 +347,18 @@ def process_step(step_id, tasks, query, model_config, stats_tracker=None):
         # ============================
 
         print(f"\n开始执行步骤 {step_id}: {tasks[step_id].get('Task', '未知任务')}")
-        prompt, difficulty = build_step_prompt(step_id, tasks, query)
+        prompt, difficulty, system_prompt = build_step_prompt(step_id, tasks, query)
         
         # === 新增：记录执行器模型的输入 ===
         model_type = "大模型" if int(difficulty) >= model_config.threshold else "小模型"
         logger.info(f"===== Prompt 给执行器 ({model_type} - 步骤 {step_id}) =====")
+        logger.info(system_prompt)
         logger.info(prompt)
         log_separator()
         # =================================
 
         # 使用模型配置生成结果
-        result = generate_step_result(prompt, difficulty, model_config, stats_tracker)
+        result = generate_step_result(prompt, difficulty, model_config, stats_tracker, system_prompt)
         
         # === 新增：记录执行器模型的输出 ===
         logger.info(f"===== 来自执行器 ({model_type} - 步骤 {step_id}) 的输出 =====")
@@ -505,9 +493,7 @@ def wait_for_completion_and_get_final_result(tasks, query, config, stats_tracker
     # 构建最终结果
     final_result = "# 问题求解最终结果\n\n"
     
-    # 添加原始问题（移除ASY绘图代码）
-    cleaned_query = remove_asy_tags(query)
-    final_result += f"## 原始问题\n{cleaned_query}\n\n"
+    final_result += f"## 原始问题\n{query}\n\n"
     
     # 添加解决方案步骤
     final_result += "## 解决步骤\n\n"
@@ -774,8 +760,8 @@ Translate your formulated strategy into a formal XML plan.
         '''
     else:
         user_query = f'''
-            **Question**: {query}
-            **Plan**:
+            Question: {query}
+            Plan:
         '''
 
     logger.info("===== Prompt to Planner (Router) for Dataset Building =====")
@@ -928,7 +914,23 @@ Your `<think>` block is a mandatory pre-processing step to ensure a high-quality
 Apply the entire framework described above to the problem provided below.
 """
     else:
-        system_prompt = """You are an expert problem-solving strategist and a master educator. Your mission is to deconstruct complex, graduate-level questions into a structured, machine-executable plan in XML format.
+        system_prompt = """
+        I will now give you a problem. Please break this problem down into a step-by-step XML plan. The plan should consist of several easy-to-solve steps that build on each other logically.
+
+1 example is as follows:
+Question: Four years ago, Kody was only half as old as Mohamed. If Mohamed is currently twice 30 years old, how old is Kody?
+Answer:
+To solve the question "How old is Kody?", we need to know: "1. How old is Mohamed now?", "2. How old was Mohamed four years ago?", and "3. How old was Kody four years ago?".
+
+Plan:
+<Plan>
+<Step ID="1" Task="How old is Mohamed now?"/>
+<Step ID="2" Task="How old was Mohamed four years ago?"/>
+<Step ID="3" Task="How old was Kody four years ago?"/>
+</Plan>
+"""
+
+        system_prompt_ori = """You are an expert problem-solving strategist and a master educator. Your mission is to deconstruct complex, graduate-level questions into a structured, machine-executable plan in XML format.
 
 This plan serves two purposes:
 1.  It guides a system of AI agents to solve the problem step-by-step.
@@ -995,10 +997,17 @@ Translate your formulated strategy into a formal XML plan.
 """
 
     user_prompt = f'''
-    **Problem**: {query}
-    **Plan**:
+    Now the command is {query}, please decompose it into easy-to-solve steps like the examples.
+    Answer Format:
+    Your answer must be structured in two distinct parts as follows:
+    To solve the question "xxx", we need to know: "1. question step 1", "2. question step 2", "3. question step 3".
+    <Plan>
+        <Step ID="unique_integer" Task="question step 1"/>
+        <Step ID="..." Task="..."/>
+        ...
+    </Plan>
     '''
-    
+    process = None
     if process != None:
         system_prompt = """
 You are an expert AI cognitive scientist and systems architect. Your mission is to reverse-engineer an existing, detailed scientific problem-solving process (Chain of Thought, or CoT) into a structured, step-by-step XML reasoning plan. **Your primary goal is to create high-level, strategic plans that are suitable for distillation.**
@@ -1126,7 +1135,7 @@ You will be assigning tasks to two available models. Use their profiles below to
                     {"role": "user", "content": user_prompt}
                 ],
                 stream=True,
-                temperature=0.5
+                temperature=1
             )
         
         # 使用deepseek_v3_tokenizer计算tokens
@@ -1213,6 +1222,7 @@ def judge_correct(question, gold_answer, final_answer, model_config):
         是否正确的布尔值和判断结果文本
     """
     model_name = "deepseek-chat"
+    client = OpenAI(api_key=get_api_key('usage/deepseek2'), base_url="https://api.deepseek.com")
     print(f"--------------------------调用{model_name}根据真实答案判断答案正确性--------------------------")
     prompt = f"""Here is a math problem with a standard answer and a student's solution. Please help me determine if the student's solution is correct. If the numerical value are same, then it is correct.
                                
@@ -1226,9 +1236,6 @@ def judge_correct(question, gold_answer, final_answer, model_config):
                 No explanation is required.
     """
     
-    # 使用全局预初始化的客户端，而不是每次创建新客户端
-    client = OpenAI(api_key=get_api_key('usage/deepseek2'), base_url="https://api.deepseek.com")
-    
     try:
         response = client.chat.completions.create(
             model=model_name,
@@ -1241,10 +1248,12 @@ def judge_correct(question, gold_answer, final_answer, model_config):
         result_text = response.choices[0].message.content.strip()
         # 解析结果文本，确定是否正确
         is_correct = "true" in result_text.lower() and "false" not in result_text.lower()
-        
+        logger = get_logger()
+        logger.info("===== 来自 judge_correct 的输出（有真实结果）=====")
+        logger.info(f"问题: {question}\n标准答案: {gold_answer}\n答案: {final_answer}\n判断结果: {result_text}")
         return is_correct, result_text
     except Exception as e:
-        print(f"判断答案正确性时出错: {e}")
+        logger.error(f"判断答案正确性时出错: {e}\n问题: {question}\n标准答案: {gold_answer}\n答案: {final_answer}")
         return False, f"判断错误: {str(e)}"
 
 def LLM_judge(question, final_answer, model_config):
@@ -1285,10 +1294,13 @@ def LLM_judge(question, final_answer, model_config):
         result_text = response.choices[0].message.content.strip()
         # 解析结果文本，确定是否正确
         is_correct = "true" in result_text.lower() and "false" not in result_text.lower()
-        
+        logger = get_logger()
+        logger.info("===== 来自 LLM_judge 的输出（没有真实结果）=====")
+        logger.info(f"问题: {question}\n答案: {final_answer}\n判断结果: {result_text}")
         return is_correct, result_text
     except Exception as e:
-        print(f"判断答案正确性时出错: {e}")
+        logger.info("===== 来自 LLM_judge 的输出（没有真实结果）=====")
+        logger.error(f"{model_name}判断答案正确性时出错: {e}\n问题: {question}\n答案: {final_answer}，判断错误: {str(e)}")
         return False, f"判断错误: {str(e)}"
     
 def judge_question_difficulty(question, model_config):
