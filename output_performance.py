@@ -102,7 +102,10 @@ def get_model_performance(model_name: str) -> Dict[str, float]:
         return {"latency": 0.69, "throughput": 64.53}
     elif "qwen3-235b-a22b" in model_name_lower:
         return {"latency": calculate_average([0.31, 1.34]), "throughput":calculate_average([52.82, 88.24])}
-
+    elif "qwen3-1.7b" in model_name_lower:
+        return {"latency": 0.69, "throughput": 184.1}
+    elif "qwen3-0.6b" in model_name_lower:
+            return {"latency": 0.69, "throughput": 184.1}
 
     # 本地模型
     elif "saves" in model_name_lower:

@@ -110,19 +110,19 @@ def process_xml_buffer():
     
     # 添加到任务字典
     step_id = attrs['ID']
-    if step_id == 1 and 'Rely' not in attrs:
-        attrs['Rely'] = ''
-    if attrs['ID'] != 1 and 'Rely' not in attrs:
-        attrs['Rely'] = ','.join(str(i) for i in range(1, int(attrs['ID'])))
-        if attrs['Rely'] == '0':
-            attrs['Rely'] = ''
-    if 'Difficulty' not in attrs:
-        attrs['Difficulty'] = '5'
+    # if step_id == 1 and 'Rely' not in attrs:
+    #     attrs['Rely'] = ''
+    # if attrs['ID'] != 1 and 'Rely' not in attrs:
+    #     attrs['Rely'] = ','.join(str(i) for i in range(1, int(attrs['ID'])))
+    #     if attrs['Rely'] == '0':
+    #         attrs['Rely'] = ''
+    # if 'Difficulty' not in attrs:
+    #     attrs['Difficulty'] = '5'
 
     tasks[step_id] = attrs
     tasks[step_id]['Result'] = None  # 添加Result字段
     
-    print(f"{step_id}的步骤是，解析出步骤 {step_id}: {attrs}")
+    # print(f"{step_id}的步骤是，解析出步骤 {step_id}: {attrs}")
     # 设置当前步骤（用于后续结果收集）
     current_step = step_id
     return True
@@ -137,7 +137,8 @@ def generate_step_result(prompt, difficulty, model_config, stats_tracker=None, s
         stats_tracker: 性能统计跟踪器
     """
     global small_model_client, large_model_client
-    
+    temperature = 0.5
+
     # 根据难度选择模型
     model = model_config.select_model_by_difficulty(difficulty)
     
@@ -160,6 +161,7 @@ def generate_step_result(prompt, difficulty, model_config, stats_tracker=None, s
                     messages=[
                         {"role": "user", "content": prompt}
                     ],
+                    temperature=temperature,
                     stream=True
                 )
             else:
@@ -169,10 +171,12 @@ def generate_step_result(prompt, difficulty, model_config, stats_tracker=None, s
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": prompt}
                     ],
+                    temperature=temperature,
                     stream=True
                 )
             logger = get_logger()
-            logger.info("================= 使用流式API =================")
+            logger.info("================= 使用流式API生成步骤结果 =================")
+            logger.info(f"温度: {temperature}")
             logger.info(f"{model}模型API调用成功，开始接收流式响应")
         except Exception as e:
             # 如果流式API调用失败，尝试使用非流式API
@@ -185,8 +189,11 @@ def generate_step_result(prompt, difficulty, model_config, stats_tracker=None, s
                     messages=[
                         {"role": "user", "content": prompt}
                     ],
+                    temperature=temperature,
                     stream=False
                 )
+                logger.info(f"{model}模型API调用成功，开始接收响应")
+                logger.info(f"温度: {temperature}")
             else:
                 response = client.chat.completions.create(
                     model=model,
@@ -194,8 +201,11 @@ def generate_step_result(prompt, difficulty, model_config, stats_tracker=None, s
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": prompt}
                     ],
+                    temperature=temperature,
                     stream=False
                 )
+                logger.info(f"{model}模型API调用成功，开始接收响应")
+                logger.info(f"温度: {temperature}")
             used_time = time.time() - start_time
             # 在这种情况下我们无法测量TTFT
             ttft = None
@@ -486,6 +496,7 @@ def wait_for_completion_and_get_final_result(tasks, query, config, stats_tracker
     # 确保所有任务已完成
     if not all('Result' in task and task['Result'] for task in tasks.values()):
         print("等待所有任务完成...")
+        time.sleep(1)
     
     # 按步骤ID排序
     sorted_tasks = sorted(tasks.items(), key=lambda x: int(x[0]))
@@ -782,7 +793,8 @@ Translate your formulated strategy into a formal XML plan.
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_query}
             ],
-            stream=True
+            stream=True,
+            temperature=1
         )
 
         for chunk in response_stream:
@@ -856,79 +868,153 @@ def run_parallel_execution(query, config, workers=4, process=None):
     print("正在获取解决方案计划...")
 
     if config.use_local_router:
-        system_prompt = """You are a master AI strategist specializing in advanced problem-solving. Your core function is to deconstruct complex user queries into a highly efficient, logical, and machine-executable plan in XML format.
+        system_prompt = """You are an expert AI cognitive scientist and systems architect. Your mission is to analyze a given problem and create a structured XML plan to solve it.
 
-### Core Directives
-1.  **Ruthless Efficiency**: Generate the **most direct and concise plan** possible with the **absolute minimum number of steps**. If multiple logical operations can be combined into a single, clear task for the expert Executor, you MUST do so. Avoid any and all superfluous steps.
-2.  **Strategic Planning**: Your role is to be a strategist, not a knowledge expert. **Do not provide specific formulas, constants, or factual data from your own knowledge.** Your job is to create steps that instruct the Executor to retrieve and then use that information.
-3.  **Logical Soundness**: Every step in your plan must be based on established scientific principles or logical deduction. **CRITICAL: Never invent, assume, or modify formulas or calculation steps.** Your role is to plan the *use* of established knowledge, not to create it.
-4.  **Executor-Aware Design**: Design tasks that are **unambiguous and self-contained**. The Executor is an expert but follows instructions literally. It will not correct flawed logic in your plan.
+The plan will be executed by a multi-threaded AI system using two distinct models. Your task decomposition, difficulty assignments, and the reasoning behind them must leverage the unique capabilities of these models.
 
-### Guided Thinking Process
-Your `<think>` block is a mandatory pre-processing step to ensure a high-quality plan. It must contain:
-1.  **Principle Identification**: Concisely state the core scientific principle(s) needed.
-2.  **Knowledge Requirement Planning**: List the specific pieces of knowledge (e.g., "the formula for X", "the value of constant Y") the Executor must retrieve.
-3.  **Logical Validation**: Briefly validate your intended logical flow. Is it sound? Does it directly address the user's question? Are there any logical leaps or flawed assumptions (e.g., inventing a calculation)? This is a self-correction step.
-4.  **Strategy Formulation**: Outline the final, leanest possible strategy. Justify why this sequence is the most efficient path to the answer.
+### **Executor Model Profiles**
 
-### XML Format Instructions
-1.  The plan must be enclosed in `<Plan>` tags.
-2.  The plan must contain between 2 and 7 `<Step>` tags (reduced to encourage brevity).
-3.  Each `<Step>` must have `ID`, `Task`, `Difficulty`, `Token`, and `Rely` attributes.
-4.  The `Task` must be a clear, actionable instruction that ends with a question mark (?).
-5.  The final step must synthesize previous results to provide the conclusive answer.
-6.  Use the `Rely` attribute to define dependencies.
+You will be assigning tasks to two available models. Use their profiles below to accurately estimate the `Difficulty` for each step:
 
-### Examples
+  * **Small Model (e.g., qwen2.5-3b-instruct):** A highly capable small model, excelling at code, standard math, multilingual tasks, and following clear instructions. It is fast and efficient for well-defined, procedural, or knowledge-retrieval tasks.
+  * **Large Model (e.g., gpt-4o):** A powerful large model with a vast knowledge base. It excels at deep scientific reasoning, multi-faceted analysis, and understanding nuanced, open-ended problems. It is the preferred choice for tasks requiring synthesis, deep analysis, and broad world knowledge.
 
-**Example 1: Mathematics**
-**Problem**: For how many rational numbers between 0 and 1 will $20!$ be the resulting product of their numerator and denominator in lowest terms?
-**Plan**:
-<think>
-**Principle Identification**: The problem involves number theory, specifically counting coprime factors.
-**Knowledge Requirement Planning**: The Executor needs the formula connecting the number of distinct prime factors (k) to the count of valid rational numbers.
-**Logical Validation**: The logic of finding primes, counting them, and applying a known formula is sound and direct.
-**Strategy Formulation**: The most efficient path is: 1. Find prime factors. 2. Count them (k). 3. Retrieve the formula relating k to the answer. 4. Apply the formula using k.
-</think>
+### **Core Directives for Plan Generation**
+
+1.  **Analyze the Problem**: Break down the problem into its core logical components.
+2.  **Strategic Milestones**: Focus on the high-level, conceptual milestones required to solve the problem.
+3.  **Delegate Knowledge Retrieval**: If a formula or principle is needed, create a step that *asks* for it.
+4.  **Maximize Parallelism**: Decompose into as many independent sub-tasks as possible.
+5.  **Formulate Actionable Questions**: The `Task` attribute must be a clear, self-contained question ending with a question mark (?). Do not leak answers in the task description.
+6.  **Construct the XML Plan**:
+      * `ID`: A unique integer.
+      * `Task`: The question for the executor AI.
+      * `Difficulty`: An integer from 1-9.
+          * **1-4 (Small Model):** Procedural tasks, basic calculations, applying a known formula.
+          * **5-9 (Large Model):** Complex reasoning, synthesis, or critical knowledge retrieval.
+      * `Token`: An integer representing the estimated number of tokens the executor will need to generate for the answer.
+      * `Rely`: The `ID`(s) of prerequisite steps. Only create necessary dependencies.
+7.  **Use Aggregation Steps**: Create a final step to synthesize the results from previous steps and derive the final conclusion.
+8.  **Keep it Concise**: The final plan must contain **fewer than 10 steps**. Focus only on the most critical milestones needed to solve the problem.
+
+### **Example**
+
+**Problem**: Four years ago, Kody was only half as old as Mohamed. If Mohamed is currently twice 30 years old, how old is Kody?
+
+**Output**:
 <Plan>
-<Step ID="1" Task="What are the distinct prime factors of 20! ?" Difficulty="4" Token="50" Rely=""/>
-<Step ID="2" Task="Count the number of distinct prime factors found in Step 1. Let this count be k. What is the value of k?" Difficulty="2" Token="20" Rely="1"/>
-<Step ID="3" Task="What is the formula that relates the number of distinct prime factors (k) of an integer to the count of rational numbers between 0 and 1 whose numerator and denominator in lowest terms multiply to that integer?" Difficulty="5" Token="60" Rely=""/>
-<Step ID="4" Task="Using the formula from Step 3 and the value of k from Step 2, what is the final number of such rational numbers?" Difficulty="4" Token="50" Rely="2,3"/>
+<Step ID="1" Task="How old is Mohamed now?" Difficulty="2" Token="10" Rely=""/>
+<Step ID="2" Task="How old was Mohamed four years ago?" Difficulty="1" Token="10" Rely="1"/>
+<Step ID="3" Task="How old was Kody four years ago?" Difficulty="2" Token="10" Rely="2"/>
 </Plan>
 
-**Example 2: Physics (Demonstrating Efficiency)**
-**Problem**: Two quantum states have lifetimes 10^-9s and 10^-8s. To distinguish them, what is the required energy difference?
-**Plan**:
-<think>
-**Principle Identification**: The problem requires the energy-time uncertainty principle.
-**Knowledge Requirement Planning**: The Executor needs to provide the specific formula for the energy-time uncertainty principle.
-**Logical Validation**: To distinguish two states, the energy difference must be greater than the energy width of the state with the *longer* lifetime (which has the *smaller* energy width, setting the resolution limit). This logic is sound. Calculating this one value is sufficient.
-**Strategy Formulation**: The most direct path is a two-step process: 1. Retrieve the formula for energy width (ΔE) from lifetime (Δt). 2. Ask the Executor to apply this formula to the longer lifetime (10^-8 s) to find the minimum required energy difference. This combines calculation and interpretation into one efficient step for the expert Executor.
-</think>
-<Plan>
-<Step ID="1" Task="What is the formula relating a quantum state's lifetime (Δt) to its minimum energy width (ΔE) according to the energy-time uncertainty principle?" Difficulty="6" Token="70" Rely=""/>
-<Step ID="2" Task="To clearly resolve two energy levels, the energy difference must exceed the energy width of the state with the longer lifetime. Using the formula from Step 1, what is the minimum energy difference required, based on the longer lifetime of 10^-8 seconds?" Difficulty="5" Token="80" Rely="1"/>
-</Plan>
-
-Apply the entire framework described above to the problem provided below.
+**Now, based on the following `Problem`, generate a response that meets all the requirements above.**
 """
+        user_prompt = f'''**Problem**: {query}
+**Output**:
+        '''
     else:
-        system_prompt = """
-        I will now give you a problem. Please break this problem down into a step-by-step XML plan. The plan should consist of several easy-to-solve steps that build on each other logically.
+        system_prompt = """You are an expert AI cognitive scientist and systems architect. Your mission is to analyze a given problem and create a structured XML plan to solve it.
 
-1 example is as follows:
-Question: Four years ago, Kody was only half as old as Mohamed. If Mohamed is currently twice 30 years old, how old is Kody?
-Answer:
-To solve the question "How old is Kody?", we need to know: "1. How old is Mohamed now?", "2. How old was Mohamed four years ago?", and "3. How old was Kody four years ago?".
+The plan will be executed by a multi-threaded AI system using two distinct models. Your task decomposition, difficulty assignments, and the reasoning behind them must leverage the unique capabilities of these models.
 
-Plan:
+### **Executor Model Profiles**
+
+You will be assigning tasks to two available models. Use their profiles below to accurately estimate the `Difficulty` for each step:
+
+  * **Small Model (e.g., qwen2.5-3b-instruct):** A highly capable small model, excelling at code, standard math, multilingual tasks, and following clear instructions. It is fast and efficient for well-defined, procedural, or knowledge-retrieval tasks.
+  * **Large Model (e.g., gpt-4o):** A powerful large model with a vast knowledge base. It excels at deep scientific reasoning, multi-faceted analysis, and understanding nuanced, open-ended problems. It is the preferred choice for tasks requiring synthesis, deep analysis, and broad world knowledge.
+
+### **Core Directives for Plan Generation**
+
+1.  **Analyze the Problem**: Break down the problem into its core logical components.
+2.  **Strategic Milestones**: Focus on the high-level, conceptual milestones required to solve the problem.
+3.  **Delegate Knowledge Retrieval**: If a formula or principle is needed, create a step that *asks* for it.
+4.  **Maximize Parallelism**: Decompose into as many independent sub-tasks as possible.
+5.  **Formulate Actionable Questions**: The `Task` attribute must be a clear, self-contained question ending with a question mark (?). Do not leak answers in the task description.
+6.  **Construct the XML Plan**:
+      * `ID`: A unique integer.
+      * `Task`: The question for the executor AI.
+      * `Difficulty`: An integer from 1-9.
+          * **1-4 (Small Model):** Procedural tasks, basic calculations, applying a known formula.
+          * **5-9 (Large Model):** Complex reasoning, synthesis, or critical knowledge retrieval.
+      * `Token`: An integer representing the estimated number of tokens the executor will need to generate for the answer.
+      * `Rely`: The `ID`(s) of prerequisite steps. Only create necessary dependencies.
+7.  **Use Aggregation Steps**: Create a final step to synthesize the results from previous steps and derive the final conclusion.
+8.  **Keep it Concise**: The final plan must contain **fewer than 10 steps**. Focus only on the most critical milestones needed to solve the problem.
+
+### **Example**
+
+**Problem**: Four years ago, Kody was only half as old as Mohamed. If Mohamed is currently twice 30 years old, how old is Kody?
+
+**Output**:
 <Plan>
-<Step ID="1" Task="How old is Mohamed now?"/>
-<Step ID="2" Task="How old was Mohamed four years ago?"/>
-<Step ID="3" Task="How old was Kody four years ago?"/>
+<Step ID="1" Task="How old is Mohamed now?" Difficulty="2" Token="10" Rely=""/>
+<Step ID="2" Task="How old was Mohamed four years ago?" Difficulty="1" Token="10" Rely="1"/>
+<Step ID="3" Task="How old was Kody four years ago?" Difficulty="2" Token="10" Rely="2"/>
 </Plan>
+
+**Now, based on the following `Problem`, generate a response that meets all the requirements above.**
 """
+        system_prompt_think = """
+You are an expert AI cognitive scientist and systems architect. Your mission is to analyze a given problem and create a detailed, two-part response: first, a chain-of-thought reasoning block, and second, a structured XML plan.
+The plan will be executed by a multi-threaded AI system using two distinct models. Your task decomposition, difficulty assignments, and the reasoning behind them must leverage the unique capabilities of these models.
+
+### **Executor Model Profiles**
+
+You will be assigning tasks to two available models. Use their profiles below to accurately estimate the `Difficulty` for each step:
+
+  * **Small Model (e.g., qwen2.5-3b-instruct):** A highly capable small model, excelling at code, standard math, multilingual tasks, and following clear instructions. It is fast and efficient for well-defined, procedural, or knowledge-retrieval tasks.
+  * **Large Model (e.g., gpt-4o):** A powerful large model with a vast knowledge base. It excels at deep scientific reasoning, multi-faceted analysis, and understanding nuanced, open-ended problems. It is the preferred choice for tasks requiring synthesis, deep analysis, and broad world knowledge.
+
+### **Core Directives for Plan Generation**
+
+1.  **Analyze the Problem**: Break down the problem into its core logical components.
+2.  **Strategic Milestones**: Focus on the high-level, conceptual milestones required to solve the problem.
+3.  **Delegate Knowledge Retrieval**: If a formula or principle is needed, create a step that *asks* for it.
+4.  **Maximize Parallelism**: Decompose into as many independent sub-tasks as possible.
+5.  **Formulate Actionable Questions**: The `Task` attribute must be a clear, self-contained question ending with a question mark (?). Do not leak answers in the task description.
+6.  **Construct the XML Plan**:
+      * `ID`: A unique integer.
+      * `Task`: The question for the executor AI.
+      * `Difficulty`: An integer from 1-9.
+          * **1-4 (Small Model):** Procedural tasks, basic calculations, applying a known formula.
+          * **5-9 (Large Model):** Complex reasoning, synthesis, or critical knowledge retrieval.
+      * `Rely`: The `ID`(s) of prerequisite steps. Only create necessary dependencies.
+7.  **Use Aggregation Steps**: Create final steps to synthesize results and derive the conclusion.
+
+### **Output Format**
+
+Your final output MUST be structured in two distinct parts: a `<think>` block followed by the `<Plan>` XML block.
+
+1.  **`<think>` block**: This should be a fluent, internal monologue demonstrating your thought process for creating the plan. It should naturally cover the goal, the sub-problems, the model allocation, and the dependencies.
+2.  **`<Plan>` block**: This is the final, machine-readable XML plan, built according to the Core Directives.
+
+-----
+
+### **Example**
+
+**Problem**: Four years ago, Kody was only half as old as Mohamed. If Mohamed is currently twice 30 years old, how old is Kody?
+
+**Output**:
+<think>
+Okay, the problem is "Four years ago, Kody was only half as old as Mohamed. If Mohamed is currently twice 30 years old, how old is Kody?". To solve this, I need to break it down into logical steps and assign them based on the model capabilities. The Small Model is ideal for procedural tasks and standard math, while the Large Model is for complex reasoning. 
+First, I need to establish Mohamed's current age. The problem states he is "twice 30 years old," which is a simple calculation, perfect for the Small Model. This will be my Step 1.
+Next, the problem references "four years ago," so I need to find Mohamed's age at that time. This is a simple subtraction based on the result of Step 1. Again, the Small Model is sufficient. This will be Step 2, and it must rely on Step 1 to work.
+Finally, with Mohamed's age from four years ago, I can figure out how old Kody was back then, since he was half of Mohamed's age. This calculation depends directly on Step 2 and is another straightforward task for the Small Model. This will be Step 3.
+This sequence of three steps logically builds the necessary foundation. The plan is ready.
+</think>
+<Plan>
+<Step ID="1" Task="How old is Mohamed now?" Difficulty="2" Rely=""/>
+<Step ID="2" Task="How old was Mohamed four years ago?" Difficulty="1" Rely="1"/>
+<Step ID="3" Task="How old was Kody four years ago?" Difficulty="2" Rely="2"/>
+</Plan>
+
+**Now, based on the following `Problem`, generate a response that meets all the requirements above.**
+"""
+        user_prompt = f'''**Problem**: {query}
+**Output**:
+        '''
 
         system_prompt_ori = """You are an expert problem-solving strategist and a master educator. Your mission is to deconstruct complex, graduate-level questions into a structured, machine-executable plan in XML format.
 
@@ -995,8 +1081,23 @@ Translate your formulated strategy into a formal XML plan.
 <Step ID="6" Task="Compare the structure deduced in Step 5 with the provided options to identify the correct compound name." Difficulty="2" Rely="5"/>
 </Plan>
 """
+    dot_system_prompt = """
+        I will now give you a problem. Please break this problem down into a step-by-step XML plan. The plan should consist of several easy-to-solve steps that build on each other logically.
 
-    user_prompt = f'''
+1 example is as follows:
+Question: Four years ago, Kody was only half as old as Mohamed. If Mohamed is currently twice 30 years old, how old is Kody?
+Answer:
+To solve the question "How old is Kody?", we need to know: "1. How old is Mohamed now?", "2. How old was Mohamed four years ago?", and "3. How old was Kody four years ago?".
+
+Plan:
+<Plan>
+<Step ID="1" Task="How old is Mohamed now?"/>
+<Step ID="2" Task="How old was Mohamed four years ago?"/>
+<Step ID="3" Task="How old was Kody four years ago?"/>
+</Plan>
+"""
+
+    dot_user_prompt = f'''
     Now the command is {query}, please decompose it into easy-to-solve steps like the examples.
     Answer Format:
     Your answer must be structured in two distinct parts as follows:
@@ -1115,19 +1216,29 @@ You will be assigning tasks to two available models. Use their profiles below to
         
         # 根据配置决定是使用本地路由模型还是远程路由模型
         if config.use_local_router:
+            temperature = 1
+            top_p = 0.95
+            max_tokens = 600
+            enable_thinking = False
             response_stream = router_model_client.chat.completions.create(
                 model=config.local_router_model,
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": query}
+                    {"role": "user", "content": user_prompt}
                 ],
                 stream=True,
-                temperature=0.3,
-                top_p=0.95,
-                max_tokens=8192,
-                extra_body={"enable_thinking": True}
+                temperature=temperature,
+                top_p=top_p,
+                max_tokens=max_tokens,
+                extra_body={"enable_thinking": enable_thinking}
             )
+            logger.info(f"----------------- 使用本地路由模型: {config.local_router_model} -----------------")
+            logger.info(f"温度: {temperature}, top_p: {top_p}, max_tokens: {max_tokens}, enable_thinking: {enable_thinking}")
         else:
+            temperature = 1
+            top_p = 0.95
+            max_tokens = 600
+            enable_thinking = False
             response_stream = router_model_client.chat.completions.create(
                 model=config.router_model,
                 messages=[
@@ -1135,11 +1246,24 @@ You will be assigning tasks to two available models. Use their profiles below to
                     {"role": "user", "content": user_prompt}
                 ],
                 stream=True,
-                temperature=1
+                temperature=temperature,
+                top_p=top_p,
+                max_tokens=max_tokens,
+                extra_body={"enable_thinking": enable_thinking}
             )
-        
+            logger.info(f"----------------- 使用远程路由模型: {config.router_model} -----------------")
+            logger.info(f"温度: {temperature}, top_p: {top_p}, max_tokens: {max_tokens}, enable_thinking: {enable_thinking}")
+
         # 使用deepseek_v3_tokenizer计算tokens
-        prompt_tokens = count_deepseek_tokens(system_prompt) + count_deepseek_tokens(query)
+        system_prompt_tokens = count_deepseek_tokens(system_prompt)
+        user_prompt_tokens = count_deepseek_tokens(user_prompt)
+        prompt_tokens = system_prompt_tokens + user_prompt_tokens
+
+        logger.info(f"----- Router (Planner) Prompt Token Usage -----")
+        logger.info(f"Prompt Tokens: {prompt_tokens}")
+        logger.info(f"System Prompt Tokens: {system_prompt_tokens}")
+        logger.info(f"User Prompt Tokens: {user_prompt_tokens}")
+
         completion_tokens = 0
         
         for chunk in response_stream:
@@ -1176,6 +1300,8 @@ You will be assigning tasks to two available models. Use their profiles below to
         # === 新增：记录 Planner 的完整输出 ===
         logger.info("===== 来自 Planner (Router) 的输出 =====")
         logger.info(full_completion)
+        logger.info(f"router模型完成的Token数: {completion_tokens}")
+        
         log_separator()
         # ==================================
 
@@ -1338,7 +1464,9 @@ def judge_question_difficulty(question, model_config):
         print(f"问题难度判断结果: {difficulty}")
         return difficulty
     except Exception as e:
-        return f"错误: 判断问题难度时出错 - {str(e)}" 
+        logger = get_logger()
+        logger.error(f"判断问题难度时出错: {e}\n问题: {question}，按照高于阈值处理")
+        return str(model_config.threshold + 1)
 
 def call_small_model_directly(question, model_config, stats_tracker=None):
     """直接调用小模型进行处理
@@ -1395,7 +1523,7 @@ def call_large_model_directly(question, model_config, stats_tracker=None):
     PROBLEM:
     {question}
     """.format(question=question)
-    return generate_step_result(prompt, "5", model_config, stats_tracker)
+    return generate_step_result(prompt, "10", model_config, stats_tracker)
 
 def build_report_path(base_dir="data_reports", is_dataset=False, dataset_name="", config=None, timestamp=None):
     """构建层次化的报告路径

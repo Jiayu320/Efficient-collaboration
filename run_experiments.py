@@ -9,14 +9,20 @@ from tqdm import tqdm # <-- NEW: Import tqdm
 # --- 1. 配置区域 ---
 ROUTER_MODELS_TO_TEST = [
     {
-        'name': 'grok-4',
-        'router_model': 'grok-4',
-        'router_key_path': 'usage/bianxie1',
-        'router_api_base_url': 'https://api.bianxie.ai/v1'
+        'name': 'qwen3-1.7b',
+        'router_model': 'qwen3-1.7b',
+        'router_key_path': 'usage/qwen',
+        'router_api_base_url': 'https://dashscope.aliyuncs.com/compatible-mode/v1'
     },
     {
-        'name': 'qwen3-235b-a22b-thinking-2507',
-        'router_model': 'qwen3-235b-a22b-thinking-2507',
+        'name': 'qwen3-0.6b',
+        'router_model': 'qwen3-0.6b',
+        'router_key_path': 'usage/qwen',
+        'router_api_base_url': 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+    },
+    {
+        'name': 'qwen3-4b',
+        'router_model': 'qwen3-4b',
         'router_key_path': 'usage/qwen',
         'router_api_base_url': 'https://dashscope.aliyuncs.com/compatible-mode/v1'
     }

@@ -75,13 +75,9 @@ def generate_markdown_section(stats):
     return markdown
 
 def main():
-    # 获取命令行参数
-    if len(sys.argv) < 2:
-        print("用法: python analyze_model_tasks.py <dataset_results.json路径> [难度阈值]")
-        return
-    
-    json_file_path = sys.argv[1]
-    threshold = int(sys.argv[2]) if len(sys.argv) > 2 else 4
+
+    json_file_path = r"D:\JIAYU\Documents\GitHub\Efficient-collaboration\data_reports\dataset\MMLU-STEM\local_router\gpt-4o\qwen2.5-3b-instruct\20251004_141112\dataset_results.json"
+    threshold = 5
     
     # 确保文件存在
     if not os.path.exists(json_file_path):

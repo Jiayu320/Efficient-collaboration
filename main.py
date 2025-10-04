@@ -147,6 +147,8 @@ def main():
             print("\n最终结果:", final_result)
         else:
             tasks, stats_tracker, planner_output = run_parallel_execution(query, config, workers)
+            if tasks is None or stats_tracker is None or planner_output is None:
+                logger.error("任务执行失败，未能生成结果。")
             print_results(tasks)
             final_result = wait_for_completion_and_get_final_result(tasks, query, config, stats_tracker)
             print("\n最终合并结果:", final_result)

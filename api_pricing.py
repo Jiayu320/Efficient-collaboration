@@ -64,6 +64,10 @@ def get_model_pricing(model_name: str) -> Dict[str, float]:
         return {"prompt": 0.00, "completion": 0.00}
     elif "qwen3-235b-a22b" in model_name_lower:
         return {"prompt": 0.10, "completion": 0.39}
+    elif "qwen3-1.7b" in model_name_lower:
+        return {"prompt": 0.00, "completion": 0.00}
+    elif "qwen3-0.6b" in model_name_lower:
+        return {"prompt": 0.00, "completion": 0.00}
 
     # 本地模型
     elif "saves" in model_name_lower or "sft" in model_name_lower:
