@@ -12,8 +12,8 @@
 
 - 数据集: dataset/TestData/MMLU-STEM.json
 - 问题总数: 50
-- 正确数量: 20
-- 准确率: 40.00%
+- 正确数量: 13
+- 准确率: 26.00%
 - 平均执行时间: 27.99 秒
 - 平均成本: $0.0030
 
@@ -55,22 +55,22 @@
 | 5 | Find the product of the given polynomials in th... | ✗ | 49.13 | 0.0000 | - | - | - |
 | 6 | Statement 1 | If a group has an element of orde... | ✗ | 30.28 | 0.0041 | 2 | 100.00% | 60.0 |
 | 7 | Statement 1 | Every homomorphic image of a grou... | ✗ | 15.69 | 0.0106 | 5 | 60.00% | 150.0 |
-| 8 | Statement 1 | A ring homomorphism is one to one... | ✗ | 10.68 | 0.0026 | 2 | 50.00% | 100.0 |
+| 8 | Statement 1 | A ring homomorphism is one to one... | ✓ | 10.68 | 0.0026 | 2 | 50.00% | 100.0 |
 | 9 | Find the degree for the given field extension Q... | ✓ | 9.46 | 0.0049 | 2 | 100.00% | 125.0 |
 | 10 | Find all zeros in the indicated finite field of... | ✓ | 9.77 | 0.0053 | 2 | 100.00% | 150.0 |
 | 11 | Statement 1 | If H is a subgroup of G and a bel... | ✗ | 13.88 | 0.0072 | 2 | 50.00% | 200.0 |
-| 12 | If A = {1, 2, 3} then relation S = {(1, 1), (2,... | ✓ | 7.62 | 0.0015 | 6 | 33.33% | 71.7 |
+| 12 | If A = {1, 2, 3} then relation S = {(1, 1), (2,... | ✗ | 7.62 | 0.0015 | 6 | 33.33% | 71.7 |
 | 13 | Find the order of the factor group (Z_11 x Z_15... | ✓ | 10.21 | 0.0052 | 2 | 100.00% | 25.0 |
-| 14 | The polynomial x^3 + 2x^2 + 2x + 1 can be facto... | ✓ | 12.28 | 0.0088 | 2 | 100.00% | 100.0 |
+| 14 | The polynomial x^3 + 2x^2 + 2x + 1 can be facto... | ✗ | 12.28 | 0.0088 | 2 | 100.00% | 100.0 |
 | 15 | Find the maximum possible order for an element ... | ✗ | 10.02 | 0.0023 | 2 | 100.00% | 55.0 |
 | 16 | Statement 1 | R is a splitting field of some po... | ✗ | 10.33 | 0.0037 | 2 | 50.00% | 30.0 |
-| 17 | The inverse of -i in the multiplicative group, ... | ✓ | 27.53 | 0.0000 | - | - | - |
-| 18 | Compute the product in the given ring. (2,3)(3,... | ✓ | 23.62 | 0.0000 | - | - | - |
-| 19 | The set of all real numbers under the usual mul... | ✓ | 25.55 | 0.0000 | - | - | - |
+| 17 | The inverse of -i in the multiplicative group, ... | ✗ | 27.53 | 0.0000 | - | - | - |
+| 18 | Compute the product in the given ring. (2,3)(3,... | ✗ | 23.62 | 0.0000 | - | - | - |
+| 19 | The set of all real numbers under the usual mul... | ✗ | 25.55 | 0.0000 | - | - | - |
 | 20 | Statement 1| Every group of order p^2 where p i... | ✓ | 23.79 | 0.0102 | 6 | 66.67% | 21.7 |
 | 21 | Statement 1 | For finite groups G and H, |G + H... | ✓ | 41.88 | 0.0030 | 2 | 50.00% | 25.0 |
-| 22 | Find the sum of the given polynomials in the gi... | ✓ | 25.23 | 0.0000 | - | - | - |
-| 23 | Statement 1 | Any set of two vectors in R^2 is ... | ✗ | 52.90 | 0.0060 | 4 | 100.00% | 25.0 |
+| 22 | Find the sum of the given polynomials in the gi... | ✗ | 25.23 | 0.0000 | - | - | - |
+| 23 | Statement 1 | Any set of two vectors in R^2 is ... | ✓ | 52.90 | 0.0060 | 4 | 100.00% | 25.0 |
 | 24 | The set of all nth roots of unity under multipl... | ✗ | 53.66 | 0.0000 | - | - | - |
 | 25 | Statement 1 | Every maximal ideal is a prime id... | ✗ | 28.35 | 0.0000 | - | - | - |
 | 26 | Let G denoted the set of all n x n non-singular... | ✗ | 8.65 | 0.0038 | 3 | 100.00% | 33.3 |
@@ -81,14 +81,14 @@
 | 31 | Statement 1 | If H is a subgroup of a group G a... | ✗ | 0.00 | 0.0000 | - | - | - |
 | 32 | If (G, .) is a group such that (ab)^-1 = a^-1b^... | ✗ | 0.00 | 0.0000 | - | - | - |
 | 33 | Statement 1 | In a finite dimensional vector sp... | ✗ | 36.82 | 0.0000 | 2 | 50.00% | 100.0 |
-| 34 | Some group (G, 0) is known to be abelian. Then ... | ✓ | 37.74 | 0.0085 | 3 | 100.00% | 30.0 |
+| 34 | Some group (G, 0) is known to be abelian. Then ... | ✗ | 37.74 | 0.0085 | 3 | 100.00% | 30.0 |
 | 35 | Statement 1 | If T: V -> W is a linear transfor... | ✗ | 25.30 | 0.0032 | 2 | 50.00% | 50.0 |
 | 36 | Find the degree for the given field extension Q... | ✓ | 33.71 | 0.0106 | 6 | 50.00% | 48.3 |
-| 37 | Compute the product in the given ring. (20)(-8)... | ✓ | 39.83 | 0.0000 | - | - | - |
+| 37 | Compute the product in the given ring. (20)(-8)... | ✗ | 39.83 | 0.0000 | - | - | - |
 | 38 | Determine whether the polynomial in Z[x] satisf... | ✗ | 0.00 | 0.0000 | - | - | - |
-| 39 | Find the generator for the finite field Z_7.  A... | ✓ | 84.81 | 0.0000 | - | - | - |
-| 40 | Statement 1 | Every permutation is a cycle. Sta... | ✗ | 10.47 | 0.0014 | 2 | 50.00% | 50.0 |
-| 41 | The set of integers Z with the binary operation... | ✓ | 4.77 | 0.0007 | 1 | 100.00% | 50.0 |
+| 39 | Find the generator for the finite field Z_7.  A... | ✗ | 84.81 | 0.0000 | - | - | - |
+| 40 | Statement 1 | Every permutation is a cycle. Sta... | ✓ | 10.47 | 0.0014 | 2 | 50.00% | 50.0 |
+| 41 | The set of integers Z with the binary operation... | ✗ | 4.77 | 0.0007 | 1 | 100.00% | 50.0 |
 | 42 | Find the characteristic of the ring Z_3 x 3Z.  ... | ✗ | 38.99 | 0.0050 | 3 | 66.67% | 50.0 |
 | 43 | Statement 1 | Some abelian group of order 45 ha... | ✗ | 59.62 | 0.0000 | 3 | 100.00% | 26.7 |
 | 44 | Statement 1 | Every integral domain with charac... | ✗ | 0.00 | 0.0000 | - | - | - |

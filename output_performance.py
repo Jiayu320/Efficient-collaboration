@@ -4,6 +4,7 @@ from typing import Dict, Any, List, Tuple
 import transformers
 import os
 import sys
+from log_config import setup_logger, get_logger, log_separator
 
 # 初始化tokenizer（全局变量）
 try:
@@ -13,6 +14,8 @@ try:
     )
 except Exception as e:
     print(f"警告: 无法加载DeepSeek tokenizer: {e}")
+    logger = get_logger()
+    logger.error(f"无法加载DeepSeek tokenizer: {e}", exc_info=True)
     tokenizer = None
 
 def count_tokens(text):
@@ -30,7 +33,9 @@ def count_tokens(text):
             return len(tokens)
         except Exception as e:
             print(f"警告: 使用DeepSeek tokenizer计算token失败: {e}")
-    
+            logger = get_logger()
+            logger.error(f"使用DeepSeek tokenizer计算token失败: {e}", exc_info=True)
+
     # 回退方法：使用简单的估计方法 (4个字符≈1个token)
     return len(text) // 4
 
@@ -90,10 +95,12 @@ def get_model_performance(model_name: str) -> Dict[str, float]:
         return {"latency": calculate_average([0.55, 0.69, 0.86, 0.48]), 
                 "throughput": calculate_average([89.21, 94.59, 148.4, 15.58])}
     elif "llama-3.2-3b" in model_name_lower or "llama3.2-3b" in model_name_lower:
-        return {"latency": 0.71, "throughput": 165.0}
+        return {"latency": calculate_average([0.54, 0.40, 0.76, 0.38, 0.37]), "throughput": calculate_average([128.3, 53.67, 181.8, 229.9, 96.15])}
     elif "llama-3.3-70b" in model_name_lower or "llama3.3-70b" in model_name_lower:
         return {"latency": calculate_average([0.55, 0.25, 0.72, 0.68, 0.57]), 
                 "throughput": calculate_average([57.97, 40.28, 51.03, 75.79, 41.67])}
+    elif "llama-3.2-1b" in model_name_lower or "llama3.2-1b" in model_name_lower:
+        return {"latency": calculate_average([1.45, 0.48, 0.31]), "throughput": calculate_average([17.43, 61.09, 439.1])}
     
     # Qwen系列
     elif "qwen3-4b" in model_name_lower:
@@ -113,6 +120,8 @@ def get_model_performance(model_name: str) -> Dict[str, float]:
 
     else:
         print(f"警告: 未识别的模型 '{model_name}'，使用默认性能")
+        logger = get_logger()
+        logger.warning(f"未识别的模型 '{model_name}'，使用默认性能: latency:0.5s, throughput:71.2tokens/s。请在 output_performance.py 中添加此模型的性能信息。")
         return {"latency": 0.5, "throughput": 71.2}
 
 def calculate_theoretical_time(model_name: str, tokens: int) -> Dict[str, float]:
@@ -214,6 +223,8 @@ def generate_theoretical_performance_report(tasks, config, planner_output=None):
         # 如果没有提供planner输出信息，基于任务数估算
         plan_tokens = len(tasks) * 100  # 每个任务约需100个token
         print(f"使用估算的planner输出token数: {plan_tokens}")
+        logger = get_logger()
+        logger.warning(f"使用估算的planner输出token数: {plan_tokens}")
     
     # 计算路由模型的理论时间（初始化 + 生成计划）
     planner_generation_time = plan_tokens / router_performance['throughput']
@@ -503,6 +514,8 @@ def generate_gantt_chart(task_timelines, max_workers, width=80):
         ASCII甘特图文本
     """
     if not task_timelines:
+        logger = get_logger()
+        logger.warning("没有任务执行数据可供显示甘特图。")
         return "没有任务执行数据可供显示。"
     
     # 确定时间范围

@@ -929,29 +929,45 @@ You will be assigning tasks to two available models. Use their profiles below to
 
 1.  **Analyze the Problem**: Break down the problem into its core logical components.
 2.  **Strategic Milestones**: Focus on the high-level, conceptual milestones required to solve the problem.
-3.  **Delegate Knowledge Retrieval**: If a formula or principle is needed, create a step that *asks* for it.
-4.  **Maximize Parallelism**: Decompose into as many independent sub-tasks as possible.
-5.  **Formulate Actionable Questions**: The `Task` attribute must be a clear, self-contained question ending with a question mark (?). Do not leak answers in the task description.
-6.  **Construct the XML Plan**:
+3.  **Maximize Parallelism**: Decompose into as many independent sub-tasks as possible.
+4.  **Formulate Actionable Questions**: The `Task` attribute must be a clear, self-contained question ending with a question mark (?). Do not leak answers in the task description.
+5.  **Construct the XML Plan**:
       * `ID`: A unique integer.
       * `Task`: The question for the executor AI.
       * `Difficulty`: An integer from 1-9.
           * **1-4 (Small Model):** Procedural tasks, basic calculations, applying a known formula.
           * **5-9 (Large Model):** Complex reasoning, synthesis, or critical knowledge retrieval.
       * `Token`: An integer representing the estimated number of tokens the executor will need to generate for the answer.
-      * `Rely`: The `ID`(s) of prerequisite steps. Only create necessary dependencies.
-7.  **Use Aggregation Steps**: Create a final step to synthesize the results from previous steps and derive the final conclusion.
-8.  **Keep it Concise**: The final plan must contain **fewer than 10 steps**. Focus only on the most critical milestones needed to solve the problem.
+      * `Rely`: The `ID`(s) of prerequisite steps. Only create necessary dependencies. If there are multiple dependencies, separate them with commas.
+6.  **Use Aggregation Steps**: Create a final step to synthesize the results from previous steps and derive the final conclusion.
+7.  **Keep it Concise**: The final plan must contain **fewer than 6 steps**. Focus only on the most critical milestones needed to solve the problem.
 
 ### **Example**
 
 **Problem**: Four years ago, Kody was only half as old as Mohamed. If Mohamed is currently twice 30 years old, how old is Kody?
-
 **Output**:
 <Plan>
 <Step ID="1" Task="How old is Mohamed now?" Difficulty="2" Token="10" Rely=""/>
 <Step ID="2" Task="How old was Mohamed four years ago?" Difficulty="1" Token="10" Rely="1"/>
 <Step ID="3" Task="How old was Kody four years ago?" Difficulty="2" Token="10" Rely="2"/>
+</Plan>
+
+**Problem**: Find the degree for the given field extension Q(sqrt(2), sqrt(3), sqrt(18)) over Q.\n\nA. 0\nB. 4\nC. 2\nD. 6\n\nPlease select the correct answer and provide the final option letter and its corresponding content.
+**Output**:
+<Plan>
+<Step ID="1" Task="What is the degree of the field extension Q(sqrt(2), sqrt(3)) over Q?" Difficulty="4" Token="20" Rely=""/>
+<Step ID="2" Task="What is the degree of the field extension Q(sqrt(18)) over Q?" Difficulty="2" Token="15" Rely=""/>
+<Step ID="3" Task="How can the degrees from Step 1 and Step 2 be combined to determine the degree of Q(sqrt(2), sqrt(3), sqrt(18)) over Q?" Difficulty="6" Token="25" Rely="1,2"/>
+</Plan>
+
+**Problem**: The set of all real numbers under the usual multiplication operation is not a group since\n\nA. multiplication is not a binary operation\nB. multiplication is not associative\nC. identity element does not exist\nD. zero has no inverse\n\nPlease select the correct answer and provide the final option letter and its corresponding content.
+**Output**:
+<Plan>
+<Step ID="1" Task="What is a binary operation and does multiplication of real numbers satisfy this property?" Difficulty="3" Token="20" Rely=""/>
+<Step ID="2" Task="Is multiplication associative for all real numbers?" Difficulty="2" Token="10" Rely=""/>
+<Step ID="3" Task="What is the identity element in multiplication of real numbers and does it exist?" Difficulty="3" Token="15" Rely=""/>
+<Step ID="4" Task="Does the zero element have an inverse under multiplication for all real numbers?" Difficulty="2" Token="10" Rely=""/>
+<Step ID="5" Task="Considering the properties checked, which of the options A, B, C, or D is correct regarding why the set of all real numbers under multiplication is not a group?" Difficulty="5" Token="25" Rely="1,2,3,4"/>
 </Plan>
 
 **Now, based on the following `Problem`, generate a response that meets all the requirements above.**
@@ -1235,7 +1251,7 @@ You will be assigning tasks to two available models. Use their profiles below to
             logger.info(f"----------------- 使用本地路由模型: {config.local_router_model} -----------------")
             logger.info(f"温度: {temperature}, top_p: {top_p}, max_tokens: {max_tokens}, enable_thinking: {enable_thinking}")
         else:
-            temperature = 1
+            temperature = 0.5
             top_p = 0.95
             max_tokens = 600
             enable_thinking = False

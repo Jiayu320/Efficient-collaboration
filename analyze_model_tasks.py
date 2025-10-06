@@ -76,7 +76,7 @@ def generate_markdown_section(stats):
 
 def main():
 
-    json_file_path = r"D:\JIAYU\Documents\GitHub\Efficient-collaboration\data_reports\dataset\MMLU-STEM\local_router\gpt-4o\qwen2.5-3b-instruct\20251004_141112\dataset_results.json"
+    json_file_path = r"D:\JIAYU\Documents\GitHub\Efficient-collaboration\data_reports\dataset\MMLU-STEM\qwen3-1.7b\gpt-4o\qwen2.5-3b-instruct\20251006_001200\dataset_results.json"
     threshold = 5
     
     # 确保文件存在
