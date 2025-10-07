@@ -74,6 +74,8 @@ def get_model_performance(model_name: str) -> Dict[str, float]:
         return {"latency": calculate_average([0.50, 0.97]), "throughput": calculate_average([110.5, 178.5])}
     elif "gpt-5" in model_name_lower:
         return {"latency": calculate_average([6.96, 7.03, 5.23]), "throughput": calculate_average([53.20, 53.43, 45.09])}
+    elif "gpt-4.1-mini" in model_name_lower:
+        return {"latency": 0.70, "throughput": 69.59}
 
     # DeepSeek系列
     elif "deepseek-r1" in model_name_lower:

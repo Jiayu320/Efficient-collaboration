@@ -11,7 +11,6 @@ from threading import Lock
 from typing import Dict, List, Tuple, Any, Optional, Set
 import itertools
 
-# 使用 tqdm 提供优雅的进度条
 from tqdm import tqdm
 
 try:
@@ -22,7 +21,7 @@ except ImportError:
 
 
 # --- 1. 配置模块 ---
-ROUTER_MODEL = "qwen3-235b-a22b" 
+ROUTER_MODEL = "qwen3-4b"
 ROUTER_KEY_PATHS = [
     "usage/qwen", "usage/qwen1", "usage/qwen2", "usage/qwen3", "usage/qwen4",
 ]
@@ -32,15 +31,15 @@ MAX_RETRIES = 3
 RETRY_DELAY = 5
 API_TIMEOUT = 300.0
 
-SOURCE_DATA_PATH = "dataset/TestData/s1k1_data.json"
-OUTPUT_DIR = "data_reports/dataset/s1k1_data/qwen3-235b-a22b-thinking-2507/gpt-4o/qwen2.5-3b-instruct/20250924_013352"
+SOURCE_DATA_PATH = "dataset/TestData/training_data_2200.json"
+OUTPUT_DIR = "data_reports/dataset/training_data_2200/qwen3-4b/gpt-4o/llama-3.2-3b-instruct/20251006_221702"
 LOG_DIR = os.path.join(OUTPUT_DIR, "logs")
 
-OUTPUT_W_THINKING_PATH = os.path.join(OUTPUT_DIR, "datasetTraining_w_thinking.json")
+# 简化输出路径，只保留一个
 OUTPUT_WO_THINKING_PATH = os.path.join(OUTPUT_DIR, "datasetTraining_wo_thinking.json")
 
-lock_w_thinking = Lock()
-lock_wo_thinking = Lock()
+# 只需要一个文件锁
+file_lock = Lock()
 
 
 # --- 2. 日志模块 ---
@@ -63,7 +62,7 @@ def setup_logger() -> logging.Logger:
 logger = setup_logger()
 
 
-# --- 3. API 调用模块 (切换为流式) ---
+# --- 3. API 调用模块 (流式) ---
 def get_api_key(path: str) -> Optional[str]:
     if not os.path.exists(path):
         logger.warning(f"API密钥文件 '{path}' 未找到，将跳过。")
@@ -84,7 +83,7 @@ def get_model_response(system_prompt: str, user_prompt: str, api_key: str):
             timeout=API_TIMEOUT,
         )
         
-        # *** MODIFIED: 切换为流式调用 ***
+        # 切换为流式调用，并移除 enable_thinking
         stream = client.chat.completions.create(
             model=ROUTER_MODEL,
             messages=[
@@ -92,13 +91,11 @@ def get_model_response(system_prompt: str, user_prompt: str, api_key: str):
                 {'role': 'user', 'content': user_prompt}
             ],
             stream=True,
-            temperature=0.5, # 根据您的需要调整
-            extra_body={"enable_thinking": True} # 启用思考过程
+            temperature=1,
+            extra_body={"enable_thinking": False}
         )
 
-        # 从流中提取数据
         full_content_parts = []
-        reasoning_content = None
         request_id = None
         
         # 从响应头中获取 request_id
@@ -106,30 +103,14 @@ def get_model_response(system_prompt: str, user_prompt: str, api_key: str):
             request_id = stream.response.headers.get('x-request-id')
 
         for chunk in stream:
-            # 拼接内容
             if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
                 full_content_parts.append(chunk.choices[0].delta.content)
-
-            # 尝试从非内容块中解析 reasoning_content
-            # 通常它存在于第一个或某个特殊的chunk中
-            if not reasoning_content:
-                try:
-                    chunk_dict = chunk.model_dump()
-                    if (choices := chunk_dict.get("choices")) and choices:
-                        # thinking/reasoning内容可能在 'message' 字段下
-                        if (message := choices[0].get("message")) and message:
-                             if reasoning := message.get("reasoning_content"):
-                                 reasoning_content = reasoning
-                except Exception:
-                    # 某些chunk可能没有这些字段，忽略解析错误
-                    pass
         
         final_text = "".join(full_content_parts)
         
         return {
             "text": final_text,
             "request_id": request_id,
-            "reasoning": reasoning_content
         }
 
     except Exception as e:
@@ -143,7 +124,8 @@ def load_existing_data(filepath: str) -> Set:
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
             data = json.load(f)
-            return {item.get('instruction', '') for item in data}
+            # 确保 instruction 字段存在
+            return {item.get('instruction', '') for item in data if 'instruction' in item}
     except (json.JSONDecodeError, FileNotFoundError):
         logger.warning(f"无法解析或找到文件 '{filepath}'，将视为空文件。")
         return set()
@@ -153,121 +135,131 @@ def append_to_json(filepath: str, data_item: Dict[str, Any], lock: Lock):
         try:
             if os.path.exists(filepath) and os.path.getsize(filepath) > 0:
                 with open(filepath, 'r+', encoding='utf-8') as f:
+                    # 读取现有数据，追加新项，然后重写文件
                     json_data = json.load(f)
                     json_data.append(data_item)
-                    f.seek(0); json.dump(json_data, f, indent=4, ensure_ascii=False); f.truncate()
+                    f.seek(0)
+                    json.dump(json_data, f, indent=4, ensure_ascii=False)
+                    f.truncate()
             else:
+                # 文件不存在或为空，创建并写入新列表
                 with open(filepath, 'w', encoding='utf-8') as f:
                     json.dump([data_item], f, indent=4, ensure_ascii=False)
         except Exception as e:
             logger.error(f"写入文件 '{filepath}' 失败: {e}")
 
-def parse_model_output(text: str) -> Tuple[str, str]:
-    think_content = ""; plan_content = ""
-    think_match = re.search(r"<think>(.*?)</think>", text, re.DOTALL)
-    if think_match: think_content = think_match.group(1).strip()
-    else: logger.warning("在模型输出中未找到 <think> 标签。")
+def parse_model_output(text: str) -> str:
+    """仅解析并返回<Plan>标签及其内容"""
     plan_match = re.search(r"<Plan>(.*?)</Plan>", text, re.DOTALL)
-    if plan_match: plan_content = f"<Plan>{plan_match.group(1).strip()}</Plan>"
+    if plan_match:
+        # 重新构建完整的<Plan>标签内容
+        plan_content = f"<Plan>{plan_match.group(1).strip()}</Plan>"
+        return plan_content
     else:
-        logger.warning("在模型输出中未找到 <Plan> 标签。")
-        if not think_content and "<Plan>" in text: plan_content = text
-    full_output = f"<think>\n{think_content}\n</think>\n{plan_content}" if think_content else plan_content
-    return full_output, plan_content
+        logger.warning("在模型输出中未找到 <Plan> 标签，将返回原始输出。")
+        # 如果没有找到<Plan>，返回原始文本以防数据丢失
+        return text.strip()
 
 
 # --- 5. 主逻辑模块 ---
 def generate_prompts(query: str) -> Tuple[str, str]:
-    system_prompt = '''You are an expert **first-principles thinker and master strategist**. Your primary function is to deconstruct any complex problem into a clear, logical, and operational sequence of steps for a machine to execute.
+    system_prompt = """You are an expert AI cognitive scientist and systems architect. Your mission is to analyze a given problem and create a structured XML plan that follows the **Explain-Analyze-Generate (EAG)** framework.
 
-Given a problem, your output must consist of two parts, in this exact order:
+The plan will be executed by a multi-threaded AI system using two distinct models. Your task decomposition and difficulty assignments must leverage the unique capabilities of these models.
 
-1.  A **`<think>` block**: Contains your high-level strategic analysis of the problem.
-2.  A **`<Plan>` block**: Contains the XML-formatted, step-by-step operational plan.
+### **Executor Model Profiles**
+You will be assigning tasks to two available models. Use their profiles below to accurately estimate the `Difficulty` for each step:
+  * **Small Model (Llama 3.2 3B): A highly capable and efficient small model. It excels at tasks requiring strong instruction-following, summarization, and rewriting. It is proficient in standard grade-school math (GSM8K) and common-sense reasoning (ARC Challenge). Use this model for well-defined, procedural, or structured tasks.
+  * **Large Model (GPT-4o): A powerful, state-of-the-art large model with a vast knowledge base. It demonstrates superior performance in tasks requiring deep reasoning and expert-level knowledge, such as advanced scientific reasoning (GPQA Diamond, MMLU-Pro), competition-level math (AIME), and complex coding (LiveCodeBench). It is the preferred choice for tasks requiring synthesis, critical analysis, and solving problems in specialized domains.
 
-**Part 1: The `<think>` Block**
-Before generating the plan, you must first perform and explicitly state your strategic analysis within `<think>` tags. This analysis must be thorough and answer the following three questions:
+### **Plan Structure: The EAG Framework**
+Your generated `<Plan>` **must** be structured into three logical stages:
 
-  * **Core Principle Identification**: What are the fundamental principles, theorems, or formulas required to solve this problem? Be specific (e.g., "This requires the prime factorization of 20\!, followed by a combinatorial count using the number of distinct prime factors," not just "number theory").
-  * **Pitfall Prediction**: What are the most likely traps? This includes:
-      * *Conceptual Traps*: Misinterpreting definitions (e.g., confusing midsegment with area bisector), mixing up reference frames, making incorrect assumptions.
-      * *Calculation Traps*: Overlooking special cases/exceptions (e.g., initial terms in a series), using the wrong formula (e.g., for error propagation or molecular speed), making unit conversion errors (e.g., g/mol vs kg/molecule).
-      * *Completeness Traps*: Stopping the reasoning process too early and failing to perform the final calculation or count.
-  * **Strategy Formulation**: Based on the principles and pitfalls, what is your high-level, step-by-step strategy? **This strategy must be concrete.** For any calculation step, explicitly state the formula or method you intend to use. (e.g., "First, find the prime factors of N. Second, count the number of distinct prime factors, let's say `k`. Third, the number of coprime factor pairs is `2^(k-1)`. Finally, calculate this value.").
+1.  **Step 1: The "Explain" Step**
+      * The plan must begin with a single, foundational step (ID="1").
+      * **Task:** The task for this step is directly inspired by the Explainer agent's role. It must be phrased as follows:
+        > **"To assist the following agents, what is your understanding of the question after reviewing it, focusing only on essential information and filtering out all irrelevant details?"**
 
-**Part 2: The `<Plan>` Block**
-After the `<think>` block, generate a solution plan that is a direct, operational implementation of your stated strategy. The plan must adhere to these strict constraints:
+2.  **The "Analyze" Steps**
+      * These are the intermediate steps that perform the core logical work.
+      * **Task:** Break down the problem into the smallest possible, independent sub-tasks to solve the problem. These steps should rely on the "Explain" step (i.e., `Rely="1"`) or other completed analysis steps.
+      * **Core Directives for Plan Generation**:
+        1.  **Analyze the Problem**: Break down the problem into its core logical components.
+        2.  **Strategic Milestones**: Focus on the high-level, conceptual milestones required to solve the problem.
+        3.  **Maximize Parallelism**: Decompose into as many independent sub-tasks as possible.
+        4.  **Formulate Actionable Questions**: The `Task` attribute must be a clear, self-contained question ending with a question mark (?). Do not leak answers in the task description.
+        5.  **Delegate Knowledge Retrieval**: If a specific formula, theorem, or principle is required, your task is to create a step that **asks for that formula or principle** (e.g., "What is the formula for...?"). Delegate the retrieval of specific knowledge to the Executor.
+      * **Goal:** Maximize parallelism. If multiple pieces of information can be processed independently, create a separate step for each.
 
-#### **XML Plan Constraints:**
+3.  **The Final "Generate" Step**
+      * The plan must conclude with a single aggregation step.
+      * **Task:** The task for this step is directly inspired by the Generator agent's role. It must be phrased as follows:
+        > **"After reviewing the original question and the thoughts of previous agents, what is the final answer to the question?"**
+**Keep the plan Concise**: The final plan must contain **fewer than 7 steps**. Focus only on the most critical milestones needed to solve the problem.
 
-1.  **Plan Length**: Must contain between 2 and 10 steps.
-2.  **Actionable & Precise Steps**: Each `<Step>` `Task` must be a distinct and **unambiguous operational instruction**.
-      * For conceptual steps, ask a precise question about a definition or property.
-      * For calculation steps, **the task must specify the exact formula or method to be used** (e.g., "Using the formula for coprime factor pairs, `2^(k-1)`, calculate the total number where `k` is the number of distinct prime factors?").
-3.  **Logical Flow & Completeness**: The plan must represent a clear logical progression from start to finish. **The final step must be the final numerical calculation or conclusive statement.**
-4.  **Contextual Linking**: When a step `N` relies on a step `M`, the `Task` for step `N` should explicitly reference the output or variables from `M`.
-5.  **Difficulty**: Mark steps requiring non-trivial synthesis with `Difficulty >= 5`.
-6.  **Attribute Integrity**: All attributes must be correctly formatted. The `Task` must end with a question mark (?).
-7.  **XML Format**: Output ONLY the `<think>` and `<Plan>` blocks as specified.
+### **XML Plan Constraints**
+  * `ID`: A unique integer.
+  * `Task`: The question for the executor AI. Must end with a question mark (?).
+  * `Difficulty`: An integer from 1-9.
+      * **1-4 (Small Model):** Procedural tasks, basic calculations, applying a known formula.
+      * **5-9 (Large Model):** Complex reasoning, synthesis, or critical knowledge retrieval.
+  * `Token`: An estimated integer for the answer's token count.
+  * `Rely`: The `ID`(s) of prerequisite steps, separated by commas if multiple.
 
------
-
-### **Examples of Good vs. Flawed Plans**
-
-#### **Good Example \#1: Correct Core Principle and Complete Plan**
-
-**Question**: "For how many rational numbers between 0 and 1 will $20\!$ be the resulting product of their numerator and denominator in lowest terms?"
-
-**Response**:
-<think>
-**Core Principle Identification**: The core principle is number theory, specifically concerning prime factorization and coprime numbers. A rational number `a/b` is in lowest terms if `gcd(a, b) = 1`. The condition `a*b = 20!` means `a` and `b` must be formed by partitioning the prime factors of `20!`. For `a` and `b` to be coprime, they cannot share any prime factors.
-**Pitfall Prediction**: The primary trap is stopping after identifying the principle and failing to perform the final count. The second trap is miscounting; the number of ways to partition `k` distinct items into two groups is `2^k`, but since `a/b` must be between 0 and 1, `a` must be less than `b`. This means we must exclude the case `a=b` (if possible) and divide the remaining pairs by 2. For a number like `20!` which is not a perfect square, `a` can never equal `b`.
-**Strategy Formulation**: 1. Find the prime factorization of 20\!. 2. Identify the number of *distinct* prime factors, let's call this `k`. 3. For `a` and `b` to be coprime, each distinct prime factor's entire power (e.g., `2^18`) must go entirely to either `a` or `b`. There are `2^k` ways to distribute these `k` distinct prime factors into two sets. 4. Since `a < b`, we divide the total number of pairs by 2. The case `a=b` is impossible as 20\! is not a perfect square. Thus the final answer is `2^k / 2 = 2^(k-1)`. 5. I will execute this final calculation.
-</think>
+### Examples
+**Problem**: Four years ago, Kody was only half as old as Mohamed. If Mohamed is currently twice 30 years old, how old is Kody?
+**Output**:
 <Plan>
-<Step ID="1" Task="What are the distinct prime factors of 20\! ?" Difficulty="4" Token="50" Rely=""/>
-<Step ID="2" Task="Count the number of distinct prime factors found in Step 1. Let this count be k. What is the value of k?" Difficulty="2" Token="20" Rely="1"/>
-<Step ID="3" Task="The number of pairs of coprime factors (a,b) of 20\! is 2^k. The number of rational numbers a/b between 0 and 1 is half of this. Using the formula N = 2^(k-1), what is the final number of such rational numbers?" Difficulty="4" Token="50" Rely="2"/>
+<Step ID="1" Task="To assist the following agents, what is your understanding of the question after reviewing it, focusing only on essential information and filtering out all irrelevant details?" Difficulty="3" Token="60" Rely=""/>
+<Step ID="2" Task="Based on the explanation in Step 1, what is Mohamed's current age?" Difficulty="2" Token="10" Rely="1"/>
+<Step ID="3" Task="Using Mohamed's current age from Step 2, what was his age four years ago?" Difficulty="1" Token="10" Rely="2"/>
+<Step ID="4" Task="Based on Mohamed's age four years ago, what was Kody's age four years ago?" Difficulty="2" Token="10" Rely="3"/>
+<Step ID="5" Task="After reviewing the original question and the thoughts of previous agents, what is the final answer to the question?" Difficulty="2" Token="15" Rely="4"/>
 </Plan>
 
------
-
-#### **Bad Example \#1: Flawed Geometric Model**
-
-**Question**: "One base of a trapezoid is $100$ units longer than the other base. The segment that joins the midpoints of the legs divides the trapezoid into two regions whose areas are in the ratio $2:3$. Let $x$ be the length of the segment that divides the trapezoid into two regions of equal area. Find the greatest integer that does not exceed $x^2/100$."
-
-**Flawed Plan**:
+**Question**: "Which of the following stars or stellar systems will appear the brightest in V magnitude when observed from Earth? Assume there is no extinction. [List of 6 options with apparent/absolute magnitudes and distances]"
+**Output**:
 <Plan>
-<Step ID="1" Task="If we denote the shorter base as 'a' and the longer base as 'a + 100', what is the length of the segment joining the midpoints of the legs?" Difficulty="2" Token="30" Rely=""/>
-<Step ID="2" Task="Using the fact that the midpoint segment divides the trapezoid into regions with area ratio 2:3, what equation can we write relating a and the height h?" Difficulty="5" Token="60" Rely="1"/>
-<Step ID="3" Task="What is the length x of the equal-area-dividing segment in terms of a?" Difficulty="4" Token="50" Rely=""/>
-<Step ID="4" Task="Calculate x²/100 and find the greatest integer." Difficulty="3" Token="30" Rely="2,3"/>
+<Step ID="1" Task="What is the formula for calculating the combined apparent magnitude of a multi-star system from the individual apparent magnitudes of its components?" Difficulty="2" Rely=""/>
+<Step ID="2" Task="What is the distance modulus formula that relates a star's apparent magnitude (m), its absolute magnitude (M), and its distance in parsecs (d)?" Difficulty="2" Rely=""/>
+<Step ID="3" Task="For each of the six options (a-f) provided in the problem, calculate its final apparent V magnitude as observed from Earth. Use the formulas from Step 1 and 2 where necessary. List the final apparent magnitude for each option." Difficulty="6" Rely="1,2"/>
+<Step ID="4" Task="Based on the six apparent magnitude values calculated in Step 3, which star or stellar system is the brightest (i.e., has the numerically lowest magnitude value)?" Difficulty="2" Rely="3"/>
 </Plan>
-**Justification for why this is flawed**: This plan is **conceptually flawed**. It incorrectly assumes that the information about the "midpoint segment" (midsegment) can be directly used to find the base `a`. The midsegment divides the trapezoid's height in half, creating two smaller trapezoids. The ratio of their areas is fixed by the lengths of the bases and does not depend on `h`. The plan fails to establish the correct geometric relationship (using similar trapezoids and area formulas) needed to find `a`.
 
------
-
-#### **Bad Example \#2: Ignoring Exceptions and Incomplete Plan**
-
-**Question**: "Find the remainder when $9 \\times 99 \\times 999 \\times \\cdots \\times \\underbrace{99\\cdots9}\_{\\text{999 9's}}$ is divided by $1000$."
-
-**Flawed Plan**:
+**Question**: "Identify the compound C9H11NO2 using the given data. IR: medium to strong intensity bands at 3420 cm-1, 3325 cm-1; strong band at 1720 cm-1. 1H NMR: 1.20 ppm (t, 3H); 4.0 ppm (bs, 2H); 4.5 ppm (q, 2H); 7.0 ppm (d, 2H), 8.0 ppm (d, 2H)."
+**Output**:
 <Plan>
-<Step ID="1" Task="How can we express a number with n consecutive 9's in terms of powers of 10?" Difficulty="2" Token="20" Rely=""/>
-<Step ID="2" Task="What are the remainders when 9, 99, and 999 are divided by 1000?" Difficulty="3" Token="30" Rely=""/>
-<Step ID="3" Task="For numbers with 4 or more 9's, what is their remainder when divided by 1000?" Difficulty="4" Token="40" Rely="1"/>
-<Step ID="4" Task="How many terms in our product have a remainder of 999?" Difficulty="3" Token="30" Rely=""/>
-<Step ID="5" Task="What is the final remainder of the entire product?" Difficulty="4" Token="50" Rely="2,3,4"/>
+<Step ID="1" Task="What functional group(s) are indicated by the IR absorption bands at 3420, 3325, and 1720 cm-1?" Difficulty="4" Rely=""/>
+<Step ID="2" Task="In the 1H NMR spectrum, what structural fragment is suggested by the combination of a triplet signal at 1.20 ppm (3H) and a quartet signal at 4.5 ppm (2H)?" Difficulty="4" Rely=""/>
+<Step ID="3" Task="In the 1H NMR spectrum, what structural feature is suggested by the presence of two distinct doublet signals at 7.0 ppm (2H) and 8.0 ppm (2H) in the aromatic region?" Difficulty="5" Rely=""/>
+<Step ID="4" Task="What does the broad singlet signal at 4.0 ppm (2H) in the 1H NMR spectrum, combined with the IR data from Step 1, suggest about the functional group present?" Difficulty="5" Rely="1"/>
+<Step ID="5" Task="Based on the fragments identified in the previous steps (a para-substituted aromatic ring, an ethyl group, and an amine/ester/amide functional group), assemble a complete molecular structure that matches the formula C9H11NO2." Difficulty="7" Rely="1,2,3,4"/>
+<Step ID="6" Task="Compare the structure deduced in Step 5 with the provided options to identify the correct compound name." Difficulty="2" Rely="5"/>
 </Plan>
-**Justification for why this is flawed**: This plan is **incomplete and invites error**. While it correctly separates some cases, Step 5 is too vague. A good plan would have separate, explicit steps to: (a) calculate the product of the remainders of the special cases (`9 * 99`), (b) calculate the product of the remainders of the general cases (`999^997`), and (c) multiply the results from (a) and (b) together modulo 1000. Lumping these into one step caused the model to forget one of the terms in the final calculation.
 
------
+**Problem**: Find the degree for the given field extension Q(sqrt(2), sqrt(3), sqrt(18)) over Q.\\n\\nA. 0\\nB. 4\\nC. 2\\nD. 6
+**Output**:
+<Plan>
+<Step ID="1" Task="To assist the following agents, what is your understanding of the question after reviewing it, focusing only on essential information and filtering out all irrelevant details?" Difficulty="4" Token="50" Rely=""/>
+<Step ID="2" Task="Is there a dependency between sqrt(2), sqrt(3), and sqrt(18)? Simplify the field extension Q(sqrt(2), sqrt(3), sqrt(18)) if possible." Difficulty="3" Token="30" Rely="1"/>
+<Step ID="3" Task="Based on the simplified field extension from Step 2, what is the degree of this extension over Q?" Difficulty="5" Token="30" Rely="2"/>
+<Step ID="4" Task="After reviewing the original question and the thoughts of previous agents, what is the final answer to the question?" Difficulty="2" Token="20" Rely="3"/>
+</Plan>
 
-# FINAL INSTRUCTION: EXECUTE NOW
+**Problem**: The set of all real numbers under the usual multiplication operation is not a group since\\n\\nA. multiplication is not a binary operation\\nB. multiplication is not associative\\nC. identity element does not exist\\nD. zero has no inverse
+**Output**:
+<Plan>
+<Step ID="1" Task="To assist the following agents, what is your understanding of the question after reviewing it, focusing only on essential information and filtering out all irrelevant details?" Difficulty="3" Token="50" Rely=""/>
+<Step ID="2" Task="Check the closure property: Is multiplication a binary operation on the set of all real numbers?" Difficulty="2" Token="20" Rely="1"/>
+<Step ID="3" Task="Check the associative property: Is multiplication of real numbers associative?" Difficulty="2" Token="20" Rely="1"/>
+<Step ID="4" Task="Check the identity property: Is there an identity element for multiplication in the set of real numbers?" Difficulty="2" Token="20" Rely="1"/>
+<Step ID="5" Task="Check the inverse property: Does every element in the set of real numbers have a multiplicative inverse?" Difficulty="3" Token="30" Rely="1"/>
+<Step ID="6" Task="After reviewing the original question and the thoughts of previous agents, what is the final answer to the question?" Difficulty="4" Token="30" Rely="2,3,4,5"/>
+</Plan>
 
-Apply the entire framework described above to the problem provided below. Remember, your final output must ONLY be the `<think>` block followed by the `<Plan>` block, with no other text whatsoever.
+Now, based on the following Problem, generate a response that meets all the requirements above. The final plan must contain **fewer than 7 steps**. 
+"""
 
-'''
     user_prompt = f'''
         **Question**: {query}
         **Plan**:
@@ -293,33 +285,33 @@ def process_single_item(item: Dict[str, Any], api_key: str):
         logger.error(f"问题 '{problem_query[:80]}...' 的API调用失败或返回为空对象。")
         return
 
-    # 从返回的字典中解包数据
     response_text = response_data["text"]
     request_id = response_data["request_id"]
-    reasoning_content = response_data["reasoning"]
 
     if not response_text or not response_text.strip():
         log_msg = (
             f"问题 '{problem_query[:80]}...' 的模型响应内容为空或仅含空白，跳过此条目。 "
             f"Request ID: {request_id or 'N/A'}"
         )
-        if reasoning_content:
-            log_msg += f"\n----- Model Reasoning -----\n{reasoning_content}\n--------------------------"
-        
         logger.error(log_msg)
         return
 
     api_key_suffix = api_key[-4:] if api_key else "N/A"
     logger.info(f"===== Planner Response (Key: ...{api_key_suffix}) =====\n{response_text}")
     
-    output_w_thinking, output_wo_thinking = parse_model_output(response_text)
+    # 解析输出，现在只返回一个结果
+    final_output = parse_model_output(response_text)
     
-    base_data = {"instruction": problem_query, "input": "", "system": system_prompt}
-    data_w_thinking = {**base_data, "output": output_w_thinking}
-    data_wo_thinking = {**base_data, "output": output_wo_thinking}
+    # 构建要保存的数据
+    data_to_save = {
+        "instruction": problem_query,
+        "input": "",
+        "system": system_prompt,
+        "output": final_output
+    }
 
-    append_to_json(OUTPUT_W_THINKING_PATH, data_w_thinking, lock_w_thinking)
-    append_to_json(OUTPUT_WO_THINKING_PATH, data_wo_thinking, lock_wo_thinking)
+    # 写入单个JSON文件
+    append_to_json(OUTPUT_WO_THINKING_PATH, data_to_save, file_lock)
     logger.info(f"已成功处理并保存问题: {problem_query[:80]}...")
 
 
@@ -335,6 +327,7 @@ def main():
         return
     logger.info(f"成功加载 {len(api_keys)} 个API Keys。")
     
+    # 使用API Key的数量作为并行数
     max_workers = len(api_keys)
     logger.info(f"并行线程数将设置为: {max_workers}")
     
@@ -347,7 +340,8 @@ def main():
     except (FileNotFoundError, json.JSONDecodeError) as e:
         logger.error(f"无法加载源数据文件 '{SOURCE_DATA_PATH}': {e}"); return
 
-    processed_instructions = load_existing_data(OUTPUT_W_THINKING_PATH)
+    # 从目标输出文件加载已处理的数据
+    processed_instructions = load_existing_data(OUTPUT_WO_THINKING_PATH)
     if processed_instructions:
         logger.info(f"检测到 {len(processed_instructions)} 条已处理的数据，将跳过它们。")
     
@@ -359,10 +353,7 @@ def main():
     logger.info(f"总计需要处理 {len(items_to_process)} 条新数据。")
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = []
-        for item in items_to_process:
-            current_api_key = next(key_cycler)
-            futures.append(executor.submit(process_single_item, item, current_api_key))
+        futures = [executor.submit(process_single_item, item, next(key_cycler)) for item in items_to_process]
         
         for future in tqdm(as_completed(futures), total=len(futures), desc=f"生成数据集(stream, {max_workers}个线程)"):
             try:
@@ -371,8 +362,7 @@ def main():
                 logger.error(f"一个线程任务生成了异常: {exc}", exc_info=True)
 
     logger.info("===== 数据集生成任务完成 =====")
-    logger.info(f"带有思考过程的数据集保存在: {OUTPUT_W_THINKING_PATH}")
-    logger.info(f"不带思考过程的数据集保存在: {OUTPUT_WO_THINKING_PATH}")
+    logger.info(f"数据集保存在: {OUTPUT_WO_THINKING_PATH}")
 
 if __name__ == "__main__":
     main()

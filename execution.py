@@ -110,19 +110,29 @@ def process_xml_buffer():
     
     # 添加到任务字典
     step_id = attrs['ID']
-    # if step_id == 1 and 'Rely' not in attrs:
-    #     attrs['Rely'] = ''
-    # if attrs['ID'] != 1 and 'Rely' not in attrs:
-    #     attrs['Rely'] = ','.join(str(i) for i in range(1, int(attrs['ID'])))
-    #     if attrs['Rely'] == '0':
-    #         attrs['Rely'] = ''
+    if attrs['ID'] == '1':
+        attrs['Rely'] = ''
     # if 'Difficulty' not in attrs:
     #     attrs['Difficulty'] = '5'
+    
+    # 处理Rely字段，确保没有依赖未来的步骤，防止死锁
+    # 如果没有并行则提供最多的信息保证输出更准确
+    if attrs['Rely'] != '':
+        Rely = [i.strip() for i in attrs['Rely'].split(',')]
+        for i in Rely:
+            if int(i) >= int(attrs['ID']):
+                Rely = [j for j in range(1, int(attrs['ID']))]
+                break
+            if str(int(attrs['ID']) - 1) in Rely:
+                Rely = [j for j in range(1, int(attrs['ID']))]
+                break
+        attrs['Rely'] = ','.join(str(i) for i in Rely)
 
     tasks[step_id] = attrs
     tasks[step_id]['Result'] = None  # 添加Result字段
-    
-    # print(f"{step_id}的步骤是，解析出步骤 {step_id}: {attrs}")
+    logger = get_logger()
+    logger.info(f"{step_id}的步骤是，解析出步骤 {step_id}: {attrs}")
+    print(f"{step_id}的步骤是，解析出步骤 {step_id}: {attrs}")
     # 设置当前步骤（用于后续结果收集）
     current_step = step_id
     return True
@@ -640,127 +650,136 @@ def dataset_run_parallel_execution(query, solution, config, workers=4, dataset_b
 
     # 根据是本地还是远程路由模型定义系统提示
     if config.use_local_router:
-        system_prompt = """You are a master AI strategist specializing in advanced problem-solving. Your core function is to deconstruct complex user queries into a highly efficient, logical, and machine-executable plan in XML format.
+        system_prompt = """You are an expert AI cognitive scientist and systems architect. Your mission is to analyze a given problem and create a structured XML plan that follows the **Explain-Analyze-Generate (EAG)** framework.
 
-### Core Directives
-1.  **Ruthless Efficiency**: Generate the **most direct and concise plan** possible with the **absolute minimum number of steps**. If multiple logical operations can be combined into a single, clear task for the expert Executor, you MUST do so. Avoid any and all superfluous steps.
-2.  **Strategic Planning**: Your role is to be a strategist, not a knowledge expert. **Do not provide specific formulas, constants, or factual data from your own knowledge.** Your job is to create steps that instruct the Executor to retrieve and then use that information.
-3.  **Logical Soundness**: Every step in your plan must be based on established scientific principles or logical deduction. **CRITICAL: Never invent, assume, or modify formulas or calculation steps.** Your role is to plan the *use* of established knowledge, not to create it.
-4.  **Executor-Aware Design**: Design tasks that are **unambiguous and self-contained**. The Executor is an expert but follows instructions literally. It will not correct flawed logic in your plan.
+The plan will be executed by a multi-threaded AI system using two distinct models. Your task decomposition and difficulty assignments must leverage the unique capabilities of these models.
 
-### Guided Thinking Process
-Your `<think>` block is a mandatory pre-processing step to ensure a high-quality plan. It must contain:
-1.  **Principle Identification**: Concisely state the core scientific principle(s) needed.
-2.  **Knowledge Requirement Planning**: List the specific pieces of knowledge (e.g., "the formula for X", "the value of constant Y") the Executor must retrieve.
-3.  **Logical Validation**: Briefly validate your intended logical flow. Is it sound? Does it directly address the user's question? Are there any logical leaps or flawed assumptions (e.g., inventing a calculation)? This is a self-correction step.
-4.  **Strategy Formulation**: Outline the final, leanest possible strategy. Justify why this sequence is the most efficient path to the answer.
+### **Executor Model Profiles**
+You will be assigning tasks to two available models. Use their profiles below to accurately estimate the `Difficulty` for each step:
+  * **Small Model (Llama 3.2 3B): A highly capable and efficient small model. It excels at tasks requiring strong instruction-following, summarization, and rewriting. It is proficient in standard grade-school math (GSM8K) and common-sense reasoning (ARC Challenge). Use this model for well-defined, procedural, or structured tasks.
+  * **Large Model (GPT-4o): A powerful, state-of-the-art large model with a vast knowledge base. It demonstrates superior performance in tasks requiring deep reasoning and expert-level knowledge, such as advanced scientific reasoning (GPQA Diamond, MMLU-Pro), competition-level math (AIME), and complex coding (LiveCodeBench). It is the preferred choice for tasks requiring synthesis, critical analysis, and solving problems in specialized domains.
 
-### XML Format Instructions
-1.  The plan must be enclosed in `<Plan>` tags.
-2.  The plan must contain between 2 and 7 `<Step>` tags (reduced to encourage brevity).
-3.  Each `<Step>` must have `ID`, `Task`, `Difficulty`, `Token`, and `Rely` attributes.
-4.  The `Task` must be a clear, actionable instruction that ends with a question mark (?).
-5.  The final step must synthesize previous results to provide the conclusive answer.
-6.  Use the `Rely` attribute to define dependencies.
+### **Plan Structure: The EAG Framework**
+Your generated `<Plan>` **must** be structured into three logical stages:
+
+1.  **Step 1: The "Explain" Step**
+      * The plan must begin with a single, foundational step (ID="1"). These steps should not have any rely (i.e. Rely="").
+      * **Task:** The task for this step is directly inspired by the Explainer agent's role. It must be phrased as follows:
+        > **"To assist the following agents, what is your understanding of the question after reviewing it, focusing only on essential information and filtering out all irrelevant details?"**
+
+2.  **The "Analyze" Steps**
+      * These are the intermediate steps that perform the core logical work.
+      * **Task:** Break down the problem into the smallest possible, independent sub-tasks to solve the problem. These steps should rely on the "Explain" step or other completed analysis steps.
+      * **Core Directives for Plan Generation**:
+        1.  **Analyze the Problem**: Break down the problem into its core logical components.
+        2.  **Strategic Milestones**: Focus on the high-level, conceptual milestones required to solve the problem.
+        3.  **Maximize Parallelism**: Decompose into as many independent sub-tasks as possible.
+        4.  **Formulate Actionable Questions**: The `Task` attribute must be a clear, self-contained question ending with a question mark (?). Do not leak answers in the task description.
+        5.  **Delegate Knowledge Retrieval**: If a specific formula, theorem, or principle is required, your task is to create a step that **asks for that formula or principle** (e.g., "What is the formula for...?"). Delegate the retrieval of specific knowledge to the Executor.
+      * **Goal:** Maximize parallelism. If multiple pieces of information can be processed independently, create a separate step for each.
+
+3.  **The Final "Generate" Step**
+      * The plan must conclude with a single aggregation step.
+      * **Task:** The task for this step is directly inspired by the Generator agent's role. It must be phrased as follows:
+        > **"After reviewing the original question and the thoughts of previous agents, what is the final answer to the question?"**
+**Keep the plan Concise**: The final plan must contain **fewer than 7 steps**. Focus only on the most critical milestones needed to solve the problem.
+
+### **XML Plan Constraints**
+  * `ID`: A unique integer.
+  * `Task`: The question for the executor AI. Must end with a question mark (?).
+  * `Difficulty`: An integer from 1-9.
+      * **1-4 (Small Model):** Procedural tasks, basic calculations, applying a known formula.
+      * **5-9 (Large Model):** Complex reasoning, synthesis, or critical knowledge retrieval.
+  * `Token`: An estimated integer for the answer's token count.
+  * `Rely`: The `ID`(s) of prerequisite steps, separated by commas if multiple.
 
 ### Examples
-
-**Example 1: Mathematics**
-**Problem**: For how many rational numbers between 0 and 1 will $20!$ be the resulting product of their numerator and denominator in lowest terms?
-**Plan**:
-<think>
-**Principle Identification**: The problem involves number theory, specifically counting coprime factors.
-**Knowledge Requirement Planning**: The Executor needs the formula connecting the number of distinct prime factors (k) to the count of valid rational numbers.
-**Logical Validation**: The logic of finding primes, counting them, and applying a known formula is sound and direct.
-**Strategy Formulation**: The most efficient path is: 1. Find prime factors. 2. Count them (k). 3. Retrieve the formula relating k to the answer. 4. Apply the formula using k.
-</think>
+**Problem**: Find the degree for the given field extension Q(sqrt(2), sqrt(3), sqrt(18)) over Q.\\n\\nA. 0\\nB. 4\\nC. 2\\nD. 6
+**Output**:
 <Plan>
-<Step ID="1" Task="What are the distinct prime factors of 20! ?" Difficulty="4" Token="50" Rely=""/>
-<Step ID="2" Task="Count the number of distinct prime factors found in Step 1. Let this count be k. What is the value of k?" Difficulty="2" Token="20" Rely="1"/>
-<Step ID="3" Task="What is the formula that relates the number of distinct prime factors (k) of an integer to the count of rational numbers between 0 and 1 whose numerator and denominator in lowest terms multiply to that integer?" Difficulty="5" Token="60" Rely=""/>
-<Step ID="4" Task="Using the formula from Step 3 and the value of k from Step 2, what is the final number of such rational numbers?" Difficulty="4" Token="50" Rely="2,3"/>
+<Step ID="1" Task="To assist the following agents, what is your understanding of the question after reviewing it, focusing only on essential information and filtering out all irrelevant details?" Difficulty="4" Token="50" Rely=""/>
+<Step ID="2" Task="Is there a dependency between sqrt(2), sqrt(3), and sqrt(18)? Simplify the field extension Q(sqrt(2), sqrt(3), sqrt(18)) if possible." Difficulty="3" Token="30" Rely="1"/>
+<Step ID="3" Task="Based on the simplified field extension from Step 2, what is the degree of this extension over Q?" Difficulty="5" Token="30" Rely="2"/>
+<Step ID="4" Task="After reviewing the original question and the thoughts of previous agents, what is the final answer to the question?" Difficulty="2" Token="20" Rely="3"/>
 </Plan>
 
-**Example 2: Physics (Demonstrating Efficiency)**
-**Problem**: Two quantum states have lifetimes 10^-9s and 10^-8s. To distinguish them, what is the required energy difference?
-**Plan**:
-<think>
-**Principle Identification**: The problem requires the energy-time uncertainty principle.
-**Knowledge Requirement Planning**: The Executor needs to provide the specific formula for the energy-time uncertainty principle.
-**Logical Validation**: To distinguish two states, the energy difference must be greater than the energy width of the state with the *longer* lifetime (which has the *smaller* energy width, setting the resolution limit). This logic is sound. Calculating this one value is sufficient.
-**Strategy Formulation**: The most direct path is a two-step process: 1. Retrieve the formula for energy width (ΔE) from lifetime (Δt). 2. Ask the Executor to apply this formula to the longer lifetime (10^-8 s) to find the minimum required energy difference. This combines calculation and interpretation into one efficient step for the expert Executor.
-</think>
+**Problem**: The set of all real numbers under the usual multiplication operation is not a group since\\n\\nA. multiplication is not a binary operation\\nB. multiplication is not associative\\nC. identity element does not exist\\nD. zero has no inverse
+**Output**:
 <Plan>
-<Step ID="1" Task="What is the formula relating a quantum state's lifetime (Δt) to its minimum energy width (ΔE) according to the energy-time uncertainty principle?" Difficulty="6" Token="70" Rely=""/>
-<Step ID="2" Task="To clearly resolve two energy levels, the energy difference must exceed the energy width of the state with the longer lifetime. Using the formula from Step 1, what is the minimum energy difference required, based on the longer lifetime of 10^-8 seconds?" Difficulty="5" Token="80" Rely="1"/>
+<Step ID="1" Task="To assist the following agents, what is your understanding of the question after reviewing it, focusing only on essential information and filtering out all irrelevant details?" Difficulty="3" Token="50" Rely=""/>
+<Step ID="2" Task="Check the closure property: Is multiplication a binary operation on the set of all real numbers?" Difficulty="2" Token="20" Rely="1"/>
+<Step ID="3" Task="Check the associative property: Is multiplication of real numbers associative?" Difficulty="2" Token="20" Rely="1"/>
+<Step ID="4" Task="Check the identity property: Is there an identity element for multiplication in the set of real numbers?" Difficulty="2" Token="20" Rely="1"/>
+<Step ID="5" Task="Check the inverse property: Does every element in the set of real numbers have a multiplicative inverse?" Difficulty="3" Token="30" Rely="1"/>
+<Step ID="6" Task="After reviewing the original question and the thoughts of previous agents, what is the final answer to the question?" Difficulty="4" Token="30" Rely="2,3,4,5"/>
 </Plan>
-
-Apply the entire framework described above to the problem provided below.
+Now, based on the following Problem, generate a response that meets all the requirements above. The final plan must contain **fewer than 7 steps**. 
 """
     else:
-        system_prompt = """You are an expert problem-solving strategist and a master educator. Your mission is to deconstruct complex, graduate-level questions into a structured, machine-executable plan in XML format.
+        system_prompt = """You are an expert AI cognitive scientist and systems architect. Your mission is to analyze a given problem and create a structured XML plan that follows the **Explain-Analyze-Generate (EAG)** framework.
 
-This plan serves two purposes:
-1.  It guides a system of AI agents to solve the problem step-by-step.
-2.  Its internal logic (`<think>` block) is used to teach smaller models how to reason by example.
+The plan will be executed by a multi-threaded AI system using two distinct models. Your task decomposition and difficulty assignments must leverage the unique capabilities of these models.
 
-Therefore, your output must be exceptionally clear, logical, and pedagogically sound.
+### **Executor Model Profiles**
+You will be assigning tasks to two available models. Use their profiles below to accurately estimate the `Difficulty` for each step:
+  * **Small Model (Llama 3.2 3B): A highly capable and efficient small model. It excels at tasks requiring strong instruction-following, summarization, and rewriting. It is proficient in standard grade-school math (GSM8K) and common-sense reasoning (ARC Challenge). Use this model for well-defined, procedural, or structured tasks.
+  * **Large Model (GPT-4o): A powerful, state-of-the-art large model with a vast knowledge base. It demonstrates superior performance in tasks requiring deep reasoning and expert-level knowledge, such as advanced scientific reasoning (GPQA Diamond, MMLU-Pro), competition-level math (AIME), and complex coding (LiveCodeBench). It is the preferred choice for tasks requiring synthesis, critical analysis, and solving problems in specialized domains.
 
-### Process Overview
+### **Plan Structure: The EAG Framework**
+Your generated `<Plan>` **must** be structured into three logical stages:
 
-**Part 1: Coherent Thought Process (`<think>` Block)**
-Before creating the plan, you MUST articulate your strategic analysis as a continuous and logical internal monologue within `<think>` tags. This paragraph should read like an expert thinking aloud, seamlessly covering the following points:
+1.  **Step 1: The "Explain" Step**
+      * The plan must begin with a single, foundational step (ID="1").
+      * **Task:** The task for this step is directly inspired by the Explainer agent's role. It must be phrased as follows:
+        > **"To assist the following agents, what is your understanding of the question after reviewing it, focusing only on essential information and filtering out all irrelevant details?"**
 
-* **Initial Diagnosis**: Start by identifying the specific academic or scientific domain of the problem.
-* **Problem Classification**: Classify the fundamental type of the question (e.g., is it a calculation, a comparative analysis, a process to be traced?).
-* **Strategic Formulation**: Conclude with a high-level, step-by-step strategy for how you will approach the solution. This should flow naturally from your diagnosis and classification.
+2.  **The "Analyze" Steps**
+      * These are the intermediate steps that perform the core logical work.
+      * **Task:** Break down the problem into the smallest possible, independent sub-tasks to solve the problem. These steps should rely on the "Explain" step (i.e., `Rely="1"`) or other completed analysis steps.
+      * **Core Directives for Plan Generation**:
+        1.  **Analyze the Problem**: Break down the problem into its core logical components.
+        2.  **Strategic Milestones**: Focus on the high-level, conceptual milestones required to solve the problem.
+        3.  **Maximize Parallelism**: Decompose into as many independent sub-tasks as possible.
+        4.  **Formulate Actionable Questions**: The `Task` attribute must be a clear, self-contained question ending with a question mark (?). Do not leak answers in the task description.
+        5.  **Delegate Knowledge Retrieval**: If a specific formula, theorem, or principle is required, your task is to create a step that **asks for that formula or principle** (e.g., "What is the formula for...?"). Delegate the retrieval of specific knowledge to the Executor.
+      * **Goal:** Maximize parallelism. If multiple pieces of information can be processed independently, create a separate step for each.
 
-**Part 2: The XML Plan (`<Plan>` Block)**
-Translate your formulated strategy into a formal XML plan.
+3.  **The Final "Generate" Step**
+      * The plan must conclude with a single aggregation step.
+      * **Task:** The task for this step is directly inspired by the Generator agent's role. It must be phrased as follows:
+        > **"After reviewing the original question and the thoughts of previous agents, what is the final answer to the question?"**
+**Keep the plan Concise**: The final plan must contain **fewer than 7 steps**. Focus only on the most critical milestones needed to solve the problem.
 
-#### XML Constraints:
-1.  **Format**: The plan must be enclosed in `<Plan>` tags, with each step in a `<Step>` tag.
-2.  **Attributes**: Each `<Step>` must have these attributes:
-    * `ID`: A unique integer for the step (e.g., "1").
-    * `Task`: The specific question the executor AI must answer. It must be a clear, self-contained instruction ending with a question mark (?).
-    * `Difficulty`: An integer from 1 to 9 estimating the complexity of the task.
-        * **1-4 (Small Model)**: Tasks involving simple retrieval, basic calculations, or definition lookups.
-        * **5-9 (Large Model)**: Tasks requiring complex reasoning, multi-step calculations, deep analysis, or synthesis of information.
-    * `Rely`: The `ID`(s) of prerequisite steps, comma-separated if multiple (e.g., "1,2"). Leave empty if none.
-3.  **Guiding Principles for Plan Design**:
-    * **Start with the Basics**: Good plans often start with foundational steps, like defining key terms or stating relevant formulas.
-    * **Logical Flow**: Ensure a true dependency structure. A step should only rely on another if it directly uses its output.
-    * **Efficiency**: Avoid redundant steps. If the same logic applies to multiple items, group them into a single, comprehensive task.
+### **XML Plan Constraints**
+  * `ID`: A unique integer.
+  * `Task`: The question for the executor AI. Must end with a question mark (?).
+  * `Difficulty`: An integer from 1-9.
+      * **1-4 (Small Model):** Procedural tasks, basic calculations, applying a known formula.
+      * **5-9 (Large Model):** Complex reasoning, synthesis, or critical knowledge retrieval.
+  * `Token`: An estimated integer for the answer's token count.
+  * `Rely`: The `ID`(s) of prerequisite steps, separated by commas if multiple.
 
----
-### Example 1: Astronomy Calculation & Comparison
-
-**Question**: "Which of the following stars or stellar systems will appear the brightest in V magnitude when observed from Earth? Assume there is no extinction. [List of 6 options with apparent/absolute magnitudes and distances]"
-
-**Response**:
-<think>This problem is from the domain of observational astronomy and astrophysics. It's a comparative analysis and calculation problem. The core task is to find the object with the lowest apparent magnitude, as a smaller magnitude means a brighter object. For each option, I need to determine its final apparent V magnitude as seen from Earth. Some options provide the apparent magnitude directly, while others give the absolute magnitude, which I'll need to convert using the distance modulus formula. For systems with multiple stars, I'll need to calculate their combined magnitude. My strategy is to systematically process each of the six options to find its apparent magnitude, and then compare all the final values to identify the minimum one.</think>
+### Examples
+**Problem**: Find the degree for the given field extension Q(sqrt(2), sqrt(3), sqrt(18)) over Q.\\n\\nA. 0\\nB. 4\\nC. 2\\nD. 6
+**Output**:
 <Plan>
-<Step ID="1" Task="What is the formula for calculating the combined apparent magnitude of a multi-star system from the individual apparent magnitudes of its components?" Difficulty="2" Rely=""/>
-<Step ID="2" Task="What is the distance modulus formula that relates a star's apparent magnitude (m), its absolute magnitude (M), and its distance in parsecs (d)?" Difficulty="2" Rely=""/>
-<Step ID="3" Task="For each of the six options (a-f) provided in the problem, calculate its final apparent V magnitude as observed from Earth. Use the formulas from Step 1 and 2 where necessary. List the final apparent magnitude for each option." Difficulty="6" Rely="1,2"/>
-<Step ID="4" Task="Based on the six apparent magnitude values calculated in Step 3, which star or stellar system is the brightest (i.e., has the numerically lowest magnitude value)?" Difficulty="2" Rely="3"/>
+<Step ID="1" Task="To assist the following agents, what is your understanding of the question after reviewing it, focusing only on essential information and filtering out all irrelevant details?" Difficulty="4" Token="50" Rely=""/>
+<Step ID="2" Task="Is there a dependency between sqrt(2), sqrt(3), and sqrt(18)? Simplify the field extension Q(sqrt(2), sqrt(3), sqrt(18)) if possible." Difficulty="3" Token="30" Rely="1"/>
+<Step ID="3" Task="Based on the simplified field extension from Step 2, what is the degree of this extension over Q?" Difficulty="5" Token="30" Rely="2"/>
+<Step ID="4" Task="After reviewing the original question and the thoughts of previous agents, what is the final answer to the question?" Difficulty="2" Token="20" Rely="3"/>
 </Plan>
 
----
-### Example 2: Organic Chemistry Structure Elucidation
-
-**Question**: "Identify the compound C9H11NO2 using the given data. IR: medium to strong intensity bands at 3420 cm-1, 3325 cm-1; strong band at 1720 cm-1. 1H NMR: 1.20 ppm (t, 3H); 4.0 ppm (bs, 2H); 4.5 ppm (q, 2H); 7.0 ppm (d, 2H), 8.0 ppm (d, 2H)."
-
-**Response**:
-<think>This is a classic structure elucidation problem in organic chemistry, requiring the interpretation of spectroscopic data (IR and 1H NMR) to identify an unknown molecule. The task is a deductive reasoning process. My strategy will be to analyze each piece of data to identify key functional groups and structural fragments. I'll start with the IR spectrum to identify major functional groups like N-H and C=O. Then, I'll analyze each signal in the 1H NMR spectrum to determine the types of protons and their connectivity (e.g., identifying an ethyl group and a para-substituted benzene ring). Finally, I will assemble these fragments, check if the proposed structure is consistent with the molecular formula C9H11NO2, and identify the correct compound from the given choices.</think>
+**Problem**: The set of all real numbers under the usual multiplication operation is not a group since\\n\\nA. multiplication is not a binary operation\\nB. multiplication is not associative\\nC. identity element does not exist\\nD. zero has no inverse
+**Output**:
 <Plan>
-<Step ID="1" Task="What functional group(s) are indicated by the IR absorption bands at 3420, 3325, and 1720 cm-1?" Difficulty="4" Rely=""/>
-<Step ID="2" Task="In the 1H NMR spectrum, what structural fragment is suggested by the combination of a triplet signal at 1.20 ppm (3H) and a quartet signal at 4.5 ppm (2H)?" Difficulty="4" Rely=""/>
-<Step ID="3" Task="In the 1H NMR spectrum, what structural feature is suggested by the presence of two distinct doublet signals at 7.0 ppm (2H) and 8.0 ppm (2H) in the aromatic region?" Difficulty="5" Rely=""/>
-<Step ID="4" Task="What does the broad singlet signal at 4.0 ppm (2H) in the 1H NMR spectrum, combined with the IR data from Step 1, suggest about the functional group present?" Difficulty="5" Rely="1"/>
-<Step ID="5" Task="Based on the fragments identified in the previous steps (a para-substituted aromatic ring, an ethyl group, and an amine/ester/amide functional group), assemble a complete molecular structure that matches the formula C9H11NO2." Difficulty="7" Rely="1,2,3,4"/>
-<Step ID="6" Task="Compare the structure deduced in Step 5 with the provided options to identify the correct compound name." Difficulty="2" Rely="5"/>
+<Step ID="1" Task="To assist the following agents, what is your understanding of the question after reviewing it, focusing only on essential information and filtering out all irrelevant details?" Difficulty="3" Token="50" Rely=""/>
+<Step ID="2" Task="Check the closure property: Is multiplication a binary operation on the set of all real numbers?" Difficulty="2" Token="20" Rely="1"/>
+<Step ID="3" Task="Check the associative property: Is multiplication of real numbers associative?" Difficulty="2" Token="20" Rely="1"/>
+<Step ID="4" Task="Check the identity property: Is there an identity element for multiplication in the set of real numbers?" Difficulty="2" Token="20" Rely="1"/>
+<Step ID="5" Task="Check the inverse property: Does every element in the set of real numbers have a multiplicative inverse?" Difficulty="3" Token="30" Rely="1"/>
+<Step ID="6" Task="After reviewing the original question and the thoughts of previous agents, what is the final answer to the question?" Difficulty="4" Token="30" Rely="2,3,4,5"/>
 </Plan>
+Now, based on the following Problem, generate a response that meets all the requirements above. The final plan must contain **fewer than 7 steps**. 
 """   
     # 根据是否使用真实答案构建用户查询
     if dataset_build_config.get('use_ground_truth_to_guide_planner', True):
@@ -868,39 +887,170 @@ def run_parallel_execution(query, config, workers=4, process=None):
     print("正在获取解决方案计划...")
 
     if config.use_local_router:
-        system_prompt = """You are an expert AI cognitive scientist and systems architect. Your mission is to analyze a given problem and create a structured XML plan to solve it.
+        system_prompt = """You are an expert AI cognitive scientist and systems architect. Your mission is to analyze a given problem and create a structured XML plan that follows the **Explain-Analyze-Generate (EAG)** framework.
+
+The plan will be executed by a multi-threaded AI system using two distinct models. Your task decomposition and difficulty assignments must leverage the unique capabilities of these models.
+
+### **Executor Model Profiles**
+You will be assigning tasks to two available models. Use their profiles below to accurately estimate the `Difficulty` for each step:
+  * **Small Model (Llama 3.2 3B): A highly capable and efficient small model. It excels at tasks requiring strong instruction-following, summarization, and rewriting. It is proficient in standard grade-school math (GSM8K) and common-sense reasoning (ARC Challenge). Use this model for well-defined, procedural, or structured tasks.
+  * **Large Model (GPT-4o): A powerful, state-of-the-art large model with a vast knowledge base. It demonstrates superior performance in tasks requiring deep reasoning and expert-level knowledge, such as advanced scientific reasoning (GPQA Diamond, MMLU-Pro), competition-level math (AIME), and complex coding (LiveCodeBench). It is the preferred choice for tasks requiring synthesis, critical analysis, and solving problems in specialized domains.
+
+### **Plan Structure: The EAG Framework**
+Your generated `<Plan>` **must** be structured into three logical stages:
+
+1.  **Step 1: The "Explain" Step**
+      * The plan must begin with a single, foundational step (ID="1").
+      * **Task:** The task for this step is directly inspired by the Explainer agent's role. It must be phrased as follows:
+        > **"To assist the following agents, what is your understanding of the question after reviewing it, focusing only on essential information and filtering out all irrelevant details?"**
+
+2.  **The "Analyze" Steps**
+      * These are the intermediate steps that perform the core logical work.
+      * **Task:** Break down the problem into the smallest possible, independent sub-tasks to solve the problem. These steps should rely on the "Explain" step (i.e., `Rely="1"`) or other completed analysis steps.
+      * **Core Directives for Plan Generation**:
+        1.  **Analyze the Problem**: Break down the problem into its core logical components.
+        2.  **Strategic Milestones**: Focus on the high-level, conceptual milestones required to solve the problem.
+        3.  **Maximize Parallelism**: Decompose into as many independent sub-tasks as possible.
+        4.  **Formulate Actionable Questions**: The `Task` attribute must be a clear, self-contained question ending with a question mark (?). Do not leak answers in the task description.
+        5.  **Delegate Knowledge Retrieval**: If a specific formula, theorem, or principle is required, your task is to create a step that **asks for that formula or principle** (e.g., "What is the formula for...?"). Delegate the retrieval of specific knowledge to the Executor.
+      * **Goal:** Maximize parallelism. If multiple pieces of information can be processed independently, create a separate step for each.
+
+3.  **The Final "Generate" Step**
+      * The plan must conclude with a single aggregation step.
+      * **Task:** The task for this step is directly inspired by the Generator agent's role. It must be phrased as follows:
+        > **"After reviewing the original question and the thoughts of previous agents, what is the final answer to the question?"**
+**Keep the plan Concise**: The final plan must contain **fewer than 7 steps**. Focus only on the most critical milestones needed to solve the problem.
+
+### **XML Plan Constraints**
+  * `ID`: A unique integer.
+  * `Task`: The question for the executor AI. Must end with a question mark (?).
+  * `Difficulty`: An integer from 1-9.
+      * **1-4 (Small Model):** Procedural tasks, basic calculations, applying a known formula.
+      * **5-9 (Large Model):** Complex reasoning, synthesis, or critical knowledge retrieval.
+  * `Token`: An estimated integer for the answer's token count.
+  * `Rely`: The `ID`(s) of prerequisite steps, separated by commas if multiple.
+
+### Examples
+**Problem**: Find the degree for the given field extension Q(sqrt(2), sqrt(3), sqrt(18)) over Q.\\n\\nA. 0\\nB. 4\\nC. 2\\nD. 6
+**Output**:
+<Plan>
+<Step ID="1" Task="To assist the following agents, what is your understanding of the question after reviewing it, focusing only on essential information and filtering out all irrelevant details?" Difficulty="4" Token="50" Rely=""/>
+<Step ID="2" Task="Is there a dependency between sqrt(2), sqrt(3), and sqrt(18)? Simplify the field extension Q(sqrt(2), sqrt(3), sqrt(18)) if possible." Difficulty="3" Token="30" Rely="1"/>
+<Step ID="3" Task="Based on the simplified field extension from Step 2, what is the degree of this extension over Q?" Difficulty="5" Token="30" Rely="2"/>
+<Step ID="4" Task="After reviewing the original question and the thoughts of previous agents, what is the final answer to the question?" Difficulty="2" Token="20" Rely="3"/>
+</Plan>
+
+**Problem**: The set of all real numbers under the usual multiplication operation is not a group since\\n\\nA. multiplication is not a binary operation\\nB. multiplication is not associative\\nC. identity element does not exist\\nD. zero has no inverse
+**Output**:
+<Plan>
+<Step ID="1" Task="To assist the following agents, what is your understanding of the question after reviewing it, focusing only on essential information and filtering out all irrelevant details?" Difficulty="3" Token="50" Rely=""/>
+<Step ID="2" Task="Check the closure property: Is multiplication a binary operation on the set of all real numbers?" Difficulty="2" Token="20" Rely="1"/>
+<Step ID="3" Task="Check the associative property: Is multiplication of real numbers associative?" Difficulty="2" Token="20" Rely="1"/>
+<Step ID="4" Task="Check the identity property: Is there an identity element for multiplication in the set of real numbers?" Difficulty="2" Token="20" Rely="1"/>
+<Step ID="5" Task="Check the inverse property: Does every element in the set of real numbers have a multiplicative inverse?" Difficulty="3" Token="30" Rely="1"/>
+<Step ID="6" Task="After reviewing the original question and the thoughts of previous agents, what is the final answer to the question?" Difficulty="4" Token="30" Rely="2,3,4,5"/>
+</Plan>
+Now, based on the following Problem, generate a response that meets all the requirements above. The final plan must contain **fewer than 7 steps**. 
+"""
+        user_prompt = f'''**Problem**: {query}
+**Output**:
+        '''
+    else:
+        system_prompt = """You are an expert AI cognitive scientist and systems architect. Your mission is to analyze a given problem and create a structured XML plan that follows the **Explain-Analyze-Generate (EAG)** framework.
+
+The plan will be executed by a multi-threaded AI system using two distinct models. Your task decomposition and difficulty assignments must leverage the unique capabilities of these models.
+
+### **Executor Model Profiles**
+You will be assigning tasks to two available models. Use their profiles below to accurately estimate the `Difficulty` for each step:
+  * **Small Model (Llama 3.2 3B): A highly capable and efficient small model. It excels at tasks requiring strong instruction-following, summarization, and rewriting. It is proficient in standard grade-school math (GSM8K) and common-sense reasoning (ARC Challenge). Use this model for well-defined, procedural, or structured tasks.
+  * **Large Model (GPT-4o): A powerful, state-of-the-art large model with a vast knowledge base. It demonstrates superior performance in tasks requiring deep reasoning and expert-level knowledge, such as advanced scientific reasoning (GPQA Diamond, MMLU-Pro), competition-level math (AIME), and complex coding (LiveCodeBench). It is the preferred choice for tasks requiring synthesis, critical analysis, and solving problems in specialized domains.
+
+### **Plan Structure: The EAG Framework**
+Your generated `<Plan>` **must** be structured into three logical stages:
+
+1.  **Step 1: The "Explain" Step**
+      * The plan must begin with a single, foundational step (ID="1").
+      * **Task:** The task for this step is directly inspired by the Explainer agent's role. It must be phrased as follows:
+        > **"To assist the following agents, what is your understanding of the question after reviewing it, focusing only on essential information and filtering out all irrelevant details?"**
+
+2.  **The "Analyze" Steps**
+      * These are the intermediate steps that perform the core logical work.
+      * **Task:** Break down the problem into the smallest possible, independent sub-tasks to solve the problem. These steps should rely on the "Explain" step (i.e., `Rely="1"`) or other completed analysis steps.
+      * **Core Directives for Plan Generation**:
+        1.  **Analyze the Problem**: Break down the problem into its core logical components.
+        2.  **Strategic Milestones**: Focus on the high-level, conceptual milestones required to solve the problem.
+        3.  **Maximize Parallelism**: Decompose into as many independent sub-tasks as possible.
+        4.  **Formulate Actionable Questions**: The `Task` attribute must be a clear, self-contained question ending with a question mark (?). Do not leak answers in the task description.
+        5.  **Delegate Knowledge Retrieval**: If a specific formula, theorem, or principle is required, your task is to create a step that **asks for that formula or principle** (e.g., "What is the formula for...?"). Delegate the retrieval of specific knowledge to the Executor.
+      * **Goal:** Maximize parallelism. If multiple pieces of information can be processed independently, create a separate step for each.
+
+3.  **The Final "Generate" Step**
+      * The plan must conclude with a single aggregation step.
+      * **Task:** The task for this step is directly inspired by the Generator agent's role. It must be phrased as follows:
+        > **"After reviewing the original question and the thoughts of previous agents, what is the final answer to the question?"**
+**Keep the plan Concise**: The final plan must contain **fewer than 7 steps**. Focus only on the most critical milestones needed to solve the problem.
+
+### **XML Plan Constraints**
+  * `ID`: A unique integer.
+  * `Task`: The question for the executor AI. Must end with a question mark (?).
+  * `Difficulty`: An integer from 1-9.
+      * **1-4 (Small Model):** Procedural tasks, basic calculations, applying a known formula.
+      * **5-9 (Large Model):** Complex reasoning, synthesis, or critical knowledge retrieval.
+  * `Token`: An estimated integer for the answer's token count.
+  * `Rely`: The `ID`(s) of prerequisite steps, separated by commas if multiple.
+
+### Examples
+**Problem**: Find the degree for the given field extension Q(sqrt(2), sqrt(3), sqrt(18)) over Q.\\n\\nA. 0\\nB. 4\\nC. 2\\nD. 6
+**Output**:
+<Plan>
+<Step ID="1" Task="To assist the following agents, what is your understanding of the question after reviewing it, focusing only on essential information and filtering out all irrelevant details?" Difficulty="4" Token="50" Rely=""/>
+<Step ID="2" Task="Is there a dependency between sqrt(2), sqrt(3), and sqrt(18)? Simplify the field extension Q(sqrt(2), sqrt(3), sqrt(18)) if possible." Difficulty="3" Token="30" Rely="1"/>
+<Step ID="3" Task="Based on the simplified field extension from Step 2, what is the degree of this extension over Q?" Difficulty="5" Token="30" Rely="2"/>
+<Step ID="4" Task="After reviewing the original question and the thoughts of previous agents, what is the final answer to the question?" Difficulty="2" Token="20" Rely="3"/>
+</Plan>
+
+**Problem**: The set of all real numbers under the usual multiplication operation is not a group since\\n\\nA. multiplication is not a binary operation\\nB. multiplication is not associative\\nC. identity element does not exist\\nD. zero has no inverse
+**Output**:
+<Plan>
+<Step ID="1" Task="To assist the following agents, what is your understanding of the question after reviewing it, focusing only on essential information and filtering out all irrelevant details?" Difficulty="3" Token="50" Rely=""/>
+<Step ID="2" Task="Check the closure property: Is multiplication a binary operation on the set of all real numbers?" Difficulty="2" Token="20" Rely="1"/>
+<Step ID="3" Task="Check the associative property: Is multiplication of real numbers associative?" Difficulty="2" Token="20" Rely="1"/>
+<Step ID="4" Task="Check the identity property: Is there an identity element for multiplication in the set of real numbers?" Difficulty="2" Token="20" Rely="1"/>
+<Step ID="5" Task="Check the inverse property: Does every element in the set of real numbers have a multiplicative inverse?" Difficulty="3" Token="30" Rely="1"/>
+<Step ID="6" Task="After reviewing the original question and the thoughts of previous agents, what is the final answer to the question?" Difficulty="4" Token="30" Rely="2,3,4,5"/>
+</Plan>
+Now, based on the following Problem, generate a response that meets all the requirements above. The final plan must contain **fewer than 7 steps**. 
+"""
+        system_prompt_llama_3b = """You are an expert AI cognitive scientist and systems architect. Your mission is to analyze a given problem and create a structured XML plan to solve it.
 
 The plan will be executed by a multi-threaded AI system using two distinct models. Your task decomposition, difficulty assignments, and the reasoning behind them must leverage the unique capabilities of these models.
 
 ### **Executor Model Profiles**
 
 You will be assigning tasks to two available models. Use their profiles below to accurately estimate the `Difficulty` for each step:
-
-  * **Small Model (e.g., qwen2.5-3b-instruct):** A highly capable small model, excelling at code, standard math, multilingual tasks, and following clear instructions. It is fast and efficient for well-defined, procedural, or knowledge-retrieval tasks.
-  * **Large Model (e.g., gpt-4o):** A powerful large model with a vast knowledge base. It excels at deep scientific reasoning, multi-faceted analysis, and understanding nuanced, open-ended problems. It is the preferred choice for tasks requiring synthesis, deep analysis, and broad world knowledge.
+  * **Small Model (Llama 3.2 3B): A highly capable and efficient small model. It excels at tasks requiring strong instruction-following, summarization, and rewriting. It is proficient in standard grade-school math (GSM8K) and common-sense reasoning (ARC Challenge). Use this model for well-defined, procedural, or structured tasks.
+  * **Large Model (GPT-4o): A powerful, state-of-the-art large model with a vast knowledge base. It demonstrates superior performance in tasks requiring deep reasoning and expert-level knowledge, such as advanced scientific reasoning (GPQA Diamond, MMLU-Pro), competition-level math (AIME), and complex coding (LiveCodeBench). It is the preferred choice for tasks requiring synthesis, critical analysis, and solving problems in specialized domains.
 
 ### **Core Directives for Plan Generation**
 
 1.  **Analyze the Problem**: Break down the problem into its core logical components.
 2.  **Strategic Milestones**: Focus on the high-level, conceptual milestones required to solve the problem.
-3.  **Delegate Knowledge Retrieval**: If a formula or principle is needed, create a step that *asks* for it.
-4.  **Maximize Parallelism**: Decompose into as many independent sub-tasks as possible.
-5.  **Formulate Actionable Questions**: The `Task` attribute must be a clear, self-contained question ending with a question mark (?). Do not leak answers in the task description.
-6.  **Construct the XML Plan**:
+3.  **Maximize Parallelism**: Decompose into as many independent sub-tasks as possible.
+4.  **Formulate Actionable Questions**: The `Task` attribute must be a clear, self-contained question ending with a question mark (?). Do not leak answers in the task description.
+5.  **Construct the XML Plan**:
       * `ID`: A unique integer.
       * `Task`: The question for the executor AI.
       * `Difficulty`: An integer from 1-9.
-          * **1-4 (Small Model):** Procedural tasks, basic calculations, applying a known formula.
-          * **5-9 (Large Model):** Complex reasoning, synthesis, or critical knowledge retrieval.
+          * **1-4 (Small Model):** Procedural tasks, basic calculations, instruction following, summarization, applying a known formula.
+          * **5-9 (Large Model):** Complex reasoning, synthesis, deep analysis, advanced math, or critical knowledge retrieval in specialized domains.
       * `Token`: An integer representing the estimated number of tokens the executor will need to generate for the answer.
-      * `Rely`: The `ID`(s) of prerequisite steps. Only create necessary dependencies.
-7.  **Use Aggregation Steps**: Create a final step to synthesize the results from previous steps and derive the final conclusion.
-8.  **Keep it Concise**: The final plan must contain **fewer than 10 steps**. Focus only on the most critical milestones needed to solve the problem.
+      * `Rely`: The `ID`(s) of prerequisite steps. Only create necessary dependencies. If there are multiple dependencies, separate them with commas.
+6.  **Use Aggregation Steps**: Create a final step to synthesize the results from previous steps and derive the final conclusion.
+7.  **Keep it Concise**: The final plan must contain **fewer than 6 steps**. Focus only on the most critical milestones needed to solve the problem.
 
 ### **Example**
 
 **Problem**: Four years ago, Kody was only half as old as Mohamed. If Mohamed is currently twice 30 years old, how old is Kody?
-
 **Output**:
 <Plan>
 <Step ID="1" Task="How old is Mohamed now?" Difficulty="2" Token="10" Rely=""/>
@@ -908,13 +1058,27 @@ You will be assigning tasks to two available models. Use their profiles below to
 <Step ID="3" Task="How old was Kody four years ago?" Difficulty="2" Token="10" Rely="2"/>
 </Plan>
 
-**Now, based on the following `Problem`, generate a response that meets all the requirements above.**
-"""
-        user_prompt = f'''**Problem**: {query}
+**Problem**: Find the degree for the given field extension Q(sqrt(2), sqrt(3), sqrt(18)) over Q.\n\nA. 0\nB. 4\nC. 2\nD. 6\n\nPlease select the correct answer and provide the final option letter and its corresponding content.
 **Output**:
-        '''
-    else:
-        system_prompt = """You are an expert AI cognitive scientist and systems architect. Your mission is to analyze a given problem and create a structured XML plan to solve it.
+<Plan>
+<Step ID="1" Task="What is the degree of the field extension Q(sqrt(2), sqrt(3)) over Q?" Difficulty="4" Token="20" Rely=""/>
+<Step ID="2" Task="What is the degree of the field extension Q(sqrt(18)) over Q?" Difficulty="2" Token="15" Rely=""/>
+<Step ID="3" Task="How can the degrees from Step 1 and Step 2 be combined to determine the degree of Q(sqrt(2), sqrt(3), sqrt(18)) over Q?" Difficulty="6" Token="25" Rely="1,2"/>
+</Plan>
+
+**Problem**: The set of all real numbers under the usual multiplication operation is not a group since\n\nA. multiplication is not a binary operation\nB. multiplication is not associative\nC. identity element does not exist\nD. zero has no inverse\n\nPlease select the correct answer and provide the final option letter and its corresponding content.
+**Output**:
+<Plan>
+<Step ID="1" Task="What is a binary operation and does multiplication of real numbers satisfy this property?" Difficulty="3" Token="20" Rely=""/>
+<Step ID="2" Task="Is multiplication associative for all real numbers?" Difficulty="2" Token="10" Rely=""/>
+<Step ID="3" Task="What is the identity element in multiplication of real numbers and does it exist?" Difficulty="3" Token="15" Rely=""/>
+<Step ID="4" Task="Does the zero element have an inverse under multiplication for all real numbers?" Difficulty="2" Token="10" Rely=""/>
+<Step ID="5" Task="Considering the properties checked, which of the options A, B, C, or D is correct regarding why the set of all real numbers under multiplication is not a group?" Difficulty="5" Token="25" Rely="1,2,3,4"/>
+</Plan>
+
+Now, based on the following `Problem`, generate a response that meets all the requirements above.
+"""
+        system_prompt_qwen_4o = """You are an expert AI cognitive scientist and systems architect. Your mission is to analyze a given problem and create a structured XML plan to solve it.
 
 The plan will be executed by a multi-threaded AI system using two distinct models. Your task decomposition, difficulty assignments, and the reasoning behind them must leverage the unique capabilities of these models.
 
@@ -970,7 +1134,7 @@ You will be assigning tasks to two available models. Use their profiles below to
 <Step ID="5" Task="Considering the properties checked, which of the options A, B, C, or D is correct regarding why the set of all real numbers under multiplication is not a group?" Difficulty="5" Token="25" Rely="1,2,3,4"/>
 </Plan>
 
-**Now, based on the following `Problem`, generate a response that meets all the requirements above.**
+Now, based on the following `Problem`, generate a response that meets all the requirements above.
 """
         system_prompt_think = """
 You are an expert AI cognitive scientist and systems architect. Your mission is to analyze a given problem and create a detailed, two-part response: first, a chain-of-thought reasoning block, and second, a structured XML plan.
@@ -1232,7 +1396,7 @@ You will be assigning tasks to two available models. Use their profiles below to
         
         # 根据配置决定是使用本地路由模型还是远程路由模型
         if config.use_local_router:
-            temperature = 1
+            temperature = 0.5
             top_p = 0.95
             max_tokens = 600
             enable_thinking = False
@@ -1366,17 +1530,24 @@ def judge_correct(question, gold_answer, final_answer, model_config):
     model_name = "deepseek-chat"
     client = OpenAI(api_key=get_api_key('usage/deepseek2'), base_url="https://api.deepseek.com")
     print(f"--------------------------调用{model_name}根据真实答案判断答案正确性--------------------------")
-    prompt = f"""Here is a math problem with a standard answer and a student's solution. Please help me determine if the student's solution is correct. If the numerical value are same, then it is correct.
-                               
+    # prompt = f"""
+    # Your task is to strictly compare the 'Student's Answer' to the 'Standard Answer'.
+
+    # **IMPORTANT: Your decision must be based exclusively on whether the final answers are equivalent. Completely ignore the problem statement and any reasoning.**
+
+    # - **Problem**: {question}
+    # - **Standard Answer**: {gold_answer}
+    # - **Student's Answer**: {final_answer}
+
+    # If the 'Student's Answer' matches the 'Standard Answer', output only the word `True`. Otherwise, output only the word `False`. Do not provide any explanation.
+    # """
+    prompt = f"""Here is a problem with a standard answer and a student's solution. Please help me determine if the student's solution is correct.                            
                 Problem: {question}
-
                 Standard answer: {gold_answer}
-
                 Answer: {final_answer}
-
                 If the student's answer is correct, just output True; otherwise, just output False.
                 No explanation is required.
-    """
+        """
     
     try:
         response = client.chat.completions.create(
@@ -1412,13 +1583,23 @@ def LLM_judge(question, final_answer, model_config):
     model_name = "deepseek-chat"
     client = OpenAI(api_key=get_api_key('usage/deepseek2'), base_url="https://api.deepseek.com")
     print(f"--------------------------调用{model_name}判断答案正确性（没有真实答案）--------------------------")
+    marker = "## 最终答案"
+
+    # 使用 split() 方法分割字符串
+    try:
+        # 找到标记后的所有内容
+        result = final_answer.split(marker)[1]
+        # 去除结果开头和结尾的空白字符（如换行符）
+        final_answer_last = result.strip()
+    except:
+        final_answer_last = final_answer
     prompt = f"""Here is a math problem and a student's solution. Please help me determine if the student's solution is correct. If the numerical value are same, then it is correct.
                                
                 Problem: {question}
 
-                Answer: {final_answer}
+                Answer: {final_answer_last}
 
-                If the student's answer is correct, just output True; otherwise, just output False.
+                If the student's answer is correct, just output True; otherwise, just output False. 
                 No explanation is required.
     """
     

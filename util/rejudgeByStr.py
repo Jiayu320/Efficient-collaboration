@@ -156,6 +156,6 @@ def process_all_folders(root_directory):
 if __name__ == "__main__":
     # 只需要在这里设置您的顶层搜索路径
     # 脚本将自动处理此路径下的所有相关子文件夹
-    root_search_path = r"D:\JIAYU\Documents\GitHub\Efficient-collaboration\data_reports\dataset\MMLU-STEM"
+    root_search_path = r"D:\JIAYU\Documents\GitHub\Efficient-collaboration\data_reports\dataset\gpqa\local_router\gpt-4o\gpt-4o\20251007_132448"
     
     process_all_folders(root_search_path)

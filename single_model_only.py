@@ -322,7 +322,7 @@ class SingleModelDatasetRunner:
         返回:
             (是否正确的布尔值, 判断结果文本)
         """
-        prompt = f"""Here is a math problem with a standard answer and a student's solution. Please help me determine if the student's solution is correct. If the numerical value are same, then it is correct.
+        prompt = f"""Here is a problem with a standard answer and a student's solution. Please help me determine if the student's solution is correct.
                                
                 Problem: {problem}
 
