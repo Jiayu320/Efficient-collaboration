@@ -87,6 +87,20 @@ def main():
     evaluator = Evaluator(eval_config)
     if evaluator.enabled:
         print(f"评估功能已开启 (Planner: {evaluator.planner_enabled}, Executor: {evaluator.executor_enabled})")
+    
+    yaml_config = load_config("config.yaml")
+    models_config = yaml_config.get("models", {})
+    sequential_execution = models_config.get("sequential_execution", False)
+    single_rely = models_config.get("single_rely", False)
+    if sequential_execution and single_rely:
+        logger.info("-->顺序执行模式已启用，所有步骤将按顺序执行。每个步骤将依赖前序的一个步骤<--")
+        print("-->顺序执行模式已启用，所有步骤将按顺序执行。每个步骤将依赖前序的一个步骤<--")
+    elif sequential_execution and not single_rely:
+        logger.info("-->顺序执行模式已启用，所有步骤将按顺序执行。每个步骤将依赖前序的所有步骤<--")
+        print("-->顺序执行模式已启用，所有步骤将按顺序执行。每个步骤将依赖前序的所有步骤<--")
+    else:
+        logger.info("-->并行执行模式已启用，步骤将根据依赖关系并行执行<--")
+        print("-->并行执行模式已启用，步骤将根据依赖关系并行执行<--")
 
     if dataset_enabled and dataset_path:
         logger.info("===== 数据集模式启动 =====")
@@ -127,6 +141,7 @@ def main():
         initialize_clients(config)
         
         difficulty = judge_question_difficulty(query, config)
+        
         stats_tracker = PerformanceTracker(config)
         planner_output = None 
         final_result = "" 

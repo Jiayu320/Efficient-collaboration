@@ -213,7 +213,7 @@ def analyze_data_and_reports_detailed(root_directory):
 if __name__ == '__main__':
     # 确保已安装 numpy: pip install numpy
     # 请在这里设置您的目标文件夹路径
-    target_directory = r'D:\JIAYU\Documents\GitHub\Efficient-collaboration\data_reports\dataset\MMLU-STEM\local_router\gpt-4o\gpt-4o\20251006_192036'
+    target_directory = r'D:\JIAYU\Documents\GitHub\Efficient-collaboration\data_reports\dataset\livebench-reasoning\local_router\gpt-4.1-mini\gpt-4.1-mini\20251007_232658'
     
     if os.path.isdir(target_directory):
         analyze_data_and_reports_detailed(target_directory)

@@ -2,6 +2,7 @@ import os
 import json
 import time
 import re
+import random
 from tqdm import tqdm
 from config import ModelConfig, load_config
 from performance import PerformanceTracker
@@ -86,12 +87,16 @@ class DatasetRunner:
         try:
             # Load the config file directly to get the definitive limit value.
             yaml_config = load_config("config.yaml")
-            self.limit = yaml_config.get("dataset", {}).get("limit", None)
+            dataset_config = yaml_config.get("dataset", {})
+            self.limit = dataset_config.get("limit", None)
+            self.seed = dataset_config.get("seed", None)
             logger.info(f"Successfully loaded limit from config.yaml: {self.limit}")
+            logger.info(f"Successfully loaded seed from config.yaml: {self.seed}")
         except Exception as e:
             # If loading the config fails for any reason, fall back to the passed parameter.
             logger.error(f"Could not load config.yaml to get limit, falling back to passed parameter. Error: {e}")
             self.limit = limit
+            self.seed = None
         # **MODIFIED LOGIC END**
 
         self.dataset = self._load_dataset()
@@ -107,9 +112,15 @@ class DatasetRunner:
             with open(self.dataset_path, 'r', encoding='utf-8') as f:
                 dataset = json.load(f)
             
-            # 如果设置了限制，则只取前N个问题
-            if self.limit is not None:
-                dataset = dataset[:self.limit]
+            # 如果设置了限制，则随机抽取N个问题
+            if self.limit is not None and len(dataset) > self.limit:
+                logger = get_logger()
+                if self.seed is not None:
+                    random.seed(self.seed)
+                    logger.info(f"使用种子 {self.seed} 进行随机抽样，抽取 {self.limit} 个样本。")
+                else:
+                    logger.info(f"未提供种子，进行随机抽样，抽取 {self.limit} 个样本。")
+                dataset = random.sample(dataset, self.limit)
             
             return dataset
         except Exception as e:

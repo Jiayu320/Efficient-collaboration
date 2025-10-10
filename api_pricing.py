@@ -38,7 +38,9 @@ def get_model_pricing(model_name: str) -> Dict[str, float]:
         return {"prompt": 1.25, "completion": 10.0}
     elif "gpt-4.1-mini" in model_name_lower:
         return {"prompt": 0.4, "completion": 1.6}
-    
+    elif "gpt-4.1" in model_name_lower:
+        return {"prompt": 2.0, "completion": 8.0}
+
     # DeepSeek系列
     elif "deepseek-r1" in model_name_lower:
         return {"prompt": 0.272, "completion": 0.272}

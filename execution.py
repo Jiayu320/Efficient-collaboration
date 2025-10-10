@@ -88,7 +88,11 @@ def parse_step_attributes(attr_str):
 def process_xml_buffer():
     """处理XML缓冲区中的完整标签"""
     global xml_buffer, tasks, current_step
-    
+    logger = get_logger()
+    yaml_config = load_config("config.yaml")
+    models_config = yaml_config.get("models", {})
+    sequential_execution = models_config.get("sequential_execution", False)
+    single_rely = models_config.get("single_rely", False)
     # 查找完整的<Step>标签
     step_match = re.search(r'<Step\s+(.*?)/>', xml_buffer, re.DOTALL)
     if not step_match:
@@ -110,23 +114,31 @@ def process_xml_buffer():
     
     # 添加到任务字典
     step_id = attrs['ID']
+
+    # 如果是顺序执行，则强制Rely为所有前面的步骤
+    if sequential_execution and not single_rely:
+        attrs['Rely'] = ','.join(str(i) for i in range(1, int(attrs['ID'])))
+    elif sequential_execution and single_rely:
+        if attrs['ID'] == '1':
+            attrs['Rely'] = ''
+        else:
+            attrs['Rely'] = str(int(attrs['ID']) - 1)
+    
     if attrs['ID'] == '1':
         attrs['Rely'] = ''
-    # if 'Difficulty' not in attrs:
-    #     attrs['Difficulty'] = '5'
+    if 'Difficulty' not in attrs:
+        attrs['Difficulty'] = '5'
     
-    # 处理Rely字段，确保没有依赖未来的步骤，防止死锁
-    # 如果没有并行则提供最多的信息保证输出更准确
-    if attrs['Rely'] != '':
-        Rely = [i.strip() for i in attrs['Rely'].split(',')]
-        for i in Rely:
-            if int(i) >= int(attrs['ID']):
-                Rely = [j for j in range(1, int(attrs['ID']))]
-                break
-            if str(int(attrs['ID']) - 1) in Rely:
-                Rely = [j for j in range(1, int(attrs['ID']))]
-                break
-        attrs['Rely'] = ','.join(str(i) for i in Rely)
+    if not sequential_execution:
+        # 处理Rely字段，确保没有依赖未来的步骤，防止死锁
+        # 如果没有并行则提供最多的信息保证输出更准确
+        if attrs['Rely'] != '':
+            Rely = [i.strip() for i in attrs['Rely'].split(',')]
+            for i in Rely:
+                if int(i) >= int(attrs['ID']):
+                    Rely = [j for j in range(1, int(attrs['ID']))]
+                    break
+            attrs['Rely'] = ','.join(str(i) for i in Rely)
 
     tasks[step_id] = attrs
     tasks[step_id]['Result'] = None  # 添加Result字段
@@ -321,6 +333,14 @@ Please solve the problem and respond according to logic.
     Based on the information above, please provide a concise and clear answer
     {Relied_Results}
     """
+    
+    # prompt_template = """
+    # The sub-problem to solve now is: {Task}
+    # Based on the information above, please provide a concise and clear answer
+    # {Relied_Results}
+    # Let's think step by step and use less than {Token} tokens:
+    # """
+
     # 获得依赖的任务的具体结果
     rely_ids = tasks[current_step].get('Rely', '')
     if rely_ids != '':
@@ -499,14 +519,12 @@ def wait_for_completion_and_get_final_result(tasks, query, config, stats_tracker
     返回:
         最终结果字符串
     """
-    # === 新增：获取日志记录器 ===
     logger = get_logger()
-    # ============================
 
     # 确保所有任务已完成
-    if not all('Result' in task and task['Result'] for task in tasks.values()):
+    if not all(task.get('Result') is not None for task in tasks.values()):
         print("等待所有任务完成...")
-        time.sleep(1)
+        # time.sleep(1)
     
     # 按步骤ID排序
     sorted_tasks = sorted(tasks.items(), key=lambda x: int(x[0]))
@@ -1000,6 +1018,36 @@ Your generated `<Plan>` **must** be structured into three logical stages:
   * `Rely`: The `ID`(s) of prerequisite steps, separated by commas if multiple.
 
 ### Examples
+**Problem**: Four years ago, Kody was only half as old as Mohamed. If Mohamed is currently twice 30 years old, how old is Kody?
+**Output**:
+<Plan>
+<Step ID="1" Task="To assist the following agents, what is your understanding of the question after reviewing it, focusing only on essential information and filtering out all irrelevant details?" Difficulty="3" Token="60" Rely=""/>
+<Step ID="2" Task="Based on the explanation in Step 1, what is Mohamed's current age?" Difficulty="2" Token="10" Rely="1"/>
+<Step ID="3" Task="Using Mohamed's current age from Step 2, what was his age four years ago?" Difficulty="1" Token="10" Rely="2"/>
+<Step ID="4" Task="Based on Mohamed's age four years ago, what was Kody's age four years ago?" Difficulty="2" Token="10" Rely="3"/>
+<Step ID="5" Task="After reviewing the original question and the thoughts of previous agents, what is the final answer to the question?" Difficulty="2" Token="15" Rely="4"/>
+</Plan>
+
+**Question**: "Which of the following stars or stellar systems will appear the brightest in V magnitude when observed from Earth? Assume there is no extinction. [List of 6 options with apparent/absolute magnitudes and distances]"
+**Output**:
+<Plan>
+<Step ID="1" Task="What is the formula for calculating the combined apparent magnitude of a multi-star system from the individual apparent magnitudes of its components?" Difficulty="2" Rely=""/>
+<Step ID="2" Task="What is the distance modulus formula that relates a star's apparent magnitude (m), its absolute magnitude (M), and its distance in parsecs (d)?" Difficulty="2" Rely=""/>
+<Step ID="3" Task="For each of the six options (a-f) provided in the problem, calculate its final apparent V magnitude as observed from Earth. Use the formulas from Step 1 and 2 where necessary. List the final apparent magnitude for each option." Difficulty="6" Rely="1,2"/>
+<Step ID="4" Task="Based on the six apparent magnitude values calculated in Step 3, which star or stellar system is the brightest (i.e., has the numerically lowest magnitude value)?" Difficulty="2" Rely="3"/>
+</Plan>
+
+**Question**: "Identify the compound C9H11NO2 using the given data. IR: medium to strong intensity bands at 3420 cm-1, 3325 cm-1; strong band at 1720 cm-1. 1H NMR: 1.20 ppm (t, 3H); 4.0 ppm (bs, 2H); 4.5 ppm (q, 2H); 7.0 ppm (d, 2H), 8.0 ppm (d, 2H)."
+**Output**:
+<Plan>
+<Step ID="1" Task="What functional group(s) are indicated by the IR absorption bands at 3420, 3325, and 1720 cm-1?" Difficulty="4" Rely=""/>
+<Step ID="2" Task="In the 1H NMR spectrum, what structural fragment is suggested by the combination of a triplet signal at 1.20 ppm (3H) and a quartet signal at 4.5 ppm (2H)?" Difficulty="4" Rely=""/>
+<Step ID="3" Task="In the 1H NMR spectrum, what structural feature is suggested by the presence of two distinct doublet signals at 7.0 ppm (2H) and 8.0 ppm (2H) in the aromatic region?" Difficulty="5" Rely=""/>
+<Step ID="4" Task="What does the broad singlet signal at 4.0 ppm (2H) in the 1H NMR spectrum, combined with the IR data from Step 1, suggest about the functional group present?" Difficulty="5" Rely="1"/>
+<Step ID="5" Task="Based on the fragments identified in the previous steps (a para-substituted aromatic ring, an ethyl group, and an amine/ester/amide functional group), assemble a complete molecular structure that matches the formula C9H11NO2." Difficulty="7" Rely="1,2,3,4"/>
+<Step ID="6" Task="Compare the structure deduced in Step 5 with the provided options to identify the correct compound name." Difficulty="2" Rely="5"/>
+</Plan>
+
 **Problem**: Find the degree for the given field extension Q(sqrt(2), sqrt(3), sqrt(18)) over Q.\\n\\nA. 0\\nB. 4\\nC. 2\\nD. 6
 **Output**:
 <Plan>
@@ -1019,6 +1067,7 @@ Your generated `<Plan>` **must** be structured into three logical stages:
 <Step ID="5" Task="Check the inverse property: Does every element in the set of real numbers have a multiplicative inverse?" Difficulty="3" Token="30" Rely="1"/>
 <Step ID="6" Task="After reviewing the original question and the thoughts of previous agents, what is the final answer to the question?" Difficulty="4" Token="30" Rely="2,3,4,5"/>
 </Plan>
+
 Now, based on the following Problem, generate a response that meets all the requirements above. The final plan must contain **fewer than 7 steps**. 
 """
         system_prompt_llama_3b = """You are an expert AI cognitive scientist and systems architect. Your mission is to analyze a given problem and create a structured XML plan to solve it.
@@ -1396,7 +1445,7 @@ You will be assigning tasks to two available models. Use their profiles below to
         
         # 根据配置决定是使用本地路由模型还是远程路由模型
         if config.use_local_router:
-            temperature = 0.5
+            temperature = 1
             top_p = 0.95
             max_tokens = 600
             enable_thinking = False
@@ -1530,24 +1579,24 @@ def judge_correct(question, gold_answer, final_answer, model_config):
     model_name = "deepseek-chat"
     client = OpenAI(api_key=get_api_key('usage/deepseek2'), base_url="https://api.deepseek.com")
     print(f"--------------------------调用{model_name}根据真实答案判断答案正确性--------------------------")
-    # prompt = f"""
-    # Your task is to strictly compare the 'Student's Answer' to the 'Standard Answer'.
+    prompt = f"""
+    Your task is to strictly compare the 'Student's Answer' to the 'Standard Answer'.
 
-    # **IMPORTANT: Your decision must be based exclusively on whether the final answers are equivalent. Completely ignore the problem statement and any reasoning.**
+    **IMPORTANT: Your decision must be based exclusively on whether the final answers are equivalent. Completely ignore the problem statement and any reasoning.**
 
-    # - **Problem**: {question}
-    # - **Standard Answer**: {gold_answer}
-    # - **Student's Answer**: {final_answer}
+    - **Problem**: {question}
+    - **Standard Answer**: {gold_answer}
+    - **Student's Answer**: {final_answer}
 
-    # If the 'Student's Answer' matches the 'Standard Answer', output only the word `True`. Otherwise, output only the word `False`. Do not provide any explanation.
-    # """
-    prompt = f"""Here is a problem with a standard answer and a student's solution. Please help me determine if the student's solution is correct.                            
-                Problem: {question}
-                Standard answer: {gold_answer}
-                Answer: {final_answer}
-                If the student's answer is correct, just output True; otherwise, just output False.
-                No explanation is required.
-        """
+    If the 'Student's Answer' matches the 'Standard Answer', output only the word `True`. Otherwise, output only the word `False`. Do not provide any explanation.
+    """
+    # prompt = f"""Here is a problem with a standard answer and a student's solution. Please help me determine if the student's solution is correct.                            
+    #             Problem: {question}
+    #             Standard answer: {gold_answer}
+    #             Answer: {final_answer}
+    #             If the student's answer is correct, just output True; otherwise, just output False.
+    #             No explanation is required.
+    #     """
     
     try:
         response = client.chat.completions.create(
@@ -1636,33 +1685,41 @@ def judge_question_difficulty(question, model_config):
     返回:
         问题难度（字符串）
     """
-    
-    prompt = f"""Please determine the difficulty of the following problem. 
-    Difficulty scale:
-    1-2: Basic computation
-    3-4: Standard operations 
-    5-6: Logical analysis 
-    7-10: Advanced synthesis
+    if model_config.enable_threshold:
+        prompt = f"""You are an expert AI system architect. Your task is to analyze a given problem and assign a difficulty score from 1 to 10. This score will determine whether the problem is routed to a smaller, faster AI model or a larger, more powerful one.
+    Refer to the model profiles below to make your decision.
+    Executor Model Profiles:
+    Small Model (Difficulty 1-4): This model is highly efficient for tasks that are procedural or rely on well-defined knowledge.
+        * Strengths: Basic calculations, direct information retrieval (e.g., "What is the capital of France?"), definition lookups, and following simple, explicit instructions.
+    Large Model (Difficulty 5-10): This model has a vast knowledge base and excels at complex reasoning, analysis, and synthesis.
+        * Strengths: Multi-step reasoning, in-depth analysis, comparing and contrasting complex ideas, solving nuanced problems, and synthesizing information from multiple sources to draw a conclusion.
+    Based on the problem below, determine which model is better suited to solve it and assign a corresponding difficulty score.
     Problem: {question}
-    Please output only the difficulty level as a number. No other explanations or details are needed.
-    """
+    Instructions:
+    Output only the integer representing the difficulty level. Do not provide any other text or explanation.
+        """
 
-    client = model_config.get_client(client_type="large")
-    try:
-        response = client.chat.completions.create(
-            model=model_config.large_model,
-            messages=[
-                {"role": "user", "content": prompt}
-            ],
-            stream=False
-        )
-        
-        difficulty = response.choices[0].message.content.strip()
-        print(f"问题难度判断结果: {difficulty}")
-        return difficulty
-    except Exception as e:
+        client = model_config.get_client(client_type="large")
+        try:
+            response = client.chat.completions.create(
+                model=model_config.large_model,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ],
+                stream=False
+            )
+            
+            difficulty = response.choices[0].message.content.strip()
+            print(f"问题难度判断结果: {difficulty}")
+            return difficulty
+        except Exception as e:
+            logger = get_logger()
+            logger.warning(f"判断问题难度时出错: {e}\n问题: {question}，按照高于阈值处理")
+            return str(model_config.threshold + 1)
+    else:
+        print("----------未启用难度阈值，默认使用模型协作模式----------")
         logger = get_logger()
-        logger.error(f"判断问题难度时出错: {e}\n问题: {question}，按照高于阈值处理")
+        logger.info("----------未启用难度阈值，默认使用模型协作模式----------")
         return str(model_config.threshold + 1)
 
 def call_small_model_directly(question, model_config, stats_tracker=None):

@@ -4,27 +4,56 @@ import os
 import shutil
 import time
 from log_config import setup_logger, get_logger
-from tqdm import tqdm # <-- NEW: Import tqdm
+from tqdm import tqdm
 
 # --- 1. 配置区域 ---
-ROUTER_MODELS_TO_TEST = [
+# 在这里定义您要运行的所有实验
+# 每个字典代表一次独立的实验配置
+# EXPERIMENTS_TO_RUN = [
+#     {
+#         'name': 'Experiment_Qwen_Small',
+#         'params': {
+#             'models.small_model': 'qwen2.5-3b-instruct',
+#             'api.small_api_base_url': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+#             'api.small_key_path': 'usage/qwen'
+#         }
+#     },
+#     {
+#         'name': 'Experiment_Qwen_Small_llama_3b_Router',
+#         'params': {
+#             'models.router_model': 'meta-llama/llama-3.2-3b-instruct',
+#             'api.router_key_path': 'usage/openrouter1',
+#             'api.router_api_base_url': 'https://openrouter.ai/api/v1',
+#             'models.small_model': 'qwen2.5-3b-instruct',
+#             'api.small_api_base_url': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+#             'api.small_key_path': 'usage/qwen'
+#         }
+#     },
+#     {
+#         'name': 'Experiment_Qwen_Small_llama_1b_Router',
+#         'params': {
+#             'models.router_model': 'meta-llama/llama-3.2-1b-instruct',
+#             'api.router_key_path': 'usage/openrouter1',
+#             'api.router_api_base_url': 'https://openrouter.ai/api/v1',
+#             'models.small_model': 'qwen2.5-3b-instruct',
+#             'api.small_api_base_url': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+#             'api.small_key_path': 'usage/qwen'
+#         }
+#     }
+# ]
+
+EXPERIMENTS_TO_RUN = [
     {
-        'name': 'qwen3-1.7b',
-        'router_model': 'qwen3-1.7b',
-        'router_key_path': 'usage/qwen',
-        'router_api_base_url': 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+        'name': 'Experiment_gpqa',
+        'params': {
+            'dataset.path': 'dataset/TestData/gpqa.json'
+        }
     },
     {
-        'name': 'qwen3-0.6b',
-        'router_model': 'qwen3-0.6b',
-        'router_key_path': 'usage/qwen',
-        'router_api_base_url': 'https://dashscope.aliyuncs.com/compatible-mode/v1'
-    },
-    {
-        'name': 'qwen3-4b',
-        'router_model': 'qwen3-4b',
-        'router_key_path': 'usage/qwen',
-        'router_api_base_url': 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+        'name': 'Experiment_MMLU-STEM',
+        'params': {
+            'dataset.path': 'dataset/TestData/MMLU-STEM.json'
+        }
     }
 ]
 
@@ -34,23 +63,30 @@ BACKUP_FILE = 'config.yaml.bak'
 MAIN_SCRIPT = 'main.py'
 LOG_DIR = 'logs'
 
-def modify_config(model_config: dict, logger):
+def modify_config(experiment_config: dict, logger):
     """
     读取、修改并写回 config.yaml 文件。
     """
-    logger.info(f"--- Modifying config for model: {model_config['name']} ---")
+    logger.info(f"--- Modifying config for experiment: {experiment_config['name']} ---")
     try:
-        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+        # 每次都从备份的原始文件中读取，确保实验独立
+        with open(BACKUP_FILE, 'r', encoding='utf-8') as f:
             config_data = yaml.safe_load(f)
 
-        config_data['models']['router_model'] = model_config['router_model']
-        config_data['api']['router_key_path'] = model_config['router_key_path']
-        config_data['api']['router_api_base_url'] = model_config['router_api_base_url']
+        # 应用当前实验的参数修改
+        for key, value in experiment_config['params'].items():
+            keys = key.split('.')
+            d = config_data
+            for k in keys[:-1]:
+                d = d[k]
+            d[keys[-1]] = value
+            logger.info(f"Set '{key}' to '{value}'")
 
+        # 将修改后的配置写入文件
         with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
             yaml.dump(config_data, f, allow_unicode=True, sort_keys=False)
         
-        logger.info(f"'{CONFIG_FILE}' updated successfully.")
+        logger.info(f"'{CONFIG_FILE}' updated successfully for {experiment_config['name']}.")
         return True
     except Exception as e:
         logger.error(f"Error modifying config file '{CONFIG_FILE}': {e}", exc_info=True)
@@ -65,6 +101,7 @@ def run_main_script(logger):
         env = os.environ.copy()
         env['PYTHONIOENCODING'] = 'utf-8'
         
+        # 使用 subprocess.run 来执行脚本
         result = subprocess.run(
             ['python', MAIN_SCRIPT],
             check=True,
@@ -75,6 +112,7 @@ def run_main_script(logger):
         )
         logger.info(f"--- {MAIN_SCRIPT} executed successfully ---")
         
+        # 记录标准输出
         logger.info(f"--- STDOUT for {MAIN_SCRIPT} ---")
         for line in result.stdout.strip().splitlines():
             logger.info(line)
@@ -82,6 +120,7 @@ def run_main_script(logger):
         return True
         
     except subprocess.CalledProcessError as e:
+        # 如果脚本执行失败，记录错误信息
         logger.error(f"--- ERROR: {MAIN_SCRIPT} failed with return code {e.returncode} ---")
         logger.error(f"--- STDOUT from failed run ---")
         for line in e.stdout.strip().splitlines():
@@ -114,32 +153,35 @@ def main():
         logger.error(f"Configuration file '{CONFIG_FILE}' not found. Aborting.")
         return
 
+    # 备份原始配置文件
     logger.info(f"Backing up original config to '{BACKUP_FILE}'...")
     shutil.copy(CONFIG_FILE, BACKUP_FILE)
     logger.info("Backup complete.")
 
     try:
-        # <-- MODIFIED: Wrap the loop with tqdm for a progress bar -->
-        print("Starting model experiments...")
-        model_iterator = tqdm(ROUTER_MODELS_TO_TEST, desc="Overall Progress", unit="model")
+        print("Starting experiments...")
+        experiment_iterator = tqdm(EXPERIMENTS_TO_RUN, desc="Overall Progress", unit="experiment")
         
-        for model_config in model_iterator:
-            model_iterator.set_postfix_str(f"Testing: {model_config['name']}") # <-- NEW: Update tqdm description
+        for experiment in experiment_iterator:
+            experiment_iterator.set_postfix_str(f"Testing: {experiment['name']}")
             
             logger.info("\n" + "="*80 + "\n")
-            logger.info(f"Starting test for: {model_config['name']}")
+            logger.info(f"Starting test for: {experiment['name']}")
             
-            if not modify_config(model_config, logger):
+            # 1. 修改配置文件（基于原始备份）
+            if not modify_config(experiment, logger):
                 logger.error("Skipping execution due to config modification failure.")
                 continue
             
-            time.sleep(1)
+            time.sleep(1) # 短暂等待，确保文件写入完成
 
+            # 2. 运行主脚本
             run_main_script(logger)
             
-            logger.info(f"Finished test for: {model_config['name']}")
+            logger.info(f"Finished test for: {experiment['name']}")
 
     finally:
+        # 3. 恢复原始配置文件
         logger.info("\n" + "="*80 + "\n")
         logger.info(f"All tests finished. Restoring original config from '{BACKUP_FILE}'...")
         if os.path.exists(BACKUP_FILE):

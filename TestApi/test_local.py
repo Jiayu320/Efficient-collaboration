@@ -7,11 +7,11 @@ messages = [
 # 启用流式输出
 stream = client.chat.completions.create(
     messages=messages,
-    # model="saves/Qwen3-1.7B-Instruct/full/sft",
-    model="saves/Qwen3-4B-Thinking/full/ep5",
+    # model="saves/Qwen3-1.7B-Instruct/full/sft", "meta-llama/llama-3.2-1b-instruct"
+    model="meta-llama/llama-3.2-1b-instruct",
     stream=True,
     temperature=0.6,
-    extra_body={"enable_thinking": True}  # 关键参数 [[9]]
+    extra_body={"enable_thinking": False}  # 关键参数 [[9]]
 )
 
 # 逐块读取并输出
