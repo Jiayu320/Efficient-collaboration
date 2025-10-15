@@ -10,6 +10,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from typing import Dict, Any, List, Union
 from openai import OpenAI
+import random
 
 # 导入理论性能计算模块
 from output_performance import get_model_performance, calculate_theoretical_time, count_tokens
@@ -66,14 +67,22 @@ class ModelConfig:
     
     def get_payload(self, query):
         """获取API请求载荷"""
+        # return {
+        #     "model": self.model,
+        #     "messages": [
+        #         {"role": "system", "content": self.system_prompt},
+        #         {"role": "user", "content": query}
+        #     ],
+        #     "stream": True,
+        #     "extra_body": {"enable_thinking": False}
+        # }
         return {
             "model": self.model,
             "messages": [
                 {"role": "system", "content": self.system_prompt},
                 {"role": "user", "content": query}
             ],
-            "stream": True,
-            "extra_body": {"enable_thinking": False}
+            "stream": True
         }
     
     def get_client(self):
@@ -164,7 +173,7 @@ def build_output_path(model_name):
 class SingleModelDatasetRunner:
     """单模型数据集处理器，用于批量处理数据集并生成统计报告"""
     
-    def __init__(self, config, dataset_path, limit=None):
+    def __init__(self, config, dataset_path, limit=None, seed=None):
         """初始化数据集处理器
         
         参数:
@@ -176,7 +185,7 @@ class SingleModelDatasetRunner:
         self.dataset_path = dataset_path
         self.limit = limit
         self.results = []
-        
+        self.seed = seed
         # 加载数据集
         self.dataset = self._load_dataset()
         
@@ -191,8 +200,14 @@ class SingleModelDatasetRunner:
                 dataset = json.load(f)
             
             # 如果设置了限制，则只取前N个问题
-            if self.limit is not None:
-                dataset = dataset[:self.limit]
+            if self.limit is not None and len(dataset) > self.limit:
+                logger = get_logger()
+                if self.seed is not None:
+                    random.seed(self.seed)
+                    logger.info(f"使用种子 {self.seed} 进行随机抽样，抽取 {self.limit} 个样本。")
+                else:
+                    logger.info(f"未提供种子，进行随机抽样，抽取 {self.limit} 个样本。")
+                dataset = random.sample(dataset, self.limit)
             
             return dataset
         except Exception as e:
@@ -836,7 +851,8 @@ if __name__ == "__main__":
     enabled_dataset_processing = yaml_config.get("dataset", {}).get("enabled", False)
     dataset_path = args.dataset or yaml_config.get("dataset", {}).get("path", None)
     dataset_limit = args.limit or yaml_config.get("dataset", {}).get("limit", None)
-    
+    seed = yaml_config.get("dataset", {}).get("seed", None)
+
     if enabled_dataset_processing and dataset_path:
         print("启动单模型数据集处理程序...")
         print(f"数据集路径: {dataset_path}")
@@ -844,7 +860,7 @@ if __name__ == "__main__":
             print(f"处理问题数量限制: {dataset_limit}")
         
         # 创建数据集运行器
-        dataset_runner = SingleModelDatasetRunner(model_config, dataset_path, limit=dataset_limit)
+        dataset_runner = SingleModelDatasetRunner(model_config, dataset_path, limit=dataset_limit, seed=seed)
         
         # === 修改：先调用保存以设置日志记录器 ===
         # 创建一个时间戳供整个运行过程使用

@@ -6,29 +6,29 @@ models:
   # "deepseek-chat", "deepseek-reasoner", "claude-3-5-sonnet-latest", "saves/Qwen3-4B-Thinking/full/ep3", "saves/Qwen3-4B-Thinking/full/ep5"
   # "gpt-5", "qwen2.5-3b-instruct", "saves/Qwen3-1.7B-Thinking/full/train_2025-09-25-23-33-09", 
   # "meta-llama/llama-3.2-3b-instruct", "meta-llama/llama-3.2-1b-instruct", "meta-llama/llama-3.2-3b-instruct:free"
-  # "saves/Llama-3.2-1B-Instruct/full/llama_1b_ep1_5e5", "qwen3-1.7b", "gpt-4.1"
-  small_model: "meta-llama/llama-3.2-3b-instruct" 
-  large_model: "meta-llama/llama-3.2-3b-instruct"   # 大模型
-  router_model: "meta-llama/llama-3.2-3b-instruct"  # 路由模型
+  # "saves/Llama-3.2-1B-Instruct/full/llama_1b_ep1_5e5", "qwen3-1.7b", "gpt-4.1", "gpt-4.1-mini"
+  small_model: "gpt-4.1-mini" 
+  large_model: "gpt-4.1-mini"   # 大模型
+  router_model: "qwen3-4b"  # 路由模型
   enable_threshold: False
   threshold: 5  # 难度阈值，大于等于此值时使用大模型
   use_local_router: False  # 是否使用本地部署的路由模型
   local_router_model: "saves/Llama-3.2-1B-Instruct/full/Llama-3-2-1B_ep5"  # 本地模型路径
-  sequential_execution: True # 是否启用强制顺序执行（否则为并行执行）
+  sequential_execution: False # 是否启用强制顺序执行（否则为并行执行）
   single_rely: False  # 是否启用单一依赖（否则为多依赖）
 
 # API配置
 api:
   # usage/bianxie, usage/deepseek2, usage/local, usage/openrouter, usage/bianxie1, usage/qwen
-  small_key_path: "usage/openrouter"
-  large_key_path: "usage/openrouter"
-  router_key_path: "usage/openrouter"
+  small_key_path: "usage/bianxie1"
+  large_key_path: "usage/bianxie1"
+  router_key_path: "usage/qwen"
 
   # "https://api.bianxie.ai/v1", "https://openrouter.ai/api/v1", "https://api.deepseek.com"
   # "http://127.0.0.1:6006/v1", "http://127.0.0.1:8000/v1", "https://dashscope.aliyuncs.com/compatible-mode/v1"
-  small_api_base_url: "https://openrouter.ai/api/v1"  # 小模型API基础URL
-  large_api_base_url: "https://openrouter.ai/api/v1"  # 大模型API基础URL
-  router_api_base_url: "https://openrouter.ai/api/v1"  # 路由模型API基础URL
+  small_api_base_url: "https://api.bianxie.ai/v1"  # 小模型API基础URL
+  large_api_base_url: "https://api.bianxie.ai/v1"  # 大模型API基础URL
+  router_api_base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"  # 路由模型API基础URL
   local_router_base_url: "http://127.0.0.1:8000/v1"  # 本地部署的路由模型API基础URL
 
 # 请求超时设置
@@ -41,6 +41,12 @@ system:
   workers: 10  # 并行工作线程数
   enable_judge: True  # 是否启用答案正确性判断
   gold_answer: "16"  # 标准答案，如果启用判断则必填
+
+  retries:
+    enabled: true          # 是否启用重试机制的总开关
+    max_attempts: 3        # 每个任务失败后的最大重试次数
+    delay_seconds: 5       # 每次重试之间的等待时间（秒）
+
 # 查询配置
 # query: "What is the result of 1+1?"
 # query: "3. (6 points) A construction company was building a tunnel. When $\\frac{1}{3}$\\ of the tunnel was completed at the original speed, they started using new equipment, which increased the construction speed by $20 \\%$ and reduced the working hours to $80 \\%$ of the original. As a result, it took a total of 185 days to complete the tunnel. If they had not used the new equipment and continued at the original speed, it would have taken $\\qquad$ days to complete the tunnel."
@@ -49,8 +55,8 @@ query: "Define all possible orientations and placements of the L-shaped tile wit
 # 数据集配置
 dataset:
   enabled: True  # 是否启用数据集模式（评估或构建）
-  path: "dataset/TestData/MMLU-STEM.json" # 数据集文件路径（JSON格式）
-  limit: 1 # 限制处理的数据条数，0表示不限制
+  path: "dataset/TestData/MMLU-Pro_test.json" # 数据集文件路径（JSON格式）
+  limit: 50 # 限制处理的数据条数
   seed: 42  # 随机种子，用于结果复现
   output_dir: "model_compare_results/" # 结果输出目录
   

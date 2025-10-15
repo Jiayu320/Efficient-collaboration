@@ -23,7 +23,10 @@ class ModelConfig:
                  use_local_router=False,
                  local_router_base="http://127.0.0.1:8000/v1",
                  local_router_model="saves/Qwen3-1.7B-Instruct/full/sft",
-                 enable_threshold=True):
+                 enable_threshold=True,
+                 enable_retries=True,
+                 max_retry_attempts=3,
+                 retry_delay=5):
         """
         初始化模型配置
         
@@ -62,6 +65,10 @@ class ModelConfig:
         self.small_api_key = self._get_api_key(small_key_path) if small_key_path else None
         self.large_api_key = self._get_api_key(large_key_path) if large_key_path else None
         self.router_api_key = self._get_api_key(router_key_path) if router_key_path else None
+
+        self.enable_retries = enable_retries
+        self.max_retry_attempts = max_retry_attempts
+        self.retry_delay = retry_delay
     
     def _get_api_key(self, file_path):
         """从文件中获取API密钥"""

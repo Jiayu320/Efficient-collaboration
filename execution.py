@@ -328,6 +328,14 @@ I have broken this problem down into a series of smaller problems. I will assign
 Please solve the problem and respond according to logic.
 """
 
+#     system_prompt = """
+#     There is a math problem. I need you to solve it and give an answer.
+# Here is the problem:\n{Problem}
+
+# I have broken this problem down into a series of smaller problems. I will assign you sub-problems one by one, and provide the results of the previous sub-problems as a reference for your reasoning.
+# Please solve the problem and respond according to logic.
+# """
+
     prompt_template = """
     The sub-problem to solve now is: {Task}
     Based on the information above, please provide a concise and clear answer
@@ -372,50 +380,58 @@ def is_step_ready(step_id, tasks):
     return all(step in completed_steps for step in rely_steps)
 
 def process_step(step_id, tasks, query, model_config, stats_tracker=None):
-    """处理单个步骤
-    
-    参数:
-        step_id: 步骤ID
-        tasks: 任务字典
-        query: 原始查询
-        model_config: 模型配置对象
-        stats_tracker: 性能统计跟踪器
     """
-    try:
-        # === 新增：获取日志记录器 ===
-        logger = get_logger()
-        # ============================
+    处理单个步骤，并包含健壮的重试机制。
+    """
+    logger = get_logger()
+    
+    # 从配置中获取重试参数
+    max_attempts = model_config.max_retry_attempts if model_config.enable_retries else 1
+    retry_delay = model_config.retry_delay if model_config.enable_retries else 0
+    
+    # 开始重试循环
+    for attempt in range(1, max_attempts + 1):
+        try:
+            if attempt > 1:
+                logger.warning(f"开始重试步骤 {step_id} (第 {attempt}/{max_attempts} 次)...")
+                print(f"\n开始重试步骤 {step_id} (第 {attempt}/{max_attempts} 次)...")
+                time.sleep(retry_delay)
 
-        print(f"\n开始执行步骤 {step_id}: {tasks[step_id].get('Task', '未知任务')}")
-        prompt, difficulty, system_prompt = build_step_prompt(step_id, tasks, query)
-        
-        # === 新增：记录执行器模型的输入 ===
-        model_type = "大模型" if int(difficulty) >= model_config.threshold else "小模型"
-        logger.info(f"===== Prompt 给执行器 ({model_type} - 步骤 {step_id}) =====")
-        logger.info(system_prompt)
-        logger.info(prompt)
-        log_separator()
-        # =================================
+            print(f"\n开始执行步骤 {step_id}: {tasks[step_id].get('Task', '未知任务')}")
+            prompt, difficulty, system_prompt = build_step_prompt(step_id, tasks, query)
+            
+            model_type = "大模型" if int(difficulty) >= model_config.threshold else "小模型"
+            logger.info(f"===== Prompt 给执行器 ({model_type} - 步骤 {step_id}) =====")
+            logger.info(system_prompt)
+            logger.info(prompt)
+            log_separator()
 
-        # 使用模型配置生成结果
-        result = generate_step_result(prompt, difficulty, model_config, stats_tracker, system_prompt)
-        
-        # === 新增：记录执行器模型的输出 ===
-        logger.info(f"===== 来自执行器 ({model_type} - 步骤 {step_id}) 的输出 =====")
-        logger.info(result)
-        log_separator()
-        # =================================
+            result = generate_step_result(prompt, difficulty, model_config, stats_tracker, system_prompt)
+            
+            if not result or (isinstance(result, str) and result.strip().startswith("错误:")):
+                raise ValueError(f"步骤 {step_id} 生成了无效或错误的结果: {result}")
 
-        tasks[step_id]['Result'] = result
-        completed_steps.add(step_id)
-        print(f"步骤 {step_id} 执行完成")
-        return step_id
-    except Exception as e:
-        print(f"步骤 {step_id} 执行出错: {e}")
-        # 即使出错也标记为完成，避免死锁
-        completed_steps.add(step_id)
-        tasks[step_id]['Result'] = f"错误: {str(e)}"
-        return step_id
+            logger.info(f"===== 来自执行器 ({model_type} - 步骤 {step_id}) 的输出 =====")
+            logger.info(result)
+            log_separator()
+
+            tasks[step_id]['Result'] = result
+            completed_steps.add(step_id)
+            print(f"步骤 {step_id} 执行成功")
+            return step_id  # 成功执行，立即退出循环并返回
+
+        except Exception as e:
+            error_message = f"步骤 {step_id} 执行出错 (第 {attempt}/{max_attempts} 次): {e}"
+            logger.error(error_message)
+            print(error_message)
+            
+            if attempt == max_attempts:
+                tasks[step_id]['Result'] = f"错误: 经过 {max_attempts} 次尝试后依然失败 - {e}"
+                completed_steps.add(step_id)
+                logger.critical(f"步骤 {step_id} 所有重试均失败，已标记为错误状态以避免阻塞。")
+                return step_id
+
+    return step_id
 
 def completion_callback(future):
     """处理完成任务的回调函数
@@ -1127,66 +1143,8 @@ You will be assigning tasks to two available models. Use their profiles below to
 
 Now, based on the following `Problem`, generate a response that meets all the requirements above.
 """
-        system_prompt_qwen_4o = """You are an expert AI cognitive scientist and systems architect. Your mission is to analyze a given problem and create a structured XML plan to solve it.
-
-The plan will be executed by a multi-threaded AI system using two distinct models. Your task decomposition, difficulty assignments, and the reasoning behind them must leverage the unique capabilities of these models.
-
-### **Executor Model Profiles**
-
-You will be assigning tasks to two available models. Use their profiles below to accurately estimate the `Difficulty` for each step:
-
-  * **Small Model (e.g., qwen2.5-3b-instruct):** A highly capable small model, excelling at code, standard math, multilingual tasks, and following clear instructions. It is fast and efficient for well-defined, procedural, or knowledge-retrieval tasks.
-  * **Large Model (e.g., gpt-4o):** A powerful large model with a vast knowledge base. It excels at deep scientific reasoning, multi-faceted analysis, and understanding nuanced, open-ended problems. It is the preferred choice for tasks requiring synthesis, deep analysis, and broad world knowledge.
-
-### **Core Directives for Plan Generation**
-
-1.  **Analyze the Problem**: Break down the problem into its core logical components.
-2.  **Strategic Milestones**: Focus on the high-level, conceptual milestones required to solve the problem.
-3.  **Maximize Parallelism**: Decompose into as many independent sub-tasks as possible.
-4.  **Formulate Actionable Questions**: The `Task` attribute must be a clear, self-contained question ending with a question mark (?). Do not leak answers in the task description.
-5.  **Construct the XML Plan**:
-      * `ID`: A unique integer.
-      * `Task`: The question for the executor AI.
-      * `Difficulty`: An integer from 1-9.
-          * **1-4 (Small Model):** Procedural tasks, basic calculations, applying a known formula.
-          * **5-9 (Large Model):** Complex reasoning, synthesis, or critical knowledge retrieval.
-      * `Token`: An integer representing the estimated number of tokens the executor will need to generate for the answer.
-      * `Rely`: The `ID`(s) of prerequisite steps. Only create necessary dependencies. If there are multiple dependencies, separate them with commas.
-6.  **Use Aggregation Steps**: Create a final step to synthesize the results from previous steps and derive the final conclusion.
-7.  **Keep it Concise**: The final plan must contain **fewer than 6 steps**. Focus only on the most critical milestones needed to solve the problem.
-
-### **Example**
-
-**Problem**: Four years ago, Kody was only half as old as Mohamed. If Mohamed is currently twice 30 years old, how old is Kody?
-**Output**:
-<Plan>
-<Step ID="1" Task="How old is Mohamed now?" Difficulty="2" Token="10" Rely=""/>
-<Step ID="2" Task="How old was Mohamed four years ago?" Difficulty="1" Token="10" Rely="1"/>
-<Step ID="3" Task="How old was Kody four years ago?" Difficulty="2" Token="10" Rely="2"/>
-</Plan>
-
-**Problem**: Find the degree for the given field extension Q(sqrt(2), sqrt(3), sqrt(18)) over Q.\n\nA. 0\nB. 4\nC. 2\nD. 6\n\nPlease select the correct answer and provide the final option letter and its corresponding content.
-**Output**:
-<Plan>
-<Step ID="1" Task="What is the degree of the field extension Q(sqrt(2), sqrt(3)) over Q?" Difficulty="4" Token="20" Rely=""/>
-<Step ID="2" Task="What is the degree of the field extension Q(sqrt(18)) over Q?" Difficulty="2" Token="15" Rely=""/>
-<Step ID="3" Task="How can the degrees from Step 1 and Step 2 be combined to determine the degree of Q(sqrt(2), sqrt(3), sqrt(18)) over Q?" Difficulty="6" Token="25" Rely="1,2"/>
-</Plan>
-
-**Problem**: The set of all real numbers under the usual multiplication operation is not a group since\n\nA. multiplication is not a binary operation\nB. multiplication is not associative\nC. identity element does not exist\nD. zero has no inverse\n\nPlease select the correct answer and provide the final option letter and its corresponding content.
-**Output**:
-<Plan>
-<Step ID="1" Task="What is a binary operation and does multiplication of real numbers satisfy this property?" Difficulty="3" Token="20" Rely=""/>
-<Step ID="2" Task="Is multiplication associative for all real numbers?" Difficulty="2" Token="10" Rely=""/>
-<Step ID="3" Task="What is the identity element in multiplication of real numbers and does it exist?" Difficulty="3" Token="15" Rely=""/>
-<Step ID="4" Task="Does the zero element have an inverse under multiplication for all real numbers?" Difficulty="2" Token="10" Rely=""/>
-<Step ID="5" Task="Considering the properties checked, which of the options A, B, C, or D is correct regarding why the set of all real numbers under multiplication is not a group?" Difficulty="5" Token="25" Rely="1,2,3,4"/>
-</Plan>
-
-Now, based on the following `Problem`, generate a response that meets all the requirements above.
-"""
         system_prompt_think = """
-You are an expert AI cognitive scientist and systems architect. Your mission is to analyze a given problem and create a detailed, two-part response: first, a chain-of-thought reasoning block, and second, a structured XML plan.
+You are an expert AI cognitive scientist and systems architect. Your mission is to analyze a given problem and create a structured XML plan.
 The plan will be executed by a multi-threaded AI system using two distinct models. Your task decomposition, difficulty assignments, and the reasoning behind them must leverage the unique capabilities of these models.
 
 ### **Executor Model Profiles**
@@ -1214,10 +1172,7 @@ You will be assigning tasks to two available models. Use their profiles below to
 
 ### **Output Format**
 
-Your final output MUST be structured in two distinct parts: a `<think>` block followed by the `<Plan>` XML block.
-
-1.  **`<think>` block**: This should be a fluent, internal monologue demonstrating your thought process for creating the plan. It should naturally cover the goal, the sub-problems, the model allocation, and the dependencies.
-2.  **`<Plan>` block**: This is the final, machine-readable XML plan, built according to the Core Directives.
+Your final output MUST be a `<Plan>` XML block.
 
 -----
 
@@ -1226,13 +1181,6 @@ Your final output MUST be structured in two distinct parts: a `<think>` block fo
 **Problem**: Four years ago, Kody was only half as old as Mohamed. If Mohamed is currently twice 30 years old, how old is Kody?
 
 **Output**:
-<think>
-Okay, the problem is "Four years ago, Kody was only half as old as Mohamed. If Mohamed is currently twice 30 years old, how old is Kody?". To solve this, I need to break it down into logical steps and assign them based on the model capabilities. The Small Model is ideal for procedural tasks and standard math, while the Large Model is for complex reasoning. 
-First, I need to establish Mohamed's current age. The problem states he is "twice 30 years old," which is a simple calculation, perfect for the Small Model. This will be my Step 1.
-Next, the problem references "four years ago," so I need to find Mohamed's age at that time. This is a simple subtraction based on the result of Step 1. Again, the Small Model is sufficient. This will be Step 2, and it must rely on Step 1 to work.
-Finally, with Mohamed's age from four years ago, I can figure out how old Kody was back then, since he was half of Mohamed's age. This calculation depends directly on Step 2 and is another straightforward task for the Small Model. This will be Step 3.
-This sequence of three steps logically builds the necessary foundation. The plan is ready.
-</think>
 <Plan>
 <Step ID="1" Task="How old is Mohamed now?" Difficulty="2" Rely=""/>
 <Step ID="2" Task="How old was Mohamed four years ago?" Difficulty="1" Rely="1"/>
@@ -1464,7 +1412,7 @@ You will be assigning tasks to two available models. Use their profiles below to
             logger.info(f"----------------- 使用本地路由模型: {config.local_router_model} -----------------")
             logger.info(f"温度: {temperature}, top_p: {top_p}, max_tokens: {max_tokens}, enable_thinking: {enable_thinking}")
         else:
-            temperature = 0.5
+            temperature = 1
             top_p = 0.95
             max_tokens = 600
             enable_thinking = False

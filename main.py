@@ -74,13 +74,22 @@ def main():
     threshold = yaml_config["models"]["threshold"]
     dataset_build_config = yaml_config.get("dataset", {}).get("build", {})
 
+    system_config = yaml_config.get("system", {})
+    retry_config = system_config.get("retries", {})
+    enable_retries = retry_config.get("enabled", True)
+    max_retry_attempts = retry_config.get("max_attempts", 3)
+    retry_delay = retry_config.get("delay_seconds", 5)
+
     config = ModelConfig(
         small_model=small_model, large_model=large_model, router_model=router_model,
         threshold=threshold, small_key_path=small_key_path, large_key_path=large_key_path,
         router_key_path=router_key_path, small_api_base=small_api_base,
         large_api_base=large_api_base, router_api_base=router_api_base,
         use_local_router=use_local_router, local_router_base=local_router_base,
-        local_router_model=local_router_model, enable_threshold=enable_threshold
+        local_router_model=local_router_model, enable_threshold=enable_threshold,
+        enable_retries=enable_retries,
+        max_retry_attempts=max_retry_attempts,
+        retry_delay=retry_delay
     )
     
     eval_config = yaml_config["evaluation"]
